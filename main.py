@@ -7,6 +7,8 @@ import os
 from typing import List, Union
 from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # For production, specify your frontend URL(s) instead of "*"
@@ -14,8 +16,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app = FastAPI()
 
 # === Helper Functions ===
 
