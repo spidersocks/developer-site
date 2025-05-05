@@ -7,6 +7,8 @@ import os
 from typing import List, Union
 from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # For production, specify your frontend URL(s) instead of "*"
@@ -14,8 +16,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app = FastAPI()
 
 # === Helper Functions ===
 
@@ -121,9 +121,9 @@ TRAINING_CONFIG = {
     },
     "600m_400m_x3": {
         "model_file": os.path.join(MODELS_DIR, "model_600_400.pkl"),
-        "feature_cols": ["600m", "3x400 average"],
+        "feature_cols": ["600m", "3x400m average"],
         "table_file": os.path.join(TABLES_DIR, "600_400.csv"),
-        "interval_cols": ["600m", "3x400 average"]
+        "interval_cols": ["600m", "3x400m average"]
     },
     "600m_300m_x4": {
         "model_file": os.path.join(MODELS_DIR, "model_600_300.pkl"),
