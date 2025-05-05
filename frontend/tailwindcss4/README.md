@@ -1,12 +1,40 @@
-# React + Vite
+# 800m-calculator Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the **frontend** for the 800m-calculator project. It provides an interface for predicting 800m race times based on training results and for calculating recommended splits for a target 800m time.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Select from several supported training types
+- Predict your 800m time by entering workout results
+- Get recommended workout splits based on a goal 800m race time
+- Clean, responsive interface built with React and Tailwind CSS
+- Connects to the backend FastAPI service
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+2. **Start the development server:**
+    ```bash
+    npm start
+    ```
+
+    The app will be available at [https://seanfontaine.dev/](https://seanfontaine.dev/) by default.
+
+3. **Configure API endpoint (if needed):**
+    - The backend API URL is set in `App.jsx` as the `API_URL` constant.
+    - Update this value if your backend is running on a different URL.
+
+## Project Structure
+
+- `src/App.jsx` - Main React application
+- `src/App.css` - Styles for the app
+- Other files are standard Create React App files
+
+## Notes
+
+- Requires Node.js and npm.
+- Make sure your backend is running and accessible to the frontend.
