@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import './App.css'
 import { Listbox } from "@headlessui/react";
 import { ChevronUpDownIcon } from "@heroicons/react/20/solid";
+import { Helmet } from 'react-helmet-async';
 
 const TRAINING_TYPES = [
   {
@@ -173,198 +174,219 @@ export default function App() {
   }
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col justify-between">
-      {/* Fixed, full-viewport grayscale background */}
-      <div className="fixed inset-0 bg-gray-50 -z-10" aria-hidden="true" />
+    <>
+      <Helmet>
+        <title>800m Training Calculator | Predict Race Splits & Times</title>
+        <meta
+          name="description"
+          content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches."
+        />
+        <link rel="canonical" href="https://www.seanfontaine.dev/800m-calculator" />
 
-      {/* Glassy Card Centered */}
-      <header className="mb-6 text-center z-10 flex flex-col items-center">
-        <h1 className="font-bold text-gray-900 mb-2 drop-shadow-none inline-block px-2
-          text-base sm:text-lg md:text-xl lg:text-2xl tracking-tight max-w-[20rem] sm:max-w-[28rem] leading-tight
+        {/* Open Graph / Twitter tags for social sharing */}
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="800m Training Calculator | Predict Race Splits & Times" />
+        <meta property="og:description" content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches." />
+        <meta property="og:image" content="https://www.seanfontaine.dev/og-800m.png" />
+        <meta property="og:url" content="https://www.seanfontaine.dev/800m-calculator" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="800m Training Calculator | Predict Race Splits & Times" />
+        <meta name="twitter:description" content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches." />
+        <meta name="twitter:image" content="https://www.seanfontaine.dev/og-800m.png" />
+      </Helmet>
+      <div className="relative min-h-screen w-full flex flex-col justify-between">
+        {/* Fixed, full-viewport grayscale background */}
+        <div className="fixed inset-0 bg-gray-50 -z-10" aria-hidden="true" />
+
+        {/* Glassy Card Centered */}
+        <header className="mb-6 text-center z-10 flex flex-col items-center">
+          <h1 className="font-bold text-gray-900 mb-2 drop-shadow-none inline-block px-2
+            text-base sm:text-lg md:text-xl lg:text-2xl tracking-tight max-w-[20rem] sm:max-w-[28rem] leading-tight
+          ">
+            800m Training & Race Calculator
+          </h1>
+          <p
+            className="text-gray-500 text-sm sm:text-base md:text-lg px-2"
+            style={{ width: "auto", maxWidth: "100%", display: "inline-block" }}
+          >
+            Predict your 800m race time from your training results,<br />
+            or calculate recommended splits for a goal 800m time.
+          </p>
+        </header>
+
+        <main className="
+          w-full max-w-md mx-auto
+          bg-white/80 backdrop-blur-sm shadow-xl rounded-xl
+          p-6 md:p-8 z-10 relative
+          border border-gray-200
+          animate-fade-in
         ">
-          800m Training & Race Calculator
-        </h1>
-        <p
-          className="text-gray-500 text-sm sm:text-base md:text-lg px-2"
-          style={{ width: "auto", maxWidth: "100%", display: "inline-block" }}
-        >
-          Predict your 800m race time from your training results,<br />
-          or calculate recommended splits for a goal 800m time.
-        </p>
-      </header>
-
-      <main className="
-        w-full max-w-md mx-auto
-        bg-white/80 backdrop-blur-sm shadow-xl rounded-xl
-        p-6 md:p-8 z-10 relative
-        border border-gray-200
-        animate-fade-in
-      ">
-        <div className="flex mb-6 gap-2 md:gap-6 justify-center">
-          <TabButton modeVal="predict">Predict Race Time</TabButton>
-          <TabButton modeVal="reverse">Get Training Splits</TabButton>
-        </div>
-        {mode === "predict" ? (
-          <form onSubmit={handlePredict} className="space-y-6">
-            <div className="mb-8">
-              <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
-              <TrainingTypeDropdown />
-            </div>
-            {trainingType.features.map((label, idx) => {
-              const phArray = PLACEHOLDERS[trainingType.key] || [];
-              const placeholder = phArray[idx] || DEFAULT_PLACEHOLDER;
-              return (
-                <div key={label}>
-                  <label className="block text-gray-700 mb-1">{label}</label>
-                  <input
-                    type="text"
-                    placeholder={placeholder}
-                    className="
-                      w-full border border-gray-300 rounded-lg px-3 py-2
-                      focus:outline-none focus:ring-2 focus:ring-indigo-200 transition
-                      bg-white
-                    "
-                    value={inputs[idx] || ""}
-                    onChange={(e) => setInputs((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))}
-                    required
-                  />
-                </div>
-              );
-            })}
-            <button
-              type="submit"
-              className={`
-                w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
-                text-${accentColor}-700 font-bold py-2 rounded-lg transition
-                transition-transform duration-150 hover:scale-105
-                shadow
-                ${loading ? "opacity-70" : ""}
-              `}
-              disabled={loading}
-            >
-              {loading ? (
-  <>
-    <svg
-      className="animate-spin h-5 w-5 text-indigo-700 inline-block mr-2 align-middle"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      ></circle>
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-      ></path>
-    </svg>
-    Calculating...
-  </>
-) : (
-  "Calculate"
-)}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleReverse} className="space-y-6">
-            <div className="mb-8">
-              <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
-              <TrainingTypeDropdown />
-            </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Goal 800m Time</label>
-              <input
-                type="text"
-                placeholder={GOAL_PLACEHOLDER}
-                className="
-                  w-full border border-gray-300 rounded-lg px-3 py-2
-                  focus:outline-none focus:ring-2 focus:ring-indigo-200 transition
-                  bg-white
-                "
-                value={goalTime}
-                onChange={(e) => setGoalTime(e.target.value)}
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className={`
-                w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
-                text-${accentColor}-700 font-bold py-2 rounded-lg transition
-                transition-transform duration-150 hover:scale-105
-                shadow
-                ${loading ? "opacity-70" : ""}
-              `}
-              disabled={loading}
-            >
-              {loading ? (
-  <>
-    <svg
-      className="animate-spin h-5 w-5 text-indigo-700 inline-block mr-2 align-middle"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      ></circle>
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-      ></path>
-    </svg>
-    Calculating...
-  </>
-) : (
-  "Get Recommended Splits"
-)}
-            </button>
-          </form>
-        )}
-        {result && (
-          <div className={`mt-6 bg-${accentColor}-50 border border-${accentColor}-100 rounded-lg p-4 text-center animate-fade-in`}>
-            {mode === "predict" ? (
-              <>
-                <div className={`text-${accentColor}-800 text-lg font-medium`}>Predicted 800m Time:</div>
-                <div className={`text-2xl font-bold text-${accentColor}-700 mt-2`}>
-                  {result.predicted_formatted}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className={`text-${accentColor}-800 text-lg font-medium`}>Recommended Splits:</div>
-                <ul className="mt-2 space-y-1">
-                  {Array.isArray(result)
-                    ? result.map((split, i) => (
-                        <li key={i} className={`text-${accentColor}-700`}>
-                          <span className="font-semibold">{split.interval}:</span>{" "}
-                          <span className="font-mono">{split.formatted}</span>
-                        </li>
-                      ))
-                    : null}
-                </ul>
-              </>
-            )}
+          <div className="flex mb-6 gap-2 md:gap-6 justify-center">
+            <TabButton modeVal="predict">Predict Race Time</TabButton>
+            <TabButton modeVal="reverse">Get Training Splits</TabButton>
           </div>
-        )}
-        {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
-      </main>
+          {mode === "predict" ? (
+            <form onSubmit={handlePredict} className="space-y-6">
+              <div className="mb-8">
+                <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
+                <TrainingTypeDropdown />
+              </div>
+              {trainingType.features.map((label, idx) => {
+                const phArray = PLACEHOLDERS[trainingType.key] || [];
+                const placeholder = phArray[idx] || DEFAULT_PLACEHOLDER;
+                return (
+                  <div key={label}>
+                    <label className="block text-gray-700 mb-1">{label}</label>
+                    <input
+                      type="text"
+                      placeholder={placeholder}
+                      className="
+                        w-full border border-gray-300 rounded-lg px-3 py-2
+                        focus:outline-none focus:ring-2 focus:ring-indigo-200 transition
+                        bg-white
+                      "
+                      value={inputs[idx] || ""}
+                      onChange={(e) => setInputs((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))}
+                      required
+                    />
+                  </div>
+                );
+              })}
+              <button
+                type="submit"
+                className={`
+                  w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
+                  text-${accentColor}-700 font-bold py-2 rounded-lg transition
+                  transition-transform duration-150 hover:scale-105
+                  shadow
+                  ${loading ? "opacity-70" : ""}
+                `}
+                disabled={loading}
+              >
+                {loading ? (
+      <>
+        <svg
+          className="animate-spin h-5 w-5 text-indigo-700 inline-block mr-2 align-middle"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          ></path>
+        </svg>
+        Calculating...
+      </>
+    ) : (
+      "Calculate"
+    )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleReverse} className="space-y-6">
+              <div className="mb-8">
+                <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
+                <TrainingTypeDropdown />
+              </div>
+              <div>
+                <label className="block text-gray-700 mb-1">Goal 800m Time</label>
+                <input
+                  type="text"
+                  placeholder={GOAL_PLACEHOLDER}
+                  className="
+                    w-full border border-gray-300 rounded-lg px-3 py-2
+                    focus:outline-none focus:ring-2 focus:ring-indigo-200 transition
+                    bg-white
+                  "
+                  value={goalTime}
+                  onChange={(e) => setGoalTime(e.target.value)}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className={`
+                  w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
+                  text-${accentColor}-700 font-bold py-2 rounded-lg transition
+                  transition-transform duration-150 hover:scale-105
+                  shadow
+                  ${loading ? "opacity-70" : ""}
+                `}
+                disabled={loading}
+              >
+                {loading ? (
+      <>
+        <svg
+          className="animate-spin h-5 w-5 text-indigo-700 inline-block mr-2 align-middle"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          ></path>
+        </svg>
+        Calculating...
+      </>
+    ) : (
+      "Get Recommended Splits"
+    )}
+              </button>
+            </form>
+          )}
+          {result && (
+            <div className={`mt-6 bg-${accentColor}-50 border border-${accentColor}-100 rounded-lg p-4 text-center animate-fade-in`}>
+              {mode === "predict" ? (
+                <>
+                  <div className={`text-${accentColor}-800 text-lg font-medium`}>Predicted 800m Time:</div>
+                  <div className={`text-2xl font-bold text-${accentColor}-700 mt-2`}>
+                    {result.predicted_formatted}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className={`text-${accentColor}-800 text-lg font-medium`}>Recommended Splits:</div>
+                  <ul className="mt-2 space-y-1">
+                    {Array.isArray(result)
+                      ? result.map((split, i) => (
+                          <li key={i} className={`text-${accentColor}-700`}>
+                            <span className="font-semibold">{split.interval}:</span>{" "}
+                            <span className="font-mono">{split.formatted}</span>
+                          </li>
+                        ))
+                      : null}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+          {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
+        </main>
 
-      <footer className="mt-10 text-gray-400 text-xs z-10 text-center pb-2">
-        @2025 Sean-Fontaine-Tools
-      </footer>
-    </div>
+        <footer className="mt-10 text-gray-400 text-xs z-10 text-center pb-2">
+          @2025 Sean-Fontaine-Tools
+        </footer>
+      </div>
+    </>
   );
 }
