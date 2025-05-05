@@ -169,7 +169,7 @@ class ReversePredictRequest(BaseModel):
 
 # === API Endpoints ===
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"message": "800m Calculator API is up."}
 
