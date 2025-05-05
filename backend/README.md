@@ -59,4 +59,3 @@ Calculates recommended splits for a workout based on a goal 800m time.
 - CORS is enabled for all origins by default (for development).  
   For production, set `allow_origins` in `main.py` to your frontend’s URL.
 - Requires Python 3.8+
-```
