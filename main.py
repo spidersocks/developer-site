@@ -121,9 +121,9 @@ TRAINING_CONFIG = {
     },
     "600m_400m_x3": {
         "model_file": os.path.join(MODELS_DIR, "model_600_400.pkl"),
-        "feature_cols": ["600m", "3x400 average"],
+        "feature_cols": ["600m", "3x400m average"],
         "table_file": os.path.join(TABLES_DIR, "600_400.csv"),
-        "interval_cols": ["600m", "3x400 average"]
+        "interval_cols": ["600m", "3x400m average"]
     },
     "600m_300m_x4": {
         "model_file": os.path.join(MODELS_DIR, "model_600_300.pkl"),
