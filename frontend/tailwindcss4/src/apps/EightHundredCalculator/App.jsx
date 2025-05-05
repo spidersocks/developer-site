@@ -9,26 +9,31 @@ const TRAINING_TYPES = [
     key: "600m_x3",
     label: "3 x 600m",
     features: ["First 600m", "Second 600m", "Third 600m"],
+    rest: "20 minutes rest between each 600m.",
   },
   {
     key: "600m_400m_x3",
     label: "600m + 3 x 400m",
     features: ["600m", "3x400 average"],
+    rest: "8 minutes rest after the 600m. 2.5 minutes rest between each 400m.",
   },
   {
     key: "600m_300m_x4",
     label: "600m + 4 x 300m",
     features: ["600m", "4x300m average"],
+    rest: "8 minutes rest after the 600m. 3 minutes rest between each 300m.",
   },
   {
     key: "500m_x3",
     label: "3 x 500m",
     features: ["First 500m", "Second 500m", "Third 500m"],
+    rest: "10 minutes rest between each 500m.",
   },
   {
     key: "300m_x3x2",
     label: "2 x (3 x 300m)",
     features: ["Set 1 3x300m average", "Set 2 3x300m average"],
+    rest: "3 minutes rest between each 300m. 10 minutes between set 1 and set 2.",
   },
 ];
 
@@ -56,6 +61,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showRest, setShowRest] = useState(false);
 
   useEffect(() => {
     setInputs(Array(trainingType.features.length).fill(""));
@@ -162,7 +168,7 @@ export default function App() {
           px-4 py-2 rounded-t-lg font-medium transition-all
           ${
             mode === modeVal
-              ? `bg-white text-${accentColor}-700 border-b-2 border-b-white shadow`
+              ? `!bg-white !text-${accentColor}-700 border-b-2 border-b-white shadow`
               : `bg-gray-100 text-gray-500 hover:bg-${accentColor}-50`
           }
         `}
@@ -230,6 +236,31 @@ export default function App() {
               <div className="mb-8">
                 <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
                 <TrainingTypeDropdown />
+                <div className="mt-2 flex items-center">
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1 text-xs !text-${accentColor}-600 hover:underline font-medium focus:outline-none`}
+                    style={{ padding: "2px 0" }}
+                    onClick={() => setShowRest((v) => !v)}
+                    aria-expanded={showRest}
+                    aria-controls="rest-info"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                      <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {showRest ? "Hide Training Info" : "Show Training Info"}
+                  </button>
+                </div>
+                {showRest && (
+                  <div
+                    id="rest-info"
+                    className={`mt-2 p-3 rounded bg-${accentColor}-50 border border-${accentColor}-100 text-${accentColor}-800 animate-fade-in text-sm`}
+                  >
+                    <div className="font-semibold mb-1">Rest Times</div>
+                    <div>{trainingType.rest}</div>
+                  </div>
+                )}
               </div>
               {trainingType.features.map((label, idx) => {
                 const phArray = PLACEHOLDERS[trainingType.key] || [];
@@ -255,8 +286,8 @@ export default function App() {
               <button
                 type="submit"
                 className={`
-                  w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
-                  text-${accentColor}-700 font-bold py-2 rounded-lg transition
+                  w-full !bg-${accentColor}-600 hover:!bg-${accentColor}-700
+                  !text-white font-bold py-2 rounded-lg transition
                   transition-transform duration-150 hover:scale-105
                   shadow
                   ${loading ? "opacity-70" : ""}
@@ -266,7 +297,7 @@ export default function App() {
                 {loading ? (
       <>
         <svg
-          className="animate-spin h-5 w-5 text-indigo-700 inline-block mr-2 align-middle"
+          className="animate-spin h-5 w-5 text-white inline-block mr-2 align-middle"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
@@ -297,6 +328,31 @@ export default function App() {
               <div className="mb-8">
                 <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
                 <TrainingTypeDropdown />
+                <div className="mt-2 flex items-center">
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1 text-xs !text-${accentColor}-600 hover:underline font-medium focus:outline-none`}
+                    style={{ padding: "2px 0" }}
+                    onClick={() => setShowRest((v) => !v)}
+                    aria-expanded={showRest}
+                    aria-controls="rest-info"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                      <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {showRest ? "Hide Training Info" : "Show Training Info"}
+                  </button>
+                </div>
+                {showRest && (
+                  <div
+                    id="rest-info"
+                    className={`mt-2 p-3 rounded bg-${accentColor}-50 border border-${accentColor}-100 text-${accentColor}-800 animate-fade-in text-sm`}
+                  >
+                    <div className="font-semibold mb-1">Rest Times</div>
+                    <div>{trainingType.rest}</div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-gray-700 mb-1">Goal 800m Time</label>
@@ -316,8 +372,8 @@ export default function App() {
               <button
                 type="submit"
                 className={`
-                  w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
-                  text-${accentColor}-700 font-bold py-2 rounded-lg transition
+                  w-full !bg-${accentColor}-600 hover:!bg-${accentColor}-700
+                  !text-white font-bold py-2 rounded-lg transition
                   transition-transform duration-150 hover:scale-105
                   shadow
                   ${loading ? "opacity-70" : ""}
@@ -327,7 +383,7 @@ export default function App() {
                 {loading ? (
       <>
         <svg
-          className="animate-spin h-5 w-5 text-indigo-700 inline-block mr-2 align-middle"
+          className="animate-spin h-5 w-5 text-white inline-block mr-2 align-middle"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
