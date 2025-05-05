@@ -1,6 +1,3 @@
-markdown
-
-Copy
 # 800m-calculator
 
 A web application to predict 800m training and race times.
