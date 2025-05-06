@@ -21,6 +21,8 @@ app.add_middleware(
 
 def convert_to_seconds(time_str: str) -> float:
     try:
+        if not any(c.isdigit() for c in time_str):
+            raise ValueError("Invalid input: Only numbers, colons, and periods are allowed. Please do not use words or letters.")
         if ":" not in time_str and "." not in time_str:
             return float(time_str)
         if ":" in time_str:
@@ -52,8 +54,8 @@ def convert_to_seconds(time_str: str) -> float:
             else:
                 raise ValueError("Too many dots.")
         raise ValueError("Could not parse input.")
-    except Exception as e:
-        raise ValueError(f"Invalid input '{time_str}': {e}")
+    except ValueError:
+        raise ValueError("Invalid input: Only numbers, colons, and periods are allowed. Please do not use words or letters.")
 
 def seconds_to_minutes(seconds: float) -> str:
     minutes = int(seconds // 60)
@@ -73,6 +75,11 @@ def predict_800m(model, feature_cols, input_values):
             processed.append(convert_to_seconds(val))
     X = pd.DataFrame([processed], columns=feature_cols)
     prediction = model.predict(X)[0]
+    # Out-of-range handling
+    if prediction < 96:
+        raise ValueError("Predicted time is too fast to be realistic (less than 1:36). Please check your inputs.")
+    if prediction > 240:
+        raise ValueError("Predicted time is too slow (over 4:00). Please check your inputs.")
     return {
         "predicted_seconds": float(prediction),
         "predicted_formatted": seconds_to_minutes(prediction)
