@@ -62,16 +62,62 @@ function cleanLabel(label) {
   return label.replace(/average/gi, '').replace(/\s{2,}/g, ' ').trim();
 }
 
+const renderInput = (label, placeholder, value, onChange) => (
+  <div>
+    <label className="block text-gray-700 mb-1">{label}</label>
+    <input
+      type="text"
+      placeholder={placeholder}
+      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 transition bg-white"
+      value={value}
+      onChange={onChange}
+      required
+    />
+  </div>
+);
+
+const renderSplitInputs = (label, placeholders, values, onChange) => (
+  <div>
+    <label className="block text-gray-700 mb-1">{label}</label>
+    <div className="flex gap-2 flex-wrap">
+      {placeholders.map((ph, idx) => (
+        <input
+          key={idx}
+          type="text"
+          placeholder={ph}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200 transition bg-white"
+          value={values[idx] || ""}
+          onChange={(e) => onChange(e.target.value, idx)}
+          required
+        />
+      ))}
+    </div>
+  </div>
+);
+
 const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages }) => {
   const featureNames = trainingType.features;
   const splitConfig = SPLIT_FEATURES[trainingType.key] || {};
   const phArray = PLACEHOLDERS[trainingType.key] || [];
 
-  const handleInputChange = useCallback((value, idx) => {
-    setInputs(prev => {
-      if (prev[idx] === value) return prev;
+  const handleInputChange = useCallback((value, idx, splitIdx = null) => {
+    setInputs((prev) => {
       const updatedInputs = [...prev];
-      updatedInputs[idx] = value;
+      if (splitIdx !== null) {
+        if (Array.isArray(updatedInputs[idx])) {
+          if (updatedInputs[idx][splitIdx] === value) return prev;
+          updatedInputs[idx] = [...updatedInputs[idx]];
+          updatedInputs[idx][splitIdx] = value;
+        } else {
+          const numSplits = splitConfig[featureNames[idx]];
+          updatedInputs[idx] = Array(numSplits).fill("").map((_, i) =>
+            i === splitIdx ? value : ""
+          );
+        }
+      } else {
+        if (updatedInputs[idx] === value) return prev;
+        updatedInputs[idx] = value;
+      }
       return updatedInputs;
     });
   }, []);
@@ -93,93 +139,99 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages })
     });
   }, []);
 
+  // Utility for extracting main distance (e.g. "600m" from "First 600m" or "4x300m average")
+  const getDistanceFromLabel = label => {
+    const match = label.match(/(\d+\s*x\s*)?(\d+m)/i) || label.match(/(\d+m)/i);
+    return match ? match[2] || match[0] : label.replace(/average|set\s*\d+/gi, '').trim();
+  };
+
+  // Utility for getting set number
+  const getSetNumber = label => {
+    const match = label.match(/Set\s*(\d+)/i);
+    return match ? match[1] : null;
+  };
+
+  // --- Input Averages Option ---
   if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
     if (inputAverages) {
-      return (
-        <div>
-          <label className="block text-gray-700 mb-1">Average Split</label>
-          <input
-            type="text"
-            placeholder={phArray[0] || DEFAULT_PLACEHOLDER}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
-            value={inputs[0] || ""}
-            onChange={(e) => handleInputChange(e.target.value, 0)}
-            required
-          />
-        </div>
+      const reps = SPLIT_FEATURES[trainingType.key];
+      const distance = getDistanceFromLabel(trainingType.label);
+      return renderInput(
+        `Average ${reps} x ${distance} Split`,
+        phArray[0] || DEFAULT_PLACEHOLDER,
+        inputs[0] || "",
+        (e) => handleInputChange(e.target.value, 0)
       );
     } else {
-      return (
-        <div>
-          <label className="block text-gray-700 mb-1">{trainingType.label} Splits</label>
-          <div className="flex gap-2 flex-wrap">
-            {Array.from({ length: SPLIT_FEATURES[trainingType.key] }).map((_, idx) => (
-              <input
-                key={`input-${idx}`}
-                type="text"
-                placeholder={phArray[idx] || DEFAULT_PLACEHOLDER}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
-                value={inputs[idx] || ""}
-                onChange={(e) => handleInputChange(e.target.value, idx)}
-                required
-              />
-            ))}
-          </div>
-        </div>
+      const distance = getDistanceFromLabel(trainingType.label);
+      const num = SPLIT_FEATURES[trainingType.key];
+      return renderSplitInputs(
+        `${distance} Split${num > 1 ? 's' : ''}`,
+        phArray,
+        inputs,
+        (value, idx) => handleInputChange(value, idx)
       );
     }
   }
 
+  // --- For compound workouts ---
   return featureNames.map((label, idx) => {
     const numSplits = splitConfig[label] || 0;
-    if (numSplits) {
+    const setNumber = getSetNumber(label);
+    const distance = getDistanceFromLabel(label);
+
+    // Custom logic for "2 x (3 x 300m)" workout
+    if (trainingType.key === "300m_x3x2") {
       if (inputAverages) {
-        return (
-          <div key={`avg-${label}`}>
-            <label className="block text-gray-700 mb-1">{cleanLabel(label)} (average)</label>
-            <input
-              type="text"
-              placeholder={phArray[idx] || DEFAULT_PLACEHOLDER}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
-              value={inputs[idx] || ""}
-              onChange={(e) => handleInputChange(e.target.value, idx)}
-              required
-            />
-          </div>
+        // Set 1 300m Average, Set 2 300m Average
+        return renderInput(
+          `Set ${idx + 1} 300m Average`,
+          phArray[idx] || DEFAULT_PLACEHOLDER,
+          inputs[idx] || "",
+          (e) => handleInputChange(e.target.value, idx)
         );
       } else {
-        return (
-          <div key={`splits-${label}`}>
-            <label className="block text-gray-700 mb-1">{cleanLabel(label)}</label>
-            <div className="flex gap-2 flex-wrap">
-              {Array.from({ length: numSplits }).map((_, splitIdx) => (
-                <input
-                  key={`split-${idx}-${splitIdx}`}
-                  type="text"
-                  placeholder={phArray[idx + splitIdx] || DEFAULT_PLACEHOLDER}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
-                  value={Array.isArray(inputs[idx]) ? inputs[idx][splitIdx] || "" : ""}
-                  onChange={(e) => handleArrayInputChange(e.target.value, idx, splitIdx)}
-                  required
-                />
-              ))}
-            </div>
-          </div>
+        // Set 1 300m Splits, Set 2 300m Splits
+        return renderSplitInputs(
+          `Set ${idx + 1} 300m Splits`,
+          phArray.slice(idx, idx + numSplits),
+          Array.isArray(inputs[idx]) ? inputs[idx] : [],
+          (value, splitIdx) => handleInputChange(value, idx, splitIdx)
+        );
+      }
+    }
+
+    // --- Default logic for other compound workouts ---
+    if (numSplits) {
+      if (inputAverages) {
+        // Examples: Average 3 x 400m Split, Average 4 x 300m Split, etc.
+        let reps = numSplits;
+        let avgLabel = `Average ${reps} x ${distance} Split`;
+        if (setNumber) {
+          avgLabel = `Average Set ${setNumber} ${distance} Split`;
+        }
+        return renderInput(
+          avgLabel,
+          phArray[idx] || DEFAULT_PLACEHOLDER,
+          inputs[idx] || "",
+          (e) => handleInputChange(e.target.value, idx)
+        );
+      } else {
+        // e.g., 400m Splits, 300m Splits (pluralized)
+        return renderSplitInputs(
+          `${distance} Split${numSplits > 1 ? 's' : ''}`,
+          phArray.slice(idx, idx + numSplits),
+          Array.isArray(inputs[idx]) ? inputs[idx] : [],
+          (value, splitIdx) => handleInputChange(value, idx, splitIdx)
         );
       }
     } else {
-      return (
-        <div key={`single-${label}`}>
-          <label className="block text-gray-700 mb-1">{cleanLabel(label)}</label>
-          <input
-            type="text"
-            placeholder={phArray[idx] || DEFAULT_PLACEHOLDER}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
-            value={inputs[idx] || ""}
-            onChange={(e) => handleInputChange(e.target.value, idx)}
-            required
-          />
-        </div>
+      // Fallback, single split, label as e.g. "600m Split"
+      return renderInput(
+        `${distance} Split`,
+        phArray[idx] || DEFAULT_PLACEHOLDER,
+        inputs[idx] || "",
+        (e) => handleInputChange(e.target.value, idx)
       );
     }
   });
@@ -220,16 +272,14 @@ function TrainingTypeDropdown({ trainingType, setTrainingType }) {
 }
 
 function TabButton({ modeVal, currentMode, onClick, children }) {
+  const isActive = currentMode === modeVal;
   return (
     <button
-      className={`
-        px-4 py-2 rounded-t-lg font-medium transition-all
-        ${
-          currentMode === modeVal
-            ? "bg-white text-indigo-700 border-b-2 border-b-white shadow"
-            : "bg-gray-100 text-gray-600 hover:bg-indigo-50"
-        }
-      `}
+      className={`px-4 py-2 rounded-t-lg font-medium transition-all ${
+        isActive
+          ? "bg-white text-indigo-700 border-b-2 border-b-white shadow"
+          : "bg-gray-100 text-gray-600 hover:bg-indigo-50"
+      }`}
       onClick={onClick}
     >
       {children}
@@ -256,19 +306,12 @@ export default function App() {
   }, [trainingType]);
 
   useEffect(() => {
-    let defaultInputs;
-    if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
-      defaultInputs = Array(SPLIT_FEATURES[trainingType.key]).fill("");
-    } else {
-      const featureNames = trainingType.features;
-      defaultInputs = featureNames.map((fn) => {
-        const splits = SPLIT_FEATURES[trainingType.key]?.[fn];
-        if (splits) {
-          return Array(splits).fill("");
-        }
-        return "";
-      });
-    }
+    const defaultInputs = Array.isArray(SPLIT_FEATURES[trainingType.key])
+      ? Array(SPLIT_FEATURES[trainingType.key]).fill("")
+      : trainingType.features.map((fn) => {
+          const splits = SPLIT_FEATURES[trainingType.key]?.[fn];
+          return splits ? Array(splits).fill("") : "";
+        });
     setInputs(defaultInputs);
     setResult(null);
     setError("");
