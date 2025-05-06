@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import './App.css'
 import { Listbox } from "@headlessui/react";
 import { ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import { Helmet } from 'react-helmet-async';
 
+// TRAINING TYPES AND FEATURES
 const TRAINING_TYPES = [
   {
     key: "600m_x3",
@@ -14,7 +15,7 @@ const TRAINING_TYPES = [
   {
     key: "600m_400m_x3",
     label: "600m + 3 x 400m",
-    features: ["600m", "3x400 average"],
+    features: ["600m", "3x400m average"],
     rest: "8 minutes rest after the 600m. 2.5 minutes rest between each 400m.",
   },
   {
@@ -37,71 +38,274 @@ const TRAINING_TYPES = [
   },
 ];
 
-// Placeholder map for each training type
+const SPLIT_FEATURES = {
+  "600m_x3": 3,
+  "500m_x3": 3,
+  "600m_400m_x3": { "3x400m average": 3 },
+  "600m_300m_x4": { "4x300m average": 4 },
+  "300m_x3x2": { "Set 1 3x300m average": 3, "Set 2 3x300m average": 3 },
+};
+
 const PLACEHOLDERS = {
   "600m_x3": ["1:36.0", "1:34.0", "1:32.0"],
-  "600m_400m_x3": ["1:32.0", "1:03.5"],
-  "600m_300m_x4": ["1:33.5", "0:46.5"],
+  "600m_400m_x3": ["1:32.0", "1:03.5", "1:03.5", "1:03.5"],
+  "600m_300m_x4": ["1:33.5", "0:46.5", "0:46.0", "0:45.5", "0:45.0"],
   "500m_x3": ["1:18.0", "1:17.0", "1:16.0"],
-  "300m_x3x2": ["0:47.0", "0:45.0"],
+  "300m_x3x2": ["0:47.0", "0:47.0", "0:47.0", "0:45.0", "0:45.0", "0:45.0"],
 };
+
 const DEFAULT_PLACEHOLDER = "1:32.5";
-const GOAL_PLACEHOLDER = "2:00.0"; // for 800m goal input
-
+const GOAL_PLACEHOLDER = "2:00.0";
 const API_URL = "https://eight00m-calculator.onrender.com";
-
-// Choose your accent color here
 const accentColor = "indigo";
+
+function cleanLabel(label) {
+  return label.replace(/average/gi, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages }) => {
+  const featureNames = trainingType.features;
+  const splitConfig = SPLIT_FEATURES[trainingType.key] || {};
+  const phArray = PLACEHOLDERS[trainingType.key] || [];
+
+  const handleInputChange = useCallback((value, idx) => {
+    setInputs(prev => {
+      if (prev[idx] === value) return prev;
+      const updatedInputs = [...prev];
+      updatedInputs[idx] = value;
+      return updatedInputs;
+    });
+  }, []);
+
+  const handleArrayInputChange = useCallback((value, idx, splitIdx) => {
+    setInputs(prev => {
+      const updatedInputs = [...prev];
+      if (Array.isArray(updatedInputs[idx])) {
+        if (updatedInputs[idx][splitIdx] === value) return prev;
+        updatedInputs[idx] = [...updatedInputs[idx]];
+        updatedInputs[idx][splitIdx] = value;
+      } else {
+        const numSplits = splitConfig[featureNames[idx]];
+        updatedInputs[idx] = Array(numSplits).fill("").map((_, i) => 
+          i === splitIdx ? value : ""
+        );
+      }
+      return updatedInputs;
+    });
+  }, []);
+
+  if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+    if (inputAverages) {
+      return (
+        <div>
+          <label className="block text-gray-700 mb-1">Average Split</label>
+          <input
+            type="text"
+            placeholder={phArray[0] || DEFAULT_PLACEHOLDER}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
+            value={inputs[0] || ""}
+            onChange={(e) => handleInputChange(e.target.value, 0)}
+            required
+          />
+        </div>
+      );
+    } else {
+      return (
+        <div>
+          <label className="block text-gray-700 mb-1">{trainingType.label} Splits</label>
+          <div className="flex gap-2 flex-wrap">
+            {Array.from({ length: SPLIT_FEATURES[trainingType.key] }).map((_, idx) => (
+              <input
+                key={`input-${idx}`}
+                type="text"
+                placeholder={phArray[idx] || DEFAULT_PLACEHOLDER}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
+                value={inputs[idx] || ""}
+                onChange={(e) => handleInputChange(e.target.value, idx)}
+                required
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  return featureNames.map((label, idx) => {
+    const numSplits = splitConfig[label] || 0;
+    if (numSplits) {
+      if (inputAverages) {
+        return (
+          <div key={`avg-${label}`}>
+            <label className="block text-gray-700 mb-1">{cleanLabel(label)} (average)</label>
+            <input
+              type="text"
+              placeholder={phArray[idx] || DEFAULT_PLACEHOLDER}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
+              value={inputs[idx] || ""}
+              onChange={(e) => handleInputChange(e.target.value, idx)}
+              required
+            />
+          </div>
+        );
+      } else {
+        return (
+          <div key={`splits-${label}`}>
+            <label className="block text-gray-700 mb-1">{cleanLabel(label)}</label>
+            <div className="flex gap-2 flex-wrap">
+              {Array.from({ length: numSplits }).map((_, splitIdx) => (
+                <input
+                  key={`split-${idx}-${splitIdx}`}
+                  type="text"
+                  placeholder={phArray[idx + splitIdx] || DEFAULT_PLACEHOLDER}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
+                  value={Array.isArray(inputs[idx]) ? inputs[idx][splitIdx] || "" : ""}
+                  onChange={(e) => handleArrayInputChange(e.target.value, idx, splitIdx)}
+                  required
+                />
+              ))}
+            </div>
+          </div>
+        );
+      }
+    } else {
+      return (
+        <div key={`single-${label}`}>
+          <label className="block text-gray-700 mb-1">{cleanLabel(label)}</label>
+          <input
+            type="text"
+            placeholder={phArray[idx] || DEFAULT_PLACEHOLDER}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
+            value={inputs[idx] || ""}
+            onChange={(e) => handleInputChange(e.target.value, idx)}
+            required
+          />
+        </div>
+      );
+    }
+  });
+});
+
+function TrainingTypeDropdown({ trainingType, setTrainingType }) {
+  return (
+    <Listbox value={trainingType} onChange={setTrainingType}>
+      <div className="relative">
+        <Listbox.Button className={`relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus:ring-2 focus:ring-${accentColor}-200 transition text-base font-medium`}>
+          <span className="block truncate">{trainingType.label}</span>
+          <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+            <ChevronUpDownIcon className={`h-5 w-5 text-${accentColor}-500`} aria-hidden="true" />
+          </span>
+        </Listbox.Button>
+        <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white border border-gray-200 shadow-lg z-[999] ring-1 ring-black/5 focus:outline-none">
+          {TRAINING_TYPES.map((type) => (
+            <Listbox.Option
+              key={type.key}
+              className={({ active }) =>
+                `cursor-pointer select-none py-2 pl-4 pr-4 text-base ${
+                  active ? `bg-${accentColor}-50 text-${accentColor}-800` : "text-gray-900"
+                }`
+              }
+              value={type}
+            >
+              {({ selected }) => (
+                <span className={`block truncate ${selected ? "font-semibold" : "font-normal"}`}>
+                  {type.label}
+                </span>
+              )}
+            </Listbox.Option>
+          ))}
+        </Listbox.Options>
+      </div>
+    </Listbox>
+  );
+}
+
+function TabButton({ modeVal, currentMode, onClick, children }) {
+  return (
+    <button
+      className={`
+        px-4 py-2 rounded-t-lg font-medium transition-all
+        ${
+          currentMode === modeVal
+            ? `bg-white text-${accentColor}-700 border-b-2 border-b-white shadow`
+            : `bg-gray-100 text-gray-600 hover:bg-${accentColor}-50`
+        }
+      `}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function App() {
   const [mode, setMode] = useState("predict");
   const [trainingType, setTrainingType] = useState(TRAINING_TYPES[0]);
-  const [inputs, setInputs] = useState(Array(TRAINING_TYPES[0].features.length).fill(""));
+  const [inputs, setInputs] = useState([]);
   const [goalTime, setGoalTime] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showRest, setShowRest] = useState(false);
+  const [inputAverages, setInputAverages] = useState(false);
+
+  const supportsAverages = useCallback(() => {
+    return (
+      typeof SPLIT_FEATURES[trainingType.key] === "number" ||
+      Object.keys(SPLIT_FEATURES[trainingType.key] || {}).length > 0
+    );
+  }, [trainingType]);
 
   useEffect(() => {
-    setInputs(Array(trainingType.features.length).fill(""));
+    let defaultInputs;
+    if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+      defaultInputs = Array(SPLIT_FEATURES[trainingType.key]).fill("");
+    } else {
+      const featureNames = trainingType.features;
+      defaultInputs = featureNames.map((fn) => {
+        const splits = SPLIT_FEATURES[trainingType.key]?.[fn];
+        if (splits) {
+          return Array(splits).fill("");
+        }
+        return "";
+      });
+    }
+    setInputs(defaultInputs);
     setResult(null);
     setError("");
+    setInputAverages(false);
   }, [trainingType, mode]);
 
-  function TrainingTypeDropdown() {
-    return (
-      <Listbox value={trainingType} onChange={setTrainingType}>
-        <div className="relative">
-          <Listbox.Button className={`relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus:ring-2 focus:ring-${accentColor}-200 transition text-base font-medium`}>
-            <span className="block truncate">{trainingType.label}</span>
-            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-              <ChevronUpDownIcon className={`h-5 w-5 text-${accentColor}-500`} aria-hidden="true" />
-            </span>
-          </Listbox.Button>
-          <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white border border-gray-200 shadow-lg z-[999] ring-1 ring-black/5 focus:outline-none">
-            {TRAINING_TYPES.map((type) => (
-              <Listbox.Option
-                key={type.key}
-                className={({ active }) =>
-                  `cursor-pointer select-none py-2 pl-4 pr-4 text-base ${
-                    active ? `bg-${accentColor}-50 text-${accentColor}-800` : "text-gray-900"
-                  }`
-                }
-                value={type}
-              >
-                {({ selected }) => (
-                  <span className={`block truncate ${selected ? "font-semibold" : "font-normal"}`}>
-                    {type.label}
-                  </span>
-                )}
-              </Listbox.Option>
-            ))}
-          </Listbox.Options>
-        </div>
-      </Listbox>
-    );
-  }
+  const handleAveragesToggle = useCallback((e) => {
+    const checked = e.target.checked;
+    setInputAverages(checked);
+
+    if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+      setInputs(prev => {
+        if (checked) {
+          return [prev && prev[0] ? prev[0] : "", "", ""];
+        } else {
+          return Array(SPLIT_FEATURES[trainingType.key])
+            .fill("")
+            .map((v, i) => (prev && prev[i] ? prev[i] : ""));
+        }
+      });
+    } else {
+      setInputs(prev =>
+        prev.map((v, idx) => {
+          const splits = SPLIT_FEATURES[trainingType.key]?.[trainingType.features[idx]];
+          if (splits) {
+            if (checked) {
+              return Array.isArray(v) ? (v[0] || "") : "";
+            } else {
+              return Array(splits).fill("").map((sv, si) => (si === 0 && v ? v : ""));
+            }
+          }
+          return v;
+        })
+      );
+    }
+  }, [trainingType]);
 
   const handlePredict = async (e) => {
     e.preventDefault();
@@ -109,12 +313,35 @@ export default function App() {
     setResult(null);
     setError("");
     try {
+      let input_values;
+      if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+        if (inputAverages) {
+          const avg = inputs[0] || "";
+          input_values = [avg, avg, avg];
+        } else {
+          input_values = inputs.map(s => s.trim());
+        }
+      } else {
+        input_values = trainingType.features.map((fn, idx) => {
+          const splits = SPLIT_FEATURES[trainingType.key]?.[fn];
+          if (splits) {
+            if (inputAverages) {
+              const avg = inputs[idx] || "";
+              return Array(splits).fill(avg);
+            } else {
+              return inputs[idx].map(s => s.trim());
+            }
+          }
+          return inputs[idx];
+        });
+      }
+
       const res = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           training_type: trainingType.key,
-          input_values: inputs,
+          input_values,
         }),
       });
       if (!res.ok) {
@@ -161,24 +388,6 @@ export default function App() {
     setLoading(false);
   };
 
-  function TabButton({ modeVal, children }) {
-    return (
-      <button
-        className={`
-          px-4 py-2 rounded-t-lg font-medium transition-all
-          ${
-            mode === modeVal
-              ? `!bg-white !text-${accentColor}-700 border-b-2 border-b-white shadow`
-              : `bg-gray-100 text-gray-500 hover:bg-${accentColor}-50`
-          }
-        `}
-        onClick={() => setMode(modeVal)}
-      >
-        {children}
-      </button>
-    );
-  }
-
   return (
     <>
       <Helmet>
@@ -188,8 +397,6 @@ export default function App() {
           content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches."
         />
         <link rel="canonical" href="https://www.seanfontaine.dev/800m-calculator" />
-
-        {/* Open Graph / Twitter tags for social sharing */}
         <meta property="og:type" content="website" />
         <meta property="og:title" content="800m Training Calculator | Predict Race Splits & Times" />
         <meta property="og:description" content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches." />
@@ -201,10 +408,7 @@ export default function App() {
         <meta name="twitter:image" content="https://www.seanfontaine.dev/og-800m.png" />
       </Helmet>
       <div className="relative min-h-screen w-full flex flex-col justify-between">
-        {/* Fixed, full-viewport grayscale background */}
         <div className="fixed inset-0 bg-gray-50 -z-10" aria-hidden="true" />
-
-        {/* Glassy Card Centered */}
         <header className="mb-6 text-center z-10 flex flex-col items-center">
           <h1 className="font-bold text-gray-900 mb-2 drop-shadow-none inline-block px-2
             text-base sm:text-lg md:text-xl lg:text-2xl tracking-tight max-w-[20rem] sm:max-w-[28rem] leading-tight
@@ -219,7 +423,6 @@ export default function App() {
             or calculate recommended splits for a goal 800m time.
           </p>
         </header>
-
         <main className="
           w-full max-w-md mx-auto
           bg-white/80 backdrop-blur-sm shadow-xl rounded-xl
@@ -228,29 +431,58 @@ export default function App() {
           animate-fade-in
         ">
           <div className="flex mb-6 gap-2 md:gap-6 justify-center">
-            <TabButton modeVal="predict">Predict Race Time</TabButton>
-            <TabButton modeVal="reverse">Get Training Splits</TabButton>
+            <TabButton 
+              modeVal="predict" 
+              currentMode={mode} 
+              onClick={() => setMode("predict")}
+            >
+              Predict Race Time
+            </TabButton>
+            <TabButton 
+              modeVal="reverse" 
+              currentMode={mode} 
+              onClick={() => setMode("reverse")}
+            >
+              Get Training Splits
+            </TabButton>
           </div>
           {mode === "predict" ? (
             <form onSubmit={handlePredict} className="space-y-6">
               <div className="mb-8">
                 <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
-                <TrainingTypeDropdown />
-                <div className="mt-2 flex items-center">
-                  <button
-                    type="button"
-                    className={`flex items-center gap-1 text-xs !text-${accentColor}-600 hover:underline font-medium focus:outline-none`}
-                    style={{ padding: "2px 0" }}
-                    onClick={() => setShowRest((v) => !v)}
-                    aria-expanded={showRest}
-                    aria-controls="rest-info"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                      <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    {showRest ? "Hide Training Info" : "Show Training Info"}
-                  </button>
+                <TrainingTypeDropdown trainingType={trainingType} setTrainingType={setTrainingType} />
+                <div className="mt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  className={`
+                    flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
+                    ${showRest ? `text-${accentColor}-700` : "text-gray-600"}
+                  `}
+                  style={{ padding: "2px 0" }}
+                  onClick={() => setShowRest((v) => !v)}
+                  aria-expanded={showRest}
+                  aria-controls="rest-info"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                    <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {showRest ? "Hide Training Info" : "Show Training Info"}
+                </button>
+                  {supportsAverages() && (
+                    <div className="flex items-center ml-auto">
+                      <input
+                        type="checkbox"
+                        id="input-averages"
+                        checked={inputAverages}
+                        onChange={handleAveragesToggle}
+                        className="accent-indigo-600"
+                      />
+                      <label htmlFor="input-averages" className="text-sm text-gray-700 cursor-pointer ml-2">
+                        Input Averages
+                      </label>
+                    </div>
+                  )}
                 </div>
                 {showRest && (
                   <div
@@ -262,31 +494,16 @@ export default function App() {
                   </div>
                 )}
               </div>
-              {trainingType.features.map((label, idx) => {
-                const phArray = PLACEHOLDERS[trainingType.key] || [];
-                const placeholder = phArray[idx] || DEFAULT_PLACEHOLDER;
-                return (
-                  <div key={label}>
-                    <label className="block text-gray-700 mb-1">{label}</label>
-                    <input
-                      type="text"
-                      placeholder={placeholder}
-                      className="
-                        w-full border border-gray-300 rounded-lg px-3 py-2
-                        focus:outline-none focus:ring-2 focus:ring-indigo-200 transition
-                        bg-white
-                      "
-                      value={inputs[idx] || ""}
-                      onChange={(e) => setInputs((prev) => prev.map((v, i) => (i === idx ? e.target.value : v)))}
-                      required
-                    />
-                  </div>
-                );
-              })}
+              <TrainingInputs 
+                trainingType={trainingType}
+                inputs={inputs}
+                setInputs={setInputs}
+                inputAverages={inputAverages}
+              />
               <button
                 type="submit"
                 className={`
-                  w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
+                  w-full bg-${accentColor}-50 hover:bg-${accentColor}-100
                   text-${accentColor}-700 font-bold py-2 rounded-lg transition
                   transition-transform duration-150 hover:scale-105
                   shadow
@@ -297,7 +514,7 @@ export default function App() {
                 {loading ? (
                   <>
                     <svg
-                      className={`animate-spin h-5 w-5 text-${accentColor}-700 inline-block mr-2 align-middle`}
+                      className={`animate-spin h-5 w-5 text-white inline-block mr-2 align-middle`}
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -327,11 +544,11 @@ export default function App() {
             <form onSubmit={handleReverse} className="space-y-6">
               <div className="mb-8">
                 <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
-                <TrainingTypeDropdown />
+                <TrainingTypeDropdown trainingType={trainingType} setTrainingType={setTrainingType} />
                 <div className="mt-2 flex items-center">
                   <button
                     type="button"
-                    className={`flex items-center gap-1 text-xs !text-${accentColor}-600 hover:underline font-medium focus:outline-none`}
+                    className={`flex items-center gap-1 text-xs !text-${accentColor}-700 hover:underline font-medium focus:outline-none`}
                     style={{ padding: "2px 0" }}
                     onClick={() => setShowRest((v) => !v)}
                     aria-expanded={showRest}
@@ -359,11 +576,7 @@ export default function App() {
                 <input
                   type="text"
                   placeholder={GOAL_PLACEHOLDER}
-                  className="
-                    w-full border border-gray-300 rounded-lg px-3 py-2
-                    focus:outline-none focus:ring-2 focus:ring-indigo-200 transition
-                    bg-white
-                  "
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
                   value={goalTime}
                   onChange={(e) => setGoalTime(e.target.value)}
                   required
@@ -372,7 +585,7 @@ export default function App() {
               <button
                 type="submit"
                 className={`
-                  w-full bg-${accentColor}-600 hover:bg-${accentColor}-700
+                  w-full bg-${accentColor}-50 hover:bg-${accentColor}-100
                   text-${accentColor}-700 font-bold py-2 rounded-lg transition
                   transition-transform duration-150 hover:scale-105
                   shadow
@@ -383,7 +596,7 @@ export default function App() {
                 {loading ? (
                   <>
                     <svg
-                      className={`animate-spin h-5 w-5 text-${accentColor}-700 inline-block mr-2 align-middle`}
+                      className={`animate-spin h-5 w-5 text-white inline-block mr-2 align-middle`}
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -438,7 +651,6 @@ export default function App() {
           )}
           {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
         </main>
-
         <footer className="mt-10 text-gray-400 text-xs z-10 text-center pb-2">
           @2025 Sean-Fontaine-Tools
         </footer>
