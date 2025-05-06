@@ -57,7 +57,6 @@ const PLACEHOLDERS = {
 const DEFAULT_PLACEHOLDER = "1:32.5";
 const GOAL_PLACEHOLDER = "2:00.0";
 const API_URL = "https://eight00m-calculator.onrender.com";
-const accentColor = "indigo";
 
 function cleanLabel(label) {
   return label.replace(/average/gi, '').replace(/\s{2,}/g, ' ').trim();
@@ -190,10 +189,10 @@ function TrainingTypeDropdown({ trainingType, setTrainingType }) {
   return (
     <Listbox value={trainingType} onChange={setTrainingType}>
       <div className="relative">
-        <Listbox.Button className={`relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus:ring-2 focus:ring-${accentColor}-200 transition text-base font-medium`}>
+        <Listbox.Button className="relative w-full cursor-pointer rounded-lg bg-white py-2 pl-3 pr-10 text-left border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition text-base font-medium">
           <span className="block truncate">{trainingType.label}</span>
           <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-            <ChevronUpDownIcon className={`h-5 w-5 text-${accentColor}-500`} aria-hidden="true" />
+            <ChevronUpDownIcon className="h-5 w-5 text-indigo-500" aria-hidden="true" />
           </span>
         </Listbox.Button>
         <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white border border-gray-200 shadow-lg z-[999] ring-1 ring-black/5 focus:outline-none">
@@ -202,7 +201,7 @@ function TrainingTypeDropdown({ trainingType, setTrainingType }) {
               key={type.key}
               className={({ active }) =>
                 `cursor-pointer select-none py-2 pl-4 pr-4 text-base ${
-                  active ? `bg-${accentColor}-50 text-${accentColor}-800` : "text-gray-900"
+                  active ? "bg-indigo-50 text-indigo-800" : "text-gray-900"
                 }`
               }
               value={type}
@@ -227,8 +226,8 @@ function TabButton({ modeVal, currentMode, onClick, children }) {
         px-4 py-2 rounded-t-lg font-medium transition-all
         ${
           currentMode === modeVal
-            ? `bg-white text-${accentColor}-700 border-b-2 border-b-white shadow`
-            : `bg-gray-100 text-gray-600 hover:bg-${accentColor}-50`
+            ? "bg-white text-indigo-700 border-b-2 border-b-white shadow"
+            : "bg-gray-100 text-gray-600 hover:bg-indigo-50"
         }
       `}
       onClick={onClick}
@@ -449,26 +448,26 @@ export default function App() {
           {mode === "predict" ? (
             <form onSubmit={handlePredict} className="space-y-6">
               <div className="mb-8">
-                <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
+                <label className="block text-indigo-700 font-semibold mb-1">Training Type</label>
                 <TrainingTypeDropdown trainingType={trainingType} setTrainingType={setTrainingType} />
                 <div className="mt-2 flex items-center justify-between">
-                <button
-                  type="button"
-                  className={`
-                    flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
-                    ${showRest ? `text-${accentColor}-700` : "text-gray-600"}
-                  `}
-                  style={{ padding: "2px 0" }}
-                  onClick={() => setShowRest((v) => !v)}
-                  aria-expanded={showRest}
-                  aria-controls="rest-info"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                    <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  {showRest ? "Hide Training Info" : "Show Training Info"}
-                </button>
+                  <button
+                    type="button"
+                    className={`
+                      flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
+                      ${showRest ? "text-indigo-700" : "text-gray-600"}
+                    `}
+                    style={{ padding: "2px 0" }}
+                    onClick={() => setShowRest((v) => !v)}
+                    aria-expanded={showRest}
+                    aria-controls="rest-info"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                      <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    {showRest ? "Hide Training Info" : "Show Training Info"}
+                  </button>
                   {supportsAverages() && (
                     <div className="flex items-center ml-auto">
                       <input
@@ -487,7 +486,7 @@ export default function App() {
                 {showRest && (
                   <div
                     id="rest-info"
-                    className={`mt-2 p-3 rounded bg-${accentColor}-50 border border-${accentColor}-100 text-${accentColor}-800 animate-fade-in text-sm`}
+                    className="mt-2 p-3 rounded bg-indigo-50 border border-indigo-100 text-indigo-800 animate-fade-in text-sm"
                   >
                     <div className="font-semibold mb-1">Rest Times</div>
                     <div>{trainingType.rest}</div>
@@ -503,8 +502,8 @@ export default function App() {
               <button
                 type="submit"
                 className={`
-                  w-full bg-${accentColor}-50 hover:bg-${accentColor}-100
-                  text-${accentColor}-700 font-bold py-2 rounded-lg transition
+                  w-full bg-indigo-50 hover:bg-indigo-100
+                  text-indigo-700 font-bold py-2 rounded-lg transition
                   transition-transform duration-150 hover:scale-105
                   shadow
                   ${loading ? "opacity-70" : ""}
@@ -514,7 +513,7 @@ export default function App() {
                 {loading ? (
                   <>
                     <svg
-                      className={`animate-spin h-5 w-5 text-white inline-block mr-2 align-middle`}
+                      className="animate-spin h-5 w-5 text-white inline-block mr-2 align-middle"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -543,12 +542,15 @@ export default function App() {
           ) : (
             <form onSubmit={handleReverse} className="space-y-6">
               <div className="mb-8">
-                <label className={`block text-${accentColor}-700 font-semibold mb-1`}>Training Type</label>
+                <label className="block text-indigo-700 font-semibold mb-1">Training Type</label>
                 <TrainingTypeDropdown trainingType={trainingType} setTrainingType={setTrainingType} />
                 <div className="mt-2 flex items-center">
                   <button
                     type="button"
-                    className={`flex items-center gap-1 text-xs !text-${accentColor}-700 hover:underline font-medium focus:outline-none`}
+                    className={`
+                      flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
+                      ${showRest ? "text-indigo-700" : "text-gray-600"}
+                    `}
                     style={{ padding: "2px 0" }}
                     onClick={() => setShowRest((v) => !v)}
                     aria-expanded={showRest}
@@ -564,7 +566,7 @@ export default function App() {
                 {showRest && (
                   <div
                     id="rest-info"
-                    className={`mt-2 p-3 rounded bg-${accentColor}-50 border border-${accentColor}-100 text-${accentColor}-800 animate-fade-in text-sm`}
+                    className="mt-2 p-3 rounded bg-indigo-50 border border-indigo-100 text-indigo-800 animate-fade-in text-sm"
                   >
                     <div className="font-semibold mb-1">Rest Times</div>
                     <div>{trainingType.rest}</div>
@@ -585,8 +587,8 @@ export default function App() {
               <button
                 type="submit"
                 className={`
-                  w-full bg-${accentColor}-50 hover:bg-${accentColor}-100
-                  text-${accentColor}-700 font-bold py-2 rounded-lg transition
+                  w-full bg-indigo-50 hover:bg-indigo-100
+                  text-indigo-700 font-bold py-2 rounded-lg transition
                   transition-transform duration-150 hover:scale-105
                   shadow
                   ${loading ? "opacity-70" : ""}
@@ -596,7 +598,7 @@ export default function App() {
                 {loading ? (
                   <>
                     <svg
-                      className={`animate-spin h-5 w-5 text-white inline-block mr-2 align-middle`}
+                      className="animate-spin h-5 w-5 text-white inline-block mr-2 align-middle"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -624,21 +626,21 @@ export default function App() {
             </form>
           )}
           {result && (
-            <div className={`mt-6 bg-${accentColor}-50 border border-${accentColor}-100 rounded-lg p-4 text-center animate-fade-in`}>
+            <div className="mt-6 bg-indigo-50 border border-indigo-100 rounded-lg p-4 text-center animate-fade-in">
               {mode === "predict" ? (
                 <>
-                  <div className={`text-${accentColor}-800 text-lg font-medium`}>Predicted 800m Time:</div>
-                  <div className={`text-2xl font-bold text-${accentColor}-700 mt-2`}>
+                  <div className="text-indigo-800 text-lg font-medium">Predicted 800m Time:</div>
+                  <div className="text-2xl font-bold text-indigo-700 mt-2">
                     {result.predicted_formatted}
                   </div>
                 </>
               ) : (
                 <>
-                  <div className={`text-${accentColor}-800 text-lg font-medium`}>Recommended Splits:</div>
+                  <div className="text-indigo-800 text-lg font-medium">Recommended Splits:</div>
                   <ul className="mt-2 space-y-1">
                     {Array.isArray(result)
                       ? result.map((split, i) => (
-                          <li key={i} className={`text-${accentColor}-700`}>
+                          <li key={i} className="text-indigo-700">
                             <span className="font-semibold">{split.interval}:</span>{" "}
                             <span className="font-mono">{split.formatted}</span>
                           </li>
