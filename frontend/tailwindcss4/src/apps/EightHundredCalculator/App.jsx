@@ -2,47 +2,22 @@ import React, { useState, useEffect, useCallback, memo } from "react";
 import './App.css'
 import { Listbox } from "@headlessui/react";
 import { ChevronUpDownIcon } from "@heroicons/react/20/solid";
-import { Helmet } from 'react-helmet-async';
-
-// TRAINING TYPES AND FEATURES
-const TRAINING_TYPES = [
-  {
-    key: "600m_x3",
-    label: "3 x 600m",
-    features: ["First 600m", "Second 600m", "Third 600m"],
-    rest: "20 minutes rest between each 600m.",
-  },
-  {
-    key: "600m_400m_x3",
-    label: "600m + 3 x 400m",
-    features: ["600m", "3x400m average"],
-    rest: "8 minutes rest after the 600m. 2.5 minutes rest between each 400m.",
-  },
-  {
-    key: "600m_300m_x4",
-    label: "600m + 4 x 300m",
-    features: ["600m", "4x300m average"],
-    rest: "8 minutes rest after the 600m. 3 minutes rest between each 300m.",
-  },
-  {
-    key: "500m_x3",
-    label: "3 x 500m",
-    features: ["First 500m", "Second 500m", "Third 500m"],
-    rest: "10 minutes rest between each 500m.",
-  },
-  {
-    key: "300m_x3x2",
-    label: "2 x (3 x 300m)",
-    features: ["Set 1 3x300m average", "Set 2 3x300m average"],
-    rest: "3 minutes rest between each 300m. 10 minutes between set 1 and set 2.",
-  },
-];
+import translations from "../../translations"; // <-- Make sure path is correct
+import { useLocation, useNavigate } from "react-router-dom";
 
 const SPLIT_FEATURES = {
   "600m_x3": 3,
   "500m_x3": 3,
   "600m_400m_x3": { "3x400m average": 3 },
   "600m_300m_x4": { "4x300m average": 4 },
+  "ladder": {
+  "First 300m": 1,
+  "First 400m": 1,
+  "500m": 1,
+  "Second 400m": 1,
+  "Second 300m": 1,
+  "200m": 1,
+},
   "300m_x3x2": { "Set 1 3x300m average": 3, "Set 2 3x300m average": 3 },
 };
 
@@ -51,11 +26,10 @@ const PLACEHOLDERS = {
   "600m_400m_x3": ["1:32.0", "1:03.5", "1:03.5", "1:03.5"],
   "600m_300m_x4": ["1:33.5", "46.5", "46.0", "45.5", "45.0"],
   "500m_x3": ["1:18.0", "1:17.0", "1:16.0"],
+  "ladder": ["44.0", "59.0", "1:15.0", "60.0", "45.0", "28.0"],
   "300m_x3x2": ["47.0", "47.0", "47.0", "45.0", "45.0", "45.0"],
 };
 
-const DEFAULT_PLACEHOLDER = "1:32.5";
-const GOAL_PLACEHOLDER = "2:00.0";
 const API_URL = "https://eight00m-calculator.onrender.com";
 
 function cleanLabel(label) {
@@ -95,9 +69,7 @@ const renderSplitInputs = (label, placeholders, values, onChange) => (
   </div>
 );
 
-const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages }) => {
-  const featureNames = trainingType.features;
-  const splitConfig = SPLIT_FEATURES[trainingType.key] || {};
+const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t }) => {
   const phArray = PLACEHOLDERS[trainingType.key] || [];
 
   const handleInputChange = useCallback((value, idx, splitIdx = null) => {
@@ -109,7 +81,7 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages })
           updatedInputs[idx] = [...updatedInputs[idx]];
           updatedInputs[idx][splitIdx] = value;
         } else {
-          const numSplits = splitConfig[featureNames[idx]];
+          const numSplits = SPLIT_FEATURES[trainingType.key]?.[trainingType.features[idx]?.key];
           updatedInputs[idx] = Array(numSplits).fill("").map((_, i) =>
             i === splitIdx ? value : ""
           );
@@ -120,116 +92,55 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages })
       }
       return updatedInputs;
     });
-  }, []);
+  }, [trainingType]);
 
-  const handleArrayInputChange = useCallback((value, idx, splitIdx) => {
-    setInputs(prev => {
-      const updatedInputs = [...prev];
-      if (Array.isArray(updatedInputs[idx])) {
-        if (updatedInputs[idx][splitIdx] === value) return prev;
-        updatedInputs[idx] = [...updatedInputs[idx]];
-        updatedInputs[idx][splitIdx] = value;
-      } else {
-        const numSplits = splitConfig[featureNames[idx]];
-        updatedInputs[idx] = Array(numSplits).fill("").map((_, i) => 
-          i === splitIdx ? value : ""
-        );
-      }
-      return updatedInputs;
-    });
-  }, []);
-
-  // Utility for extracting main distance (e.g. "600m" from "First 600m" or "4x300m average")
-  const getDistanceFromLabel = label => {
-    const match = label.match(/(\d+\s*x\s*)?(\d+m)/i) || label.match(/(\d+m)/i);
-    return match ? match[2] || match[0] : label.replace(/average|set\s*\d+/gi, '').trim();
-  };
-
-  // Utility for getting set number
-  const getSetNumber = label => {
-    const match = label.match(/Set\s*(\d+)/i);
-    return match ? match[1] : null;
-  };
-
-  // --- Input Averages Option ---
+  // If training type is a "number" (e.g. 3), handle average input mode specially
   if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+    // Average input mode: one box
     if (inputAverages) {
-      const reps = SPLIT_FEATURES[trainingType.key];
-      const distance = getDistanceFromLabel(trainingType.label);
+      // Use the first average label for this workout
+      const labelObj = t.prompts[trainingType.key][0];
+      const label = labelObj.average;
       return renderInput(
-        `Average ${reps} x ${distance} Split`,
-        phArray[0] || DEFAULT_PLACEHOLDER,
+        label,
+        phArray[0] || t.defaultPlaceholder,
         inputs[0] || "",
         (e) => handleInputChange(e.target.value, 0)
       );
-    } else {
-      const distance = getDistanceFromLabel(trainingType.label);
-      const num = SPLIT_FEATURES[trainingType.key];
-      return renderSplitInputs(
-        `${distance} Split${num > 1 ? 's' : ''}`,
-        phArray,
-        inputs,
-        (value, idx) => handleInputChange(value, idx)
-      );
     }
+    // Non-average mode: one box per rep
+    return trainingType.features.map((feature, idx) => {
+      const labelObj = t.prompts[trainingType.key][idx];
+      const label = labelObj.split;
+      return renderInput(
+        label,
+        phArray[idx] || t.defaultPlaceholder,
+        inputs[idx] || "",
+        (e) => handleInputChange(e.target.value, idx)
+      );
+    });
   }
 
-  // --- For compound workouts ---
-  return featureNames.map((label, idx) => {
-    const numSplits = splitConfig[label] || 0;
-    const setNumber = getSetNumber(label);
-    const distance = getDistanceFromLabel(label);
+  // All other types (compound workouts)
+  return trainingType.features.map((feature, idx) => {
+    const labelObj = t.prompts[trainingType.key][idx];
+    const label = inputAverages ? labelObj.average : labelObj.split;
+    const splitConfig = SPLIT_FEATURES[trainingType.key] || {};
+    const numSplits = splitConfig[feature.key] || 0;
 
-    // Custom logic for "2 x (3 x 300m)" workout
-    if (trainingType.key === "300m_x3x2") {
-      if (inputAverages) {
-        // Set 1 300m Average, Set 2 300m Average
-        return renderInput(
-          `Set ${idx + 1} 300m Average`,
-          phArray[idx] || DEFAULT_PLACEHOLDER,
-          inputs[idx] || "",
-          (e) => handleInputChange(e.target.value, idx)
-        );
-      } else {
-        // Set 1 300m Splits, Set 2 300m Splits
-        return renderSplitInputs(
-          `Set ${idx + 1} 300m Splits`,
-          phArray.slice(idx, idx + numSplits),
-          Array.isArray(inputs[idx]) ? inputs[idx] : [],
-          (value, splitIdx) => handleInputChange(value, idx, splitIdx)
-        );
-      }
-    }
-
-    // --- Default logic for other compound workouts ---
-    if (numSplits) {
-      if (inputAverages) {
-        // Examples: Average 3 x 400m Split, Average 4 x 300m Split, etc.
-        let reps = numSplits;
-        let avgLabel = `Average ${reps} x ${distance} Split`;
-        if (setNumber) {
-          avgLabel = `Average Set ${setNumber} ${distance} Split`;
-        }
-        return renderInput(
-          avgLabel,
-          phArray[idx] || DEFAULT_PLACEHOLDER,
-          inputs[idx] || "",
-          (e) => handleInputChange(e.target.value, idx)
-        );
-      } else {
-        // e.g., 400m Splits, 300m Splits (pluralized)
-        return renderSplitInputs(
-          `${distance} Split${numSplits > 1 ? 's' : ''}`,
-          phArray.slice(idx, idx + numSplits),
-          Array.isArray(inputs[idx]) ? inputs[idx] : [],
-          (value, splitIdx) => handleInputChange(value, idx, splitIdx)
-        );
-      }
+    if (numSplits > 1 && !inputAverages) {
+      // Multiple splits, not using average
+      return renderSplitInputs(
+        label,
+        phArray.slice(idx, idx + numSplits),
+        Array.isArray(inputs[idx]) ? inputs[idx] : [],
+        (value, splitIdx) => handleInputChange(value, idx, splitIdx)
+      );
     } else {
-      // Fallback, single split, label as e.g. "600m Split"
+      // Single input, or using average
       return renderInput(
-        `${distance} Split`,
-        phArray[idx] || DEFAULT_PLACEHOLDER,
+        label,
+        phArray[idx] || t.defaultPlaceholder,
         inputs[idx] || "",
         (e) => handleInputChange(e.target.value, idx)
       );
@@ -237,7 +148,14 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages })
   });
 });
 
-function TrainingTypeDropdown({ trainingType, setTrainingType }) {
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const secs = (seconds % 60).toFixed(2).padStart(5, '0');
+  if (minutes === 0) return `${secs}`;
+  return `${minutes}:${secs}`;
+}
+
+function TrainingTypeDropdown({ trainingType, setTrainingType, trainingTypes }) {
   return (
     <Listbox value={trainingType} onChange={setTrainingType}>
       <div className="relative">
@@ -248,7 +166,7 @@ function TrainingTypeDropdown({ trainingType, setTrainingType }) {
           </span>
         </Listbox.Button>
         <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white border border-gray-200 shadow-lg z-[999] ring-1 ring-black/5 focus:outline-none">
-          {TRAINING_TYPES.map((type) => (
+          {trainingTypes.map((type) => (
             <Listbox.Option
               key={type.key}
               className={({ active }) =>
@@ -287,9 +205,33 @@ function TabButton({ modeVal, currentMode, onClick, children }) {
   );
 }
 
-export default function App() {
+function LangButton({ lang }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const otherLang = lang === "zh" ? "en" : "zh";
+  // Replace /en or /zh at the start of the path
+  const newPath = location.pathname.replace(/^\/(en|zh)/, `/${otherLang}`);
+
+  return (
+    <button
+      style={{
+        position: "absolute", top: 14, right: 20,
+        fontWeight: "bold", fontSize: 18, zIndex: 1000,
+        background: "none", border: "none", cursor: "pointer"
+      }}
+      onClick={() => navigate(newPath + location.search)}
+      aria-label={lang === "zh" ? "Switch to English" : "切換到繁體中文"}
+    >
+      {lang === "zh" ? "EN" : "繁"}
+    </button>
+  );
+}
+
+export default function App({ lang = "en" }) {
+  const t = translations[lang] || translations.en;
   const [mode, setMode] = useState("predict");
-  const [trainingType, setTrainingType] = useState(TRAINING_TYPES[0]);
+  const [trainingTypes, setTrainingTypes] = useState(t.trainingTypes);
+  const [trainingType, setTrainingType] = useState(t.trainingTypes[0]);
   const [inputs, setInputs] = useState([]);
   const [goalTime, setGoalTime] = useState("");
   const [result, setResult] = useState(null);
@@ -305,11 +247,17 @@ export default function App() {
     );
   }, [trainingType]);
 
+  // Update training type list and selected training type on language change
+  useEffect(() => {
+    setTrainingTypes(t.trainingTypes);
+    setTrainingType(t.trainingTypes[0]);
+  }, [lang]);
+
   useEffect(() => {
     const defaultInputs = Array.isArray(SPLIT_FEATURES[trainingType.key])
       ? Array(SPLIT_FEATURES[trainingType.key]).fill("")
-      : trainingType.features.map((fn) => {
-          const splits = SPLIT_FEATURES[trainingType.key]?.[fn];
+      : trainingType.features.map((f) => {
+          const splits = SPLIT_FEATURES[trainingType.key]?.[f.key];
           return splits ? Array(splits).fill("") : "";
         });
     setInputs(defaultInputs);
@@ -335,7 +283,7 @@ export default function App() {
     } else {
       setInputs(prev =>
         prev.map((v, idx) => {
-          const splits = SPLIT_FEATURES[trainingType.key]?.[trainingType.features[idx]];
+          const splits = SPLIT_FEATURES[trainingType.key]?.[trainingType.features[idx].key];
           if (splits) {
             if (checked) {
               return Array.isArray(v) ? (v[0] || "") : "";
@@ -364,8 +312,8 @@ export default function App() {
           input_values = inputs.map(s => s.trim());
         }
       } else {
-        input_values = trainingType.features.map((fn, idx) => {
-          const splits = SPLIT_FEATURES[trainingType.key]?.[fn];
+        input_values = trainingType.features.map((f, idx) => {
+          const splits = SPLIT_FEATURES[trainingType.key]?.[f.key];
           if (splits) {
             if (inputAverages) {
               const avg = inputs[idx] || "";
@@ -387,7 +335,7 @@ export default function App() {
         }),
       });
       if (!res.ok) {
-        let errorDetail = "Prediction failed. Please check inputs.";
+        let errorDetail = t.predictionError;
         try {
           const errorJson = await res.json();
           errorDetail = errorJson.detail || errorDetail;
@@ -396,7 +344,7 @@ export default function App() {
       }
       setResult(await res.json());
     } catch (err) {
-      setError(err.message || "An error occurred.");
+      setError(err.message || t.genericError);
     }
     setLoading(false);
   };
@@ -416,7 +364,7 @@ export default function App() {
         }),
       });
       if (!res.ok) {
-        let errorDetail = "Split calculation failed. Please check goal time.";
+        let errorDetail = t.splitError;
         try {
           const errorJson = await res.json();
           errorDetail = errorJson.detail || errorDetail;
@@ -425,44 +373,42 @@ export default function App() {
       }
       setResult(await res.json());
     } catch (err) {
-      setError(err.message || "An error occurred.");
+      setError(err.message || t.genericError);
     }
     setLoading(false);
   };
 
   return (
     <>
-      <Helmet>
-        <title>800m Training Calculator | Predict Race Splits & Times</title>
-        <meta
-          name="description"
-          content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches."
-        />
-        <link rel="canonical" href="https://www.seanfontaine.dev/800m-calculator" />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="800m Training Calculator | Predict Race Splits & Times" />
-        <meta property="og:description" content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches." />
-        <meta property="og:image" content="https://www.seanfontaine.dev/og-800m.png" />
-        <meta property="og:url" content="https://www.seanfontaine.dev/800m-calculator" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="800m Training Calculator | Predict Race Splits & Times" />
-        <meta name="twitter:description" content="Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches." />
-        <meta name="twitter:image" content="https://www.seanfontaine.dev/og-800m.png" />
-      </Helmet>
+      {/* Metadata */}
+      <title>{t.metaTitle}</title>
+      <meta name="description" content={t.metaDescription} />
+      <link rel="canonical" href={t.metaUrl} />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content={t.metaTitle} />
+      <meta property="og:description" content={t.metaDescription} />
+      <meta property="og:image" content={t.metaImage} />
+      <meta property="og:url" content={t.metaUrl} />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={t.metaTitle} />
+      <meta name="twitter:description" content={t.metaDescription} />
+      <meta name="twitter:image" content={t.metaImage} />
+
+      <LangButton lang={lang} />
+
       <div className="relative min-h-screen w-full flex flex-col justify-between">
         <div className="fixed inset-0 bg-gray-50 -z-10" aria-hidden="true" />
         <header className="mb-6 text-center z-10 flex flex-col items-center">
           <h1 className="font-bold text-gray-900 mb-2 drop-shadow-none inline-block px-2
             text-base sm:text-lg md:text-xl lg:text-2xl tracking-tight max-w-[20rem] sm:max-w-[28rem] leading-tight
           ">
-            800m Training & Race Calculator
+            {t.title}
           </h1>
           <p
             className="text-gray-500 text-sm sm:text-base md:text-lg px-2"
             style={{ width: "auto", maxWidth: "100%", display: "inline-block" }}
           >
-            Predict your 800m race time from your training results,<br />
-            or calculate recommended splits for a goal 800m time.
+            {t.description}
           </p>
         </header>
         <main className="
@@ -478,21 +424,25 @@ export default function App() {
               currentMode={mode} 
               onClick={() => setMode("predict")}
             >
-              Predict Race Time
+              {t.predictTab}
             </TabButton>
             <TabButton 
               modeVal="reverse" 
               currentMode={mode} 
               onClick={() => setMode("reverse")}
             >
-              Get Training Splits
+              {t.reverseTab}
             </TabButton>
           </div>
           {mode === "predict" ? (
             <form onSubmit={handlePredict} className="space-y-6">
               <div className="mb-8">
-                <label className="block text-indigo-700 font-semibold mb-1">Training Type</label>
-                <TrainingTypeDropdown trainingType={trainingType} setTrainingType={setTrainingType} />
+                <label className="block text-indigo-700 font-semibold mb-1">{t.trainingType}</label>
+                <TrainingTypeDropdown 
+                  trainingType={trainingType}
+                  setTrainingType={setTrainingType}
+                  trainingTypes={trainingTypes}
+                />
                 <div className="mt-2 flex items-center justify-between">
                   <button
                     type="button"
@@ -509,7 +459,7 @@ export default function App() {
                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
                       <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    {showRest ? "Hide Training Info" : "Show Training Info"}
+                    {showRest ? t.hideTrainingInfo : t.showTrainingInfo}
                   </button>
                   {supportsAverages() && (
                     <div className="flex items-center ml-auto">
@@ -521,7 +471,7 @@ export default function App() {
                         className="accent-indigo-600"
                       />
                       <label htmlFor="input-averages" className="text-sm text-gray-700 cursor-pointer ml-2">
-                        Input Averages
+                        {t.inputAverages}
                       </label>
                     </div>
                   )}
@@ -531,7 +481,7 @@ export default function App() {
                     id="rest-info"
                     className="mt-2 p-3 rounded bg-indigo-50 border border-indigo-100 text-indigo-800 animate-fade-in text-sm"
                   >
-                    <div className="font-semibold mb-1">Rest Times</div>
+                    <div className="font-semibold mb-1">{t.restTimes}</div>
                     <div>{trainingType.rest}</div>
                   </div>
                 )}
@@ -541,6 +491,7 @@ export default function App() {
                 inputs={inputs}
                 setInputs={setInputs}
                 inputAverages={inputAverages}
+                t={t}
               />
               <button
                 type="submit"
@@ -575,18 +526,22 @@ export default function App() {
                         d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                       ></path>
                     </svg>
-                    Calculating...
+                    {t.calculating}
                   </>
                 ) : (
-                  "Calculate"
+                  t.calculate
                 )}
               </button>
             </form>
           ) : (
             <form onSubmit={handleReverse} className="space-y-6">
               <div className="mb-8">
-                <label className="block text-indigo-700 font-semibold mb-1">Training Type</label>
-                <TrainingTypeDropdown trainingType={trainingType} setTrainingType={setTrainingType} />
+                <label className="block text-indigo-700 font-semibold mb-1">{t.trainingType}</label>
+                <TrainingTypeDropdown
+                  trainingType={trainingType}
+                  setTrainingType={setTrainingType}
+                  trainingTypes={trainingTypes}
+                />
                 <div className="mt-2 flex items-center">
                   <button
                     type="button"
@@ -603,7 +558,7 @@ export default function App() {
                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
                       <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    {showRest ? "Hide Training Info" : "Show Training Info"}
+                    {showRest ? t.hideTrainingInfo : t.showTrainingInfo}
                   </button>
                 </div>
                 {showRest && (
@@ -611,16 +566,16 @@ export default function App() {
                     id="rest-info"
                     className="mt-2 p-3 rounded bg-indigo-50 border border-indigo-100 text-indigo-800 animate-fade-in text-sm"
                   >
-                    <div className="font-semibold mb-1">Rest Times</div>
+                    <div className="font-semibold mb-1">{t.restTimes}</div>
                     <div>{trainingType.rest}</div>
                   </div>
                 )}
               </div>
               <div>
-                <label className="block text-gray-700 mb-1">Goal 800m Time</label>
+                <label className="block text-gray-700 mb-1">{t.goal800mTime}</label>
                 <input
                   type="text"
-                  placeholder={GOAL_PLACEHOLDER}
+                  placeholder={t.goalPlaceholder}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition bg-white"
                   value={goalTime}
                   onChange={(e) => setGoalTime(e.target.value)}
@@ -660,10 +615,10 @@ export default function App() {
                         d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                       ></path>
                     </svg>
-                    Calculating...
+                    {t.calculating}
                   </>
                 ) : (
-                  "Calculate"
+                  t.calculate
                 )}
               </button>
             </form>
@@ -672,20 +627,25 @@ export default function App() {
             <div className="mt-6 bg-indigo-50 border border-indigo-100 rounded-lg p-4 text-center animate-fade-in">
               {mode === "predict" ? (
                 <>
-                  <div className="text-indigo-800 text-lg font-medium">Predicted 800m Time:</div>
+                  <div className="text-indigo-800 text-lg font-medium">{t.predictedTime}</div>
                   <div className="text-2xl font-bold text-indigo-700 mt-2">
                     {result.predicted_formatted}
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="text-indigo-800 text-lg font-medium">Recommended Splits:</div>
+                  <div className="text-indigo-800 text-lg font-medium">{t.recommendedSplits}</div>
                   <ul className="mt-2 space-y-1">
                     {Array.isArray(result)
                       ? result.map((split, i) => (
                           <li key={i} className="text-indigo-700">
-                            <span className="font-semibold">{split.interval}:</span>{" "}
-                            <span className="font-mono">{split.formatted}</span>
+                            <span className="font-semibold">
+                              {(t.splitLabels && t.splitLabels[split.interval]) ? t.splitLabels[split.interval] : split.interval}
+                              {lang === "zh" ? "：" : ":"}
+                            </span>{" "}
+                            <span className="font-mono">
+                              {formatTime(split.seconds)}
+                            </span>
                           </li>
                         ))
                       : null}
@@ -697,7 +657,7 @@ export default function App() {
           {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
         </main>
         <footer className="mt-10 text-gray-400 text-xs z-10 text-center pb-2">
-          @2025 Sean-Fontaine-Tools
+          {t.copyright}
         </footer>
       </div>
     </>

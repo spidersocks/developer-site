@@ -81,8 +81,7 @@ def predict_800m(model, feature_cols, input_values):
     if prediction > 240:
         raise ValueError("Predicted time is too slow (over 4:00). Please check your inputs.")
     return {
-        "predicted_seconds": float(prediction),
-        "predicted_formatted": seconds_to_minutes(prediction)
+        "predicted_seconds": float(prediction)
     }
 
 def reverse_predict(df, target_col, goal_time, interval_cols, rounding=None):
@@ -106,8 +105,7 @@ def reverse_predict(df, target_col, goal_time, interval_cols, rounding=None):
         rounded = round(interp / rounding[idx]) * rounding[idx]
         splits.append({
             "interval": col,
-            "seconds": float(rounded),
-            "formatted": seconds_to_minutes(rounded),
+            "seconds": float(rounded)
         })
     return splits
 
@@ -149,6 +147,16 @@ TRAINING_CONFIG = {
         "feature_cols": ["Set 1 3x300m average", "Set 2 3x300m average"],
         "table_file": os.path.join(TABLES_DIR, "300.csv"),
         "interval_cols": ["Set 1 3x300m average", "Set 2 3x300m average"]
+    },
+    "ladder": {
+        "model_file": os.path.join(MODELS_DIR, "model_ladder.pkl"),
+        "feature_cols": [
+            "First 300m", "First 400m", "500m", "Second 400m", "Second 300m", "200m"
+        ],
+        "table_file": os.path.join(TABLES_DIR, "ladder.csv"),
+        "interval_cols": [
+            "First 300m", "First 400m", "500m", "Second 400m", "Second 300m", "200m"
+        ]
     }
 }
 
