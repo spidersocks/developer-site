@@ -76,7 +76,7 @@ const translations = {
         {
           key: "ladder",
           label: "300-400-500-400-300-200m Ladder",
-          rest: "3 minutes rest between each rep.",
+          rest: "300m (rest 4 min), 400m (rest 5 min), 500m (rest 5 min), 400m (rest 4 min), 300m (rest 3 min), 200m.",
           features: [
             { key: "300m_avg", label: "300m" },
             { key: "400m_avg", label: "400m" },
@@ -223,7 +223,7 @@ const translations = {
         {
           key: "ladder",
           label: "300-400-500-400-300-200米階梯",
-          rest: "每組之間休息3分鐘。",
+          rest: "300米（休4分鐘）、400米（休5分鐘）、500米（休5分鐘）、400米（休4分鐘）、300米（休3分鐘）、200米。",
           features: [
             { key: "300m_avg", label: "300米" },
             { key: "400m_avg", label: "400米" },
