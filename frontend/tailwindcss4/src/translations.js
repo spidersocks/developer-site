@@ -78,11 +78,9 @@ const translations = {
           label: "300-400-500-400-300-200m Ladder",
           rest: "3 minutes rest between each rep.",
           features: [
-            { key: "First 300m", label: "First 300m" },
-            { key: "First 400m", label: "First 400m" },
+            { key: "300m_avg", label: "300m" },
+            { key: "400m_avg", label: "400m" },
             { key: "500m", label: "500m" },
-            { key: "Second 400m", label: "Second 400m" },
-            { key: "Second 300m", label: "Second 300m" },
             { key: "200m", label: "200m" }
           ],
         },
@@ -117,12 +115,10 @@ const translations = {
           { split: "Third 500m Split", average: "3 x 500m Average Split" },
         ],
         "ladder": [
-        { split: "First 300m Split", average: "First 300m" },
-        { split: "First 400m Split", average: "First 400m" },
-        { split: "500m Split", average: "500m" },
-        { split: "Second 400m Split", average: "Second 400m" },
-        { split: "Second 300m Split", average: "Second 300m" },
-        { split: "200m Split", average: "200m" }
+          { split: "300m Splits", average: "300m Average" },
+          { split: "400m Splits", average: "400m Average" },
+          { split: "500m Split", average: "500m" },
+          { split: "200m Split", average: "200m" }
         ],
         "300m_x3x2": [
           { split: "Set 1 300m Splits", average: "Set 1 3x300m Average" },
@@ -143,11 +139,11 @@ const translations = {
         "Set 1 3x300m average": "Set 1 3x300m average",
         "Set 2 3x300m average": "Set 2 3x300m average",
         "First 300m": "First 300m",
-        "First 400m": "First 400m",
-        "500m": "500m",
-        "Second 400m": "Second 400m",
         "Second 300m": "Second 300m",
-        "200m": "200m"
+        "First 400m": "First 400m",
+        "Second 400m": "Second 400m",
+        "500m": "500m",
+        "200m": "200m",
       },
     },
   
@@ -229,11 +225,9 @@ const translations = {
           label: "300-400-500-400-300-200米階梯",
           rest: "每組之間休息3分鐘。",
           features: [
-            { key: "First 300m", label: "第一組300米" },
-            { key: "First 400m", label: "第一組400米" },
+            { key: "300m_avg", label: "300米" },
+            { key: "400m_avg", label: "400米" },
             { key: "500m", label: "500米" },
-            { key: "Second 400m", label: "第二組400米" },
-            { key: "Second 300m", label: "第二組300米" },
             { key: "200m", label: "200米" }
           ],
         },
@@ -268,11 +262,9 @@ const translations = {
           { split: "第三組500米分段", average: "3 x 500米平均分段" },
         ],
         "ladder": [
-          { split: "第一組300米分段", average: "第一組300米" },
-          { split: "第一組400米分段", average: "第一組400米" },
+          { split: "300米分段", average: "300米平均" },
+          { split: "400米分段", average: "400米平均" },
           { split: "500米分段", average: "500米" },
-          { split: "第二組400米分段", average: "第二組400米" },
-          { split: "第二組300米分段", average: "第二組300米" },
           { split: "200米分段", average: "200米" }
         ],
         "300m_x3x2": [
@@ -294,11 +286,11 @@ const translations = {
         "Set 1 3x300m average": "第一組3x300米平均分段",
         "Set 2 3x300m average": "第二組3x300米平均分段",
         "First 300m": "第一組300米",
-        "First 400m": "第一組400米",
-        "500m": "500米",
-        "Second 400m": "第二組400米",
         "Second 300m": "第二組300米",
-        "200m": "200米"
+        "First 400m": "第一組400米",
+        "Second 400m": "第二組400米",
+        "500m": "500米",
+        "200m": "200米",
       },
     },
   };

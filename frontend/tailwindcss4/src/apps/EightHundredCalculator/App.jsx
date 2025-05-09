@@ -10,15 +10,8 @@ const SPLIT_FEATURES = {
   "500m_x3": 3,
   "600m_400m_x3": { "3x400m average": 3 },
   "600m_300m_x4": { "4x300m average": 4 },
-  "ladder": {
-  "First 300m": 1,
-  "First 400m": 1,
-  "500m": 1,
-  "Second 400m": 1,
-  "Second 300m": 1,
-  "200m": 1,
-},
   "300m_x3x2": { "Set 1 3x300m average": 3, "Set 2 3x300m average": 3 },
+  "ladder": { "300m_avg": 2, "400m_avg": 2, "500m": 1, "200m": 1 }
 };
 
 const PLACEHOLDERS = {
@@ -72,6 +65,64 @@ const renderSplitInputs = (label, placeholders, values, onChange) => (
 const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t }) => {
   const phArray = PLACEHOLDERS[trainingType.key] || [];
 
+  // Special handling for ladder training
+  if (trainingType.key === "ladder") {
+    if (inputAverages) {
+      // Four input boxes: avg 300m, avg 400m, 500m, 200m
+      return (
+        <>
+          {renderInput(
+            t.prompts.ladder[0].average,
+            phArray[0] || t.defaultPlaceholder,
+            inputs[0] || "",
+            (e) => setInputs(prev => [e.target.value, prev[1], prev[2], prev[3]])
+          )}
+          {renderInput(
+            t.prompts.ladder[1].average,
+            phArray[1] || t.defaultPlaceholder,
+            inputs[1] || "",
+            (e) => setInputs(prev => [prev[0], e.target.value, prev[2], prev[3]])
+          )}
+          {renderInput(
+            t.prompts.ladder[2].average,
+            phArray[2] || t.defaultPlaceholder,
+            inputs[2] || "",
+            (e) => setInputs(prev => [prev[0], prev[1], e.target.value, prev[3]])
+          )}
+          {renderInput(
+            t.prompts.ladder[3].average,
+            phArray[3] || t.defaultPlaceholder,
+            inputs[3] || "",
+            (e) => setInputs(prev => [prev[0], prev[1], prev[2], e.target.value])
+          )}
+        </>
+      );
+    } else {
+      // Six input boxes, in race order
+      const splitOrder = [
+        { label: t.splitLabels["First 300m"] || "First 300m", ph: phArray[0] || t.defaultPlaceholder },
+        { label: t.splitLabels["First 400m"] || "First 400m", ph: phArray[1] || t.defaultPlaceholder },
+        { label: t.splitLabels["500m"] || "500m", ph: phArray[2] || t.defaultPlaceholder },
+        { label: t.splitLabels["Second 400m"] || "Second 400m", ph: phArray[3] || t.defaultPlaceholder },
+        { label: t.splitLabels["Second 300m"] || "Second 300m", ph: phArray[4] || t.defaultPlaceholder },
+        { label: t.splitLabels["200m"] || "200m", ph: phArray[5] || t.defaultPlaceholder },
+      ];
+      return splitOrder.map((split, idx) => (
+        renderInput(
+          split.label,
+          split.ph,
+          inputs[idx] || "",
+          (e) => setInputs(prev => {
+            const arr = [...prev];
+            arr[idx] = e.target.value;
+            return arr;
+          })
+        )
+      ));
+    }
+  }
+
+  // --- Default logic for all other types ---
   const handleInputChange = useCallback((value, idx, splitIdx = null) => {
     setInputs((prev) => {
       const updatedInputs = [...prev];
@@ -94,11 +145,8 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
     });
   }, [trainingType]);
 
-  // If training type is a "number" (e.g. 3), handle average input mode specially
   if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
-    // Average input mode: one box
     if (inputAverages) {
-      // Use the first average label for this workout
       const labelObj = t.prompts[trainingType.key][0];
       const label = labelObj.average;
       return renderInput(
@@ -108,7 +156,6 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
         (e) => handleInputChange(e.target.value, 0)
       );
     }
-    // Non-average mode: one box per rep
     return trainingType.features.map((feature, idx) => {
       const labelObj = t.prompts[trainingType.key][idx];
       const label = labelObj.split;
@@ -121,7 +168,6 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
     });
   }
 
-  // All other types (compound workouts)
   return trainingType.features.map((feature, idx) => {
     const labelObj = t.prompts[trainingType.key][idx];
     const label = inputAverages ? labelObj.average : labelObj.split;
@@ -129,7 +175,6 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
     const numSplits = splitConfig[feature.key] || 0;
 
     if (numSplits > 1 && !inputAverages) {
-      // Multiple splits, not using average
       return renderSplitInputs(
         label,
         phArray.slice(idx, idx + numSplits),
@@ -137,7 +182,6 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
         (value, splitIdx) => handleInputChange(value, idx, splitIdx)
       );
     } else {
-      // Single input, or using average
       return renderInput(
         label,
         phArray[idx] || t.defaultPlaceholder,
@@ -254,12 +298,21 @@ export default function App({ lang = "en" }) {
   }, [lang]);
 
   useEffect(() => {
-    const defaultInputs = Array.isArray(SPLIT_FEATURES[trainingType.key])
-      ? Array(SPLIT_FEATURES[trainingType.key]).fill("")
-      : trainingType.features.map((f) => {
-          const splits = SPLIT_FEATURES[trainingType.key]?.[f.key];
-          return splits ? Array(splits).fill("") : "";
-        });
+    let defaultInputs;
+    if (trainingType.key === "ladder") {
+      if (inputAverages) {
+        defaultInputs = ["", "", "", ""];
+      } else {
+        defaultInputs = ["", "", "", "", "", ""];
+      }
+    } else if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+      defaultInputs = Array(SPLIT_FEATURES[trainingType.key]).fill("");
+    } else {
+      defaultInputs = trainingType.features.map((f) => {
+        const splits = SPLIT_FEATURES[trainingType.key]?.[f.key];
+        return splits ? Array(splits).fill("") : "";
+      });
+    }
     setInputs(defaultInputs);
     setResult(null);
     setError("");
@@ -269,8 +322,16 @@ export default function App({ lang = "en" }) {
   const handleAveragesToggle = useCallback((e) => {
     const checked = e.target.checked;
     setInputAverages(checked);
-
-    if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+  
+    if (trainingType.key === "ladder") {
+      // Always reset to fresh array to avoid shape mismatches
+      if (checked) {
+        setInputs(["", "", "", ""]);
+      } else {
+        setInputs(["", "", "", "", "", ""]);
+      }
+    }
+    else if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
       setInputs(prev => {
         if (checked) {
           return [prev && prev[0] ? prev[0] : "", "", ""];
@@ -304,7 +365,37 @@ export default function App({ lang = "en" }) {
     setError("");
     try {
       let input_values;
-      if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
+  
+      // Special handling for ladder training
+      if (trainingType.key === "ladder") {
+        if (inputAverages) {
+          // [avg300m, avg400m, 500m, 200m] -> [avg300m, avg400m, 500m, avg400m, avg300m, 200m]
+          const avg300 = inputs[0] || "";
+          const avg400 = inputs[1] || "";
+          const s500 = inputs[2] || "";
+          const s200 = inputs[3] || "";
+          input_values = [
+            avg300,      // First 300m
+            avg400,      // First 400m
+            s500,        // 500m
+            avg400,      // Second 400m
+            avg300,      // Second 300m
+            s200         // 200m
+          ];
+        } else {
+          // Inputs are already in race order!
+          input_values = [
+            inputs[0] || "", // First 300m
+            inputs[1] || "", // First 400m
+            inputs[2] || "", // 500m
+            inputs[3] || "", // Second 400m
+            inputs[4] || "", // Second 300m
+            inputs[5] || ""  // 200m
+          ];
+        }
+      }
+      // --- Other training types ---
+      else if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
         if (inputAverages) {
           const avg = inputs[0] || "";
           input_values = [avg, avg, avg];
@@ -325,7 +416,7 @@ export default function App({ lang = "en" }) {
           return inputs[idx];
         });
       }
-
+  
       const res = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

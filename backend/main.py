@@ -75,13 +75,12 @@ def predict_800m(model, feature_cols, input_values):
             processed.append(convert_to_seconds(val))
     X = pd.DataFrame([processed], columns=feature_cols)
     prediction = model.predict(X)[0]
-    # Out-of-range handling
-    if prediction < 96:
         raise ValueError("Predicted time is too fast to be realistic (less than 1:36). Please check your inputs.")
     if prediction > 240:
         raise ValueError("Predicted time is too slow (over 4:00). Please check your inputs.")
     return {
-        "predicted_seconds": float(prediction)
+        "predicted_seconds": float(prediction),
+        "predicted_formatted": seconds_to_minutes(prediction)
     }
 
 def reverse_predict(df, target_col, goal_time, interval_cols, rounding=None):
