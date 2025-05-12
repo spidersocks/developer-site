@@ -58,8 +58,12 @@ def convert_to_seconds(time_str: str) -> float:
         raise ValueError("Invalid input: Only numbers, colons, and periods are allowed. Please do not use words or letters.")
 
 def seconds_to_minutes(seconds: float) -> str:
-    minutes = int(seconds // 60)
-    remaining_seconds = seconds % 60
+    total_seconds = round(seconds, 2)
+    minutes = int(total_seconds // 60)
+    remaining_seconds = total_seconds - minutes * 60
+    if remaining_seconds >= 59.995:  # If rounding pushes it to 60
+        minutes += 1
+        remaining_seconds = 0.0
     if minutes == 0:
         return f"{remaining_seconds:05.2f}"
     else:
