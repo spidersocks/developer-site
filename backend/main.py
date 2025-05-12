@@ -161,6 +161,18 @@ TRAINING_CONFIG = {
         "interval_cols": [
             "First 300m", "First 400m", "500m", "Second 400m", "Second 300m", "200m"
         ]
+    },
+        "200m_x8": {
+        "model_file": os.path.join(MODELS_DIR, "model_200.pkl"),
+        "feature_cols": [
+            "First 200m", "Second 200m", "Third 200m", "Fourth 200m", 
+            "Fifth 200m", "Sixth 200m", "Seventh 200m", "Eighth 200m"
+        ],
+        "table_file": os.path.join(TABLES_DIR, "200.csv"),
+        "interval_cols": [
+            "First 200m", "Second 200m", "Third 200m", "Fourth 200m", 
+            "Fifth 200m", "Sixth 200m", "Seventh 200m", "Eighth 200m"
+        ]
     }
 }
 
@@ -206,12 +218,15 @@ def get_training_types():
 @app.post("/predict")
 def predict_endpoint(req: PredictRequest):
     try:
+        print("Request training_type:", req.training_type)
         config = TRAINING_CONFIG[req.training_type]
         model = MODELS[req.training_type]
         result = predict_800m(model, config["feature_cols"], req.input_values)
         return result
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Training type not found: {e}")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Server error: " + str(e))
 
 @app.post("/reverse-predict")
 def reverse_predict_endpoint(req: ReversePredictRequest):

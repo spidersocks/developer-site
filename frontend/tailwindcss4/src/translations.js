@@ -93,6 +93,21 @@ const translations = {
             { key: "Set 2 3x300m average", label: "Set 2 3x300m average" },
           ],
         },
+        {
+          key: "200m_x8",
+          label: "8 x 200m",
+          rest: "Jogged 90 seconds active recovery between each 200m.",
+          features: [
+            { key: "First 200m", label: "First 200m" },
+            { key: "Second 200m", label: "Second 200m" },
+            { key: "Third 200m", label: "Third 200m" },
+            { key: "Fourth 200m", label: "Fourth 200m" },
+            { key: "Fifth 200m", label: "Fifth 200m" },
+            { key: "Sixth 200m", label: "Sixth 200m" },
+            { key: "Seventh 200m", label: "Seventh 200m" },
+            { key: "Eighth 200m", label: "Eighth 200m" }
+          ]
+        }
       ],
       // -- NEW: PROMPTS --
       prompts: {
@@ -124,6 +139,16 @@ const translations = {
           { split: "Set 1 300m Splits", average: "Set 1 3x300m Average" },
           { split: "Set 2 300m Splits", average: "Set 2 3x300m Average" },
         ],
+        "200m_x8": [
+          { split: "First 200m", average: "8 x 200m Average" },
+          { split: "Second 200m", average: "8 x 200m Average" },
+          { split: "Third 200m", average: "8 x 200m Average" },
+          { split: "Fourth 200m", average: "8 x 200m Average" },
+          { split: "Fifth 200m", average: "8 x 200m Average" },
+          { split: "Sixth 200m", average: "8 x 200m Average" },
+          { split: "Seventh 200m", average: "8 x 200m Average" },
+          { split: "Eighth 200m", average: "8 x 200m Average" }
+        ]
       },
       splitLabels: {
         "600m": "600m",
@@ -144,6 +169,15 @@ const translations = {
         "Second 400m": "Second 400m",
         "500m": "500m",
         "200m": "200m",
+        "8x200m average": "8x200m average",
+        "First 200m": "First 200m",
+        "Second 200m": "Second 200m",
+        "Third 200m": "Third 200m",
+        "Fourth 200m": "Fourth 200m",
+        "Fifth 200m": "Fifth 200m",
+        "Sixth 200m": "Sixth 200m",
+        "Seventh 200m": "Seventh 200m",
+        "Eighth 200m": "Eighth 200m"
       },
     },
   
@@ -240,6 +274,21 @@ const translations = {
             { key: "Set 2 3x300m average", label: "第二組3x300米平均" },
           ],
         },
+        {
+          key: "200m_x8",
+          label: "8 x 200米",
+          rest: "每組200米之間慢跑200米（90秒）。",
+          features: [
+            { key: "First 200m", label: "第一組200米" },
+            { key: "Second 200m", label: "第二組200米" },
+            { key: "Third 200m", label: "第三組200米" },
+            { key: "Fourth 200m", label: "第四組200米" },
+            { key: "Fifth 200m", label: "第五組200米" },
+            { key: "Sixth 200m", label: "第六組200米" },
+            { key: "Seventh 200m", label: "第七組200米" },
+            { key: "Eighth 200m", label: "第八組200米" }
+          ]
+        }
       ],
       // -- NEW: PROMPTS --
       prompts: {
@@ -271,6 +320,16 @@ const translations = {
           { split: "第1組3x300米分段", average: "第1組3x300米平均" },
           { split: "第2組3x300米分段", average: "第2組3x300米平均" },
         ],
+        "200m_x8": [
+          { split: "第一組200米", average: "8 x 200米平均" },
+          { split: "第二組200米", average: "8 x 200米平均" },
+          { split: "第三組200米", average: "8 x 200米平均" },
+          { split: "第四組200米", average: "8 x 200米平均" },
+          { split: "第五組200米", average: "8 x 200米平均" },
+          { split: "第六組200米", average: "8 x 200米平均" },
+          { split: "第七組200米", average: "8 x 200米平均" },
+          { split: "第八組200米", average: "8 x 200米平均" }
+        ]
       },
       splitLabels: {
         "600m": "600米",
@@ -291,6 +350,15 @@ const translations = {
         "Second 400m": "第二組400米",
         "500m": "500米",
         "200m": "200米",
+        "8x200m average": "8x200米平均",
+        "First 200m": "第一組200米",
+        "Second 200m": "第二組200米",
+        "Third 200m": "第三組200米",
+        "Fourth 200m": "第四組200米",
+        "Fifth 200m": "第五組200米",
+        "Sixth 200m": "第六組200米",
+        "Seventh 200m": "第七組200米",
+        "Eighth 200m": "第八組200米",
       },
     },
   };

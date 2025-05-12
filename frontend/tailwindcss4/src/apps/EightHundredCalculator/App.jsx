@@ -11,7 +11,8 @@ const SPLIT_FEATURES = {
   "600m_400m_x3": { "3x400m average": 3 },
   "600m_300m_x4": { "4x300m average": 4 },
   "300m_x3x2": { "Set 1 3x300m average": 3, "Set 2 3x300m average": 3 },
-  "ladder": { "300m_avg": 2, "400m_avg": 2, "500m": 1, "200m": 1 }
+  "ladder": { "300m_avg": 2, "400m_avg": 2, "500m": 1, "200m": 1 },
+  "200m_x8": 8
 };
 
 const PLACEHOLDERS = {
@@ -21,6 +22,7 @@ const PLACEHOLDERS = {
   "500m_x3": ["1:18.0", "1:17.0", "1:16.0"],
   "ladder": ["44.0", "59.0", "1:15.0", "60.0", "45.0", "28.0"],
   "300m_x3x2": ["47.0", "47.0", "47.0", "45.0", "45.0", "45.0"],
+  "200m_x8": ["27.0", "27.0", "27.0", "27.0", "27.0", "27.0", "27.0", "27.0"],
 };
 
 const API_URL = "https://eight00m-calculator.onrender.com";
