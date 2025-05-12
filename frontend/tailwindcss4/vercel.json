@@ -1,11 +1,17 @@
 {
-    "rewrites": [
-      { "source": "/(.*)", "destination": "/" }
-    ],
-      "build": {
-        "env": {
-          "NPM_FLAGS": "--legacy-peer-deps"
-        }
-                }
-    
+  "redirects": [
+    {
+      "source": "/800m-calculator",
+      "destination": "/en/800m-calculator",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ],
+  "build": {
+    "env": {
+      "NPM_FLAGS": "--legacy-peer-deps"
+    }
+  }
 }
