@@ -400,7 +400,8 @@ export default function App({ lang = "en" }) {
       else if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
         if (inputAverages) {
           const avg = inputs[0] || "";
-          input_values = [avg, avg, avg];
+          const count = SPLIT_FEATURES[trainingType.key]; // This will be 8 for 8x200m, 3 for 3x600, etc.
+          input_values = Array(count).fill(avg);
         } else {
           input_values = inputs.map(s => s.trim());
         }
