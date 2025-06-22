@@ -1,0 +1,11 @@
+.poke-bg {
+  background-image: url('https://helios-i.mashable.com/imagery/articles/02Jk8DJSQ8I4zkwgKNpMSSI/images-1.fill.size_2000x1125.v1665765956.png');
+  background-size: cover;
+  background-position: center;
+  min-height: 100vh;
+  min-width: 100vw;
+}
+
+.poke-transparent-btn {
+  background-color: transparent !important;
+}
