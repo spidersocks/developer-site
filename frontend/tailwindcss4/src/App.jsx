@@ -17,7 +17,7 @@ export default function App() {
         <Route path="/en/800m-calculator/*" element={<EightHundredCalculatorApp lang="en" />} />
         <Route path="/zh/800m-calculator/*" element={<EightHundredCalculatorApp lang="zh" />} />
         <Route path="/poke-team-predictor" element={<PokeTeamPredictorApp />} />
-        {/* You can add more localized routes as needed */}
+        {/* More routes here if needed */}
       </Routes>
       <Analytics />
     </BrowserRouter>

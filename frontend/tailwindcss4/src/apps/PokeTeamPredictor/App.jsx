@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import "./App.css"; // Ensure .poke-bg and .poke-transparent-btn are present!
+import "./App.css";
 
 const API_URL = "https://poke-team-predictor.onrender.com/predict-teammates";
 
-/**
- * Fetches the correct sprite for a Pokémon, including special forms.
- */
+// Fetches the correct sprite for a Pokemon from PokeAPI
+// With consideration for special forms
+
 async function fetchSpriteUrl(pokeName) {
   const FALLBACKS = {
     "ogerpon-cornerstone": "ogerpon-cornerstone-mask",
@@ -43,10 +43,9 @@ async function fetchSpriteUrl(pokeName) {
   return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/0.png";
 }
 
-/**
- * Converts a Pokémon name to the correct Pikalytics VGC 2025 Regulation I URL.
- * Example: "Calyrex-Ice" -> "https://www.pikalytics.com/pokedex/gen9vgc2025regi/calyrex-ice"
- */
+// Converts a Pokémon name to the correct Pikalytics VGC 2025 Regulation I URL.
+//Example: "Calyrex-Ice" -> "https://www.pikalytics.com/pokedex/gen9vgc2025regi/calyrex-ice"
+
 function toPikalyticsUrl(name) {
   return (
     "https://www.pikalytics.com/pokedex/gen9vgc2025regi/" +
@@ -59,8 +58,11 @@ function toPikalyticsUrl(name) {
 
 export default function PokeTeamPredictorApp() {
   const [pokemonList] = useState([
-    "Calyrex-Ice", "Miraidon", "Zacian", "Kyogre", "Dialga", "Groudon", "Rayquaza", "Lugia", "Zekrom", "Ho-Oh",
-    "Necrozma-Dusk-Mane", "Palkia", "Kyurem-White", "Koraidon", "Terapagos", "Zamazenta", "Giratina", "Reshiram"
+    "Mewtwo","Lugia","Ho-Oh","Kyogre","Groudon","Rayquaza","Dialga","Dialga-Origin","Palkia","Palkia-Origin",
+    "Giratina","Giratina-Origin","Reshiram","Zekrom","Kyurem","Kyurem-White","Kyurem-Black","Cosmog","Cosmoem",
+    "Solgaleo","Lunala","Necrozma","Necrozma-Dusk-Mane","Necrozma-Dawn-Wings","Zacian","Zacian-Crowned",
+    "Zamazenta","Zamazenta-Crowned","Eternatus","Calyrex","Calyrex-Ice","Calyrex-Shadow","Koraidon","Miraidon",
+    "Terapagos"
   ]);
   const [core1, setCore1] = useState("Calyrex-Ice");
   const [core2, setCore2] = useState("Miraidon");
@@ -208,7 +210,7 @@ export default function PokeTeamPredictorApp() {
                 `}
                 onClick={handlePredict}
                 disabled={loading}
-                style={{ fontSize: "1.25rem" /* for extra size */ }}
+                style={{ fontSize: "1.25rem"}}
               >
                 {loading ? "Predicting..." : "Predict Teammates"}
               </button>
