@@ -4,6 +4,17 @@ export default function Home({ lang = "en" }) {
   const calculatorLink = `/${validLang}/800m-calculator`;
   const pokemonCalcLink = "/poke-team-predictor"; // Adjust if your route is different
 
+  // Button styles for consistency
+  const buttonBaseStyle = {
+    display: "inline-block",
+    padding: "0.75em 1.5em",
+    borderRadius: "0.75em",
+    textDecoration: "none",
+    fontWeight: 600,
+    fontSize: "1.05rem",
+    transition: "background 0.2s",
+  };
+
   return (
     <>
       <title>Sean Fontaine | Portfolio & Web Apps</title>
@@ -43,15 +54,9 @@ export default function Home({ lang = "en" }) {
               <a
                 href={calculatorLink}
                 style={{
-                  display: "inline-block",
+                  ...buttonBaseStyle,
                   background: "#6366f1",
                   color: "#fff",
-                  padding: "0.75em 1.5em",
-                  borderRadius: "0.75em",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                  fontSize: "1.05rem",
-                  transition: "background 0.2s",
                 }}
                 onMouseOver={e => (e.currentTarget.style.background = "#4338ca")}
                 onMouseOut={e => (e.currentTarget.style.background = "#6366f1")}
@@ -59,19 +64,13 @@ export default function Home({ lang = "en" }) {
                 800m Training & Race Calculator
               </a>
             </li>
-            <li>
+            <li style={{ marginBottom: "1.2rem" }}>
               <a
                 href={pokemonCalcLink}
                 style={{
-                  display: "inline-block",
+                  ...buttonBaseStyle,
                   background: "#fbbf24",
                   color: "#374151",
-                  padding: "0.75em 1.5em",
-                  borderRadius: "0.75em",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                  fontSize: "1.05rem",
-                  transition: "background 0.2s",
                   position: "relative",
                 }}
                 onMouseOver={e => (e.currentTarget.style.background = "#f59e42")}
@@ -92,6 +91,21 @@ export default function Home({ lang = "en" }) {
                 >
                   NEW
                 </span>
+              </a>
+            </li>
+            <li>
+              <a
+                href="/podcast-project"
+                style={{
+                  ...buttonBaseStyle,
+                  background: "#06b6d4",
+                  color: "#fff",
+                }}
+                onMouseOver={e => (e.currentTarget.style.background = "#0891b2")}
+                onMouseOut={e => (e.currentTarget.style.background = "#06b6d4")}
+              >
+                Podcast Project{" "}
+                <span style={{ fontSize: "0.85em", marginLeft: "0.8em" }}>BETA</span>
               </a>
             </li>
           </ul>

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
 import EightHundredCalculatorApp from "./apps/EightHundredCalculator/App";
 import PokeTeamPredictorApp from "./apps/PokeTeamPredictor/App";
+import PodcastProjectApp from "./apps/PodcastProject/App";
 import { Analytics } from "@vercel/analytics/react";
 import React from "react";
 
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/en/800m-calculator/*" element={<EightHundredCalculatorApp lang="en" />} />
         <Route path="/zh/800m-calculator/*" element={<EightHundredCalculatorApp lang="zh" />} />
         <Route path="/poke-team-predictor" element={<PokeTeamPredictorApp />} />
+        <Route path="/podcast-project/*" element={<PodcastProjectApp />} />
         {/* More routes here if needed */}
       </Routes>
       <Analytics />
