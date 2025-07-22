@@ -8,7 +8,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import "./App.css";
+import styles from "./App.module.css";
 
 // Color map matches your backend's lowercase 'news' and 'podcast'
 const SOURCE_TYPE_COLORS = {
@@ -87,8 +87,8 @@ function generateChartTitle(drillPath) {
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="custom-tooltip">
-        <div className="custom-tooltip-title">{label}</div>
+      <div className={styles.customTooltip}>
+        <div className={styles.customTooltipTitle}>{label}</div>
         {payload.map((entry, idx) => (
           <div key={idx} style={{ color: entry.color }}>
             {entry.name}: {(entry.value * 100).toFixed(2)}%
@@ -183,22 +183,22 @@ export default function PodcastProjectApp() {
   const broaderTopic = drillPath.length > 0 ? drillPath[drillPath.length - 1] : "news";
 
   return (
-    <div>
-      <div className="main-card">
+    <div className={styles.podcastAppRoot}>
+      <div className={styles.mainCard}>
         <h1>Airwaves & Archives: Topic Distribution in Podcasts and Public News Media</h1>
         <h2>Explore topic distributions across podcasts and news.</h2>
 
         {/* Breadcrumbs */}
-        <nav className="breadcrumbs" aria-label="Breadcrumb">
+        <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
           <span
-            className="all-topics-link"
+            className={styles.allTopicsLink}
             onClick={() => setDrillPath([])}
           >
             {drillPath.length === 0 ? "All Topics" : "Return to all topics"}
           </span>
           {drillPath.map((step, i) => (
             <React.Fragment key={i}>
-              <span className="sep">&rsaquo;</span>
+              <span className={styles.sep}>&rsaquo;</span>
               <span
                 style={{
                   color: i === drillPath.length - 1 ? "#3730a3" : "#6366f1",
@@ -219,7 +219,7 @@ export default function PodcastProjectApp() {
             </label>
             <select
               aria-label="Drilldown topic selection"
-              className="dropdown"
+              className={styles.dropdown}
               value=""
               onChange={(e) => {
                 if (e.target.value) handleDrilldown(e.target.value);
@@ -235,14 +235,14 @@ export default function PodcastProjectApp() {
           </div>
         )}
 
-        <h2 className="chart-title" style={{ marginTop: 0, marginBottom: "1em" }}>
+        <h3 className={styles.chartTitle} style={{ marginTop: 0, marginBottom: "1em" }}>
           {generateChartTitle(drillPath)}
-        </h2>
+        </h3>
 
         {/* Chart is now fully contained within the white card */}
-        <div className="chart-scroll-wrapper">
+        <div className={styles.chartScrollWrapper}>
           <div
-            className="chart-inner"
+            className={styles.chartInner}
             style={{
               "--bar-count": chartData.length,
               minWidth: 500,
@@ -252,13 +252,13 @@ export default function PodcastProjectApp() {
           >
             {loading ? (
               <div>
-                <div className="spinner" />
+                <div className={styles.spinner} />
                 <div style={{ textAlign: "center", color: "#64748b" }}>Loading chart…</div>
               </div>
             ) : chartData.length === 0 ? (
               <div style={{ textAlign: "center", color: "#64748b", padding: "2em" }}>
                 No topics found.<br />
-                <button onClick={() => setDrillPath([])} className="button" style={{ marginTop: 16 }}>Back to top</button>
+                <button onClick={() => setDrillPath([])} className={styles.button} style={{ marginTop: 16 }}>Back to top</button>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={400}>
@@ -307,7 +307,7 @@ export default function PodcastProjectApp() {
                       offset: 90,
                       fontSize: 14,
                       fontWeight: 600,
-                      fill: "#64748b",
+                      fill: "#29292a",
                     }}
                   />
                   <YAxis
@@ -333,7 +333,7 @@ export default function PodcastProjectApp() {
                       dx: -20,
                       fontSize: 14,
                       fontWeight: 600,
-                      fill: "#64748b",
+                      fill: "#29292a",
                     }}
                   />
                   <Tooltip
