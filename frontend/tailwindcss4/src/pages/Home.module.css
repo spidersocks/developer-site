@@ -1,0 +1,235 @@
+.homeRoot {
+  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  background: #f5f7fb;
+  display: flex;
+}
+
+.sidebar {
+  width: 270px;
+  background: #fff;
+  box-shadow: 2px 0 24px 0 rgba(31,38,135,0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1.2rem 1.2rem 1.2rem;
+  border-right: 1px solid #ececec;
+  min-height: 100vh;
+  z-index: 2;
+  position: relative;
+}
+
+.sidebarHeader {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.avatar {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  margin: 0 auto 1.1em auto;
+  background: linear-gradient(135deg, #6366f1 60%, #06b6d4 100%);
+  /* You can insert an image here if preferred */
+}
+
+.name {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 0.25em;
+}
+
+.tagline {
+  font-size: 1.01rem;
+  color: #6b7280;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+.sidebarNav {
+  margin: 1em 0 2em 0;
+  width: 100%;
+}
+
+.sidebarNav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebarNav li {
+  margin-bottom: 0.7em;
+}
+
+.sidebarNav a {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.32em 0.3em;
+  border-radius: 0.3em;
+  transition: background 0.16s, color 0.16s;
+}
+
+.sidebarNav a:hover {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.sidebarFooter {
+  font-size: 0.93em;
+  color: #b3b5bb;
+  margin-top: auto;
+  text-align: center;
+  padding-bottom: 1.2em;
+}
+
+.mainContent {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 3.5rem 2rem 2rem 2rem;
+}
+
+.projects {
+  width: 100%;
+  max-width: 700px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+/* Project Card */
+.projectCard {
+  display: block;
+  background: #fff;
+  border: 1px solid #ececec;
+  border-radius: 1rem;
+  box-shadow: 0 1px 8px rgba(31,38,135,0.07);
+  text-decoration: none;
+  color: #23243a;
+  padding: 1.6em 2em;
+  transition: box-shadow 0.16s, transform 0.16s, border 0.16s;
+  font-weight: 500;
+  position: relative;
+}
+
+.projectCard:hover, .projectCard:focus {
+  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.11);
+  border: 1.5px solid #6366f1;
+  color: #3730a3;
+  outline: none;
+  transform: translateY(-2px) scale(1.012);
+}
+
+.projectTitle {
+  font-size: 1.18rem;
+  font-weight: 700;
+  margin-bottom: 0.52em;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7em;
+}
+
+.projectDesc {
+  font-size: 1.01rem;
+  color: #525363;
+  font-weight: 400;
+  text-align: left;
+}
+
+.avatar {
+  width: 120px;     
+  height: 120px;    
+  border-radius: 50%;
+  overflow: hidden; 
+  margin: 0 auto 1.1em auto;
+  background: linear-gradient(135deg, #6366f1 60%, #06b6d4 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarImg {
+  width: 120px;   
+  height: 120px;   
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.projectDate {
+  font-size: 0.98em;
+  color: #8a8da1;
+  font-weight: 400;
+  margin-bottom: 0.25em;
+  margin-top: -0.3em;
+  text-align: left; /* Optional: ensures left alignment */
+}
+
+/* Badges */
+.badge {
+  margin-left: 0.6em;
+  background: #f1f5f9;
+  color: #6366f1;
+  font-size: 0.85em;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.18em 0.9em;
+  vertical-align: middle;
+  letter-spacing: 0.4px;
+}
+
+.badgeNEW {
+  background: #e0e7ff;
+  color: #6366f1;
+}
+
+.badgeBETA {
+  background: #f0fdfa;
+  color: #06b6d4;
+}
+
+.badgeTool {
+  background: #f5f7fa;
+  color: #545960;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .homeRoot {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    min-height: unset;
+    box-shadow: none;
+    border-right: none;
+    border-bottom: 1px solid #ececec;
+    padding: 2rem 1.2rem 1.2rem 1.2rem;
+  }
+  .mainContent {
+    padding: 2rem 1rem 1rem 1rem;
+  }
+  .projects {
+    gap: 1.2rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .mainContent {
+    padding: 1.2rem 0.2rem 1rem 0.2rem;
+  }
+  .projects {
+    max-width: 99vw;
+  }
+  .projectCard {
+    padding: 1em 0.8em;
+  }
+  .sidebar {
+    padding: 1.2rem 0.6rem 0.7rem 0.6rem;
+  }
+}
