@@ -25,7 +25,12 @@ a:hover {
 }
 
 html, body {
+  width: 100vw;
+  max-width: 100vw;
   overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {

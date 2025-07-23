@@ -3,14 +3,23 @@
 .podcastAppRoot {
   min-height: 100vh;
   min-height: 100dvh;
-  width: 100vw;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
   font-family: 'Inter', sans-serif;
-  /* Page-specific background image */
+  position: relative;
+}
+
+.podcastAppRoot::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   background: url('https://about.fb.com/wp-content/uploads/2024/02/Facebook-News-Update_US_AU_Header.jpg?w=1920') no-repeat center center fixed;
   background-size: cover;
+  pointer-events: none;
 }
 
 /* Glassmorphism card */
