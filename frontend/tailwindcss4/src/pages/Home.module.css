@@ -44,7 +44,6 @@
 /* Header/Sidebar Styles */
 .sidebar {
   width: 100%;
-  min-width: 0;
   background: #fff;
   box-shadow: 0 2px 24px rgba(31, 38, 135, 0.06);
   display: flex;
@@ -58,7 +57,6 @@
 
 .sidebar-container {
   width: 100%;
-  max-width: 1400px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -79,11 +77,6 @@
   overflow: hidden;
   background: linear-gradient(135deg, #6366f1 60%, #06b6d4 100%);
   flex-shrink: 0;
-  transition: transform 0.3s ease;
-}
-
-.avatar:hover {
-  transform: scale(1.05);
 }
 
 .avatarImg {
@@ -97,11 +90,6 @@
   font-weight: 800;
   margin-bottom: 0.1em;
   color: #23243a;
-  transition: color 0.2s ease;
-}
-
-.name:hover {
-  color: #6366f1;
 }
 
 .tagline {
@@ -110,18 +98,34 @@
   font-weight: 500;
 }
 
-.sidebarNav {
-  display: none;
+.sidebarNav ul {
+  display: flex;
+  gap: 1.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebarNav a {
+  color: #6366f1;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.32em 0.3em;
+  border-radius: 0.3em;
+  transition: background 0.16s, color 0.16s;
+}
+
+.sidebarNav a:hover {
+  background: #eef2ff;
+  color: #3730a3;
 }
 
 /* Projects Section */
 .projects {
   width: 100%;
-  max-width: 700px;
   display: grid;
   grid-template-columns: 1fr;
-  box-sizing: border-box;
-  gap: 2.5rem; /* Increased gap for better separation */
+  gap: 2rem;
   margin: 0 auto;
   padding: 0 2rem;
 }
@@ -130,85 +134,60 @@
   display: block;
   background: #fff;
   border: 1px solid #ececec;
-  border-left: 4px solid transparent; /* Visual hierarchy marker */
   border-radius: 1rem;
-  box-shadow: 0 2px 12px rgba(31,38,135,0.08);
+  box-shadow: 0 1px 8px rgba(31,38,135,0.07);
   text-decoration: none;
   color: #23243a;
-  padding: 1.8em 2.2em; /* Slightly increased padding */
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  position: relative;
+  padding: 1.6em 2em;
+  transition: all 0.3s ease;
 }
 
 .projectCard:hover {
-  box-shadow: 0 10px 32px 0 rgba(31,38,135,0.12);
-  border-left-color: #6366f1; /* Accent border on hover */
-  transform: translateX(4px) translateY(-2px);
+  box-shadow: 0 8px 32px 0 rgba(31,38,135,0.11);
+  border: 1.5px solid #6366f1;
+  transform: translateY(-2px);
 }
 
 .projectTitle {
-  font-size: 1.2rem; /* Slightly larger */
+  font-size: 1.18rem;
   font-weight: 700;
-  margin-bottom: 0.6em;
+  margin-bottom: 0.52em;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.7em;
-  color: #1e1b4b; /* Darker for better contrast */
 }
 
 .projectDesc {
-  font-size: 1.02rem; /* Slightly larger */
+  font-size: 1.01rem;
   color: #525363;
   font-weight: 400;
   text-align: left;
-  line-height: 1.6; /* Better readability */
 }
 
 .projectDate {
-  font-size: 0.95em;
-  color: #6b7280;
-  margin-bottom: 0.5em;
-  text-align: left;
+  font-size: 0.98em;
+  color: #8a8da1;
+  margin-bottom: 0.25em;
+  margin-top: -0.3em;
+  text-align: left; 
   width: 100%;
   display: block;
-  font-weight: 500; /* Slightly bolder */
 }
 
-/* Badges - Enhanced Visual Hierarchy */
+/* Badges */
 .badge {
   margin-left: 0.6em;
   background: #f1f5f9;
   color: #6366f1;
-  font-size: 0.82em;
-  font-weight: 700; /* Bolder */
+  font-size: 0.85em;
+  font-weight: 600;
   border-radius: 999px;
-  padding: 0.25em 1em;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-.badge::before {
-  content: '';
-  position: absolute;
-  left: 0.6em;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.badge:hover {
-  transform: translateY(-1px);
+  padding: 0.18em 0.9em;
 }
 
 .badgeNEW {
   background: #e0e7ff;
-  color: #4f46e5;
 }
 
 .badgeBETA {
@@ -242,11 +221,12 @@
   
   .projects {
     padding: 0 1.5rem;
-    gap: 2rem;
   }
   
-  .projectCard {
-    padding: 1.6em 2em;
+  .sidebarNav ul {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.7rem;
   }
 }
 
@@ -262,11 +242,6 @@
   
   .projects {
     padding: 0 1rem;
-    gap: 1.8rem;
-  }
-  
-  .projectTitle {
-    font-size: 1.15rem;
   }
 }
 
@@ -275,23 +250,3 @@
     transform: translate(5%, 5%);
   }
 }
-
-/* New: Staggered loading animation */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.projectCard {
-  animation: fadeInUp 0.6s both;
-}
-
-.projectCard:nth-child(1) { animation-delay: 0.1s; }
-.projectCard:nth-child(2) { animation-delay: 0.2s; }
-.projectCard:nth-child(3) { animation-delay: 0.3s; }
