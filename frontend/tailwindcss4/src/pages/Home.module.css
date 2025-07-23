@@ -1,9 +1,8 @@
 .homeRoot {
-  /* REMOVE min-height: 100vh; */
-  /* REMOVE width: 100vw; */
-  background: #f5f7fb;
+  min-height: 100vh;
   display: flex;
   width: 100%;
+  background: none; 
 }
 
 .sidebar {
@@ -15,7 +14,7 @@
   align-items: center;
   padding: 2.5rem 1.2rem 1.2rem 1.2rem;
   border-right: 1px solid #ececec;
-  /* REMOVE min-height: 100vh; */
+  min-height: 100vh;
   z-index: 2;
   position: relative;
 }
