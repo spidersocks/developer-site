@@ -9,14 +9,16 @@
 }
 
 .calculator-app-wrapper {
-  min-height: 100dvh;
-  min-height: 100vh;
+  min-height: 100%;
   width: 100%;
   box-sizing: border-box;
   background: #f5f7fb;
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .logo {
@@ -58,6 +60,13 @@
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
     animation: logo-spin infinite 20s linear;
+  }
+}
+
+@supports (height: 100dvh) {
+  .calculator-app-wrapper {
+    height: 100dvh;
+    min-height: 100dvh;
   }
 }
 

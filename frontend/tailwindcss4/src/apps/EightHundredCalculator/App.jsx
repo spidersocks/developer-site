@@ -473,7 +473,7 @@ export default function App({ lang = "en" }) {
   };
 
   return (
-    <div className="calculator-app-wrapper">
+    <div className="calculator-app-wrapper" style={{ overflowY: 'auto' }}>
       {/* Metadata */}
       <title>{t.metaTitle}</title>
       <meta name="description" content={t.metaDescription} />
