@@ -1,25 +1,25 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import EightHundredCalculatorApp from "./apps/EightHundredCalculator/App";
 import PokeTeamPredictorApp from "./apps/PokeTeamPredictor/App";
 import PodcastProjectApp from "./apps/PodcastProject/App";
 import { Analytics } from "@vercel/analytics/react";
-import React from "react";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Redirect plain "/" to preferred language if desired, e.g. "en" */}
-        <Route path="/" element={<Navigate to="/en" replace />} />
-        {/* Language-prefixed routes */}
-        <Route path="/en" element={<Home lang="en" />} />
-        <Route path="/zh" element={<Home lang="zh" />} />
+        {/* Homepage (no language prefix) */}
+        <Route path="/" element={<Home />} />
+        
+        {/* 800m Calculator (with language support) */}
+        <Route path="/800m-calculator" element={<EightHundredCalculatorApp lang="en" />} />
         <Route path="/en/800m-calculator/*" element={<EightHundredCalculatorApp lang="en" />} />
         <Route path="/zh/800m-calculator/*" element={<EightHundredCalculatorApp lang="zh" />} />
+        
+        {/* Other apps (no language prefix) */}
         <Route path="/poke-team-predictor" element={<PokeTeamPredictorApp />} />
         <Route path="/podcast-project/*" element={<PodcastProjectApp />} />
-        {/* More routes here if needed */}
       </Routes>
       <Analytics />
     </BrowserRouter>
