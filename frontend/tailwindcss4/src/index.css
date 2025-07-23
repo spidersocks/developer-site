@@ -21,6 +21,10 @@ html, body {
   padding: 0;
 }
 
+body {
+  background: #f9fafb;
+}
+
 a {
   font-weight: 500;
   color: #646cff;

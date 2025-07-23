@@ -491,7 +491,6 @@ export default function App({ lang = "en" }) {
       <LangButton lang={lang} />
 
       <div className="relative w-full flex flex-col justify-between">
-        <div className="fixed inset-0 bg-gray-50 -z-10" aria-hidden="true" />
         <header className="mb-6 text-center z-10 flex flex-col items-center">
           <h1 className="font-bold text-gray-900 mb-2 drop-shadow-none inline-block px-2
             text-base sm:text-lg md:text-xl lg:text-2xl tracking-tight max-w-[20rem] sm:max-w-[28rem] leading-tight
