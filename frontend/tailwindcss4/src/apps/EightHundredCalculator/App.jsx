@@ -504,6 +504,7 @@ export default function App({ lang = "en" }) {
             {t.description}
           </p>
         </header>
+        <div style={{ height: 1500, background: "rgba(255,200,200,0.2)" }}>SCROLL TEST DUMMY</div>
         <main className="
           w-full max-w-md mx-auto
           bg-white/80 backdrop-blur-sm shadow-xl rounded-xl
