@@ -246,9 +246,48 @@
   }
 }
 
+/* Shrinkable sticky sidebar for mobile */
 @media (max-width: 700px) {
   .projects {
     max-width: 100%;
+  }
+  .sidebar {
+    transition: all 0.28s cubic-bezier(.4,0,.2,1);
+    padding: 1.25rem 0;
+    min-height: 88px;
+  }
+  .sidebar.shrunk {
+    padding: 0.25rem 0;
+    min-height: 56px;
+    box-shadow: 0 1px 8px rgba(31,38,135,0.07);
+  }
+  .sidebarHeader {
+    transition: all 0.28s cubic-bezier(.4,0,.2,1);
+    gap: 0.5rem;
+  }
+  .sidebar.shrunk .sidebarHeader {
+    gap: 0.2rem;
+  }
+  .sidebar .avatar {
+    transition: width 0.2s, height 0.2s;
+  }
+  .sidebar.shrunk .avatar {
+    width: 44px;
+    height: 44px;
+  }
+  .sidebar .name {
+    font-size: 1.1rem;
+    transition: font-size 0.2s;
+  }
+  .sidebar.shrunk .name {
+    font-size: 1rem;
+  }
+  .sidebar .tagline {
+    font-size: 0.92rem;
+    transition: font-size 0.2s;
+  }
+  .sidebar.shrunk .tagline {
+    font-size: 0.85rem;
   }
 }
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styles from "./Home.module.css";
 
 const projects = [
@@ -26,10 +26,29 @@ const projects = [
 ];
 
 export default function Home() {
+  const [shrunk, setShrunk] = useState(false);
+
+  useEffect(() => {
+    function handleScroll() {
+      if (window.innerWidth <= 700) {
+        setShrunk(window.scrollY > 20);
+      } else {
+        setShrunk(false);
+      }
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll); // If switching between desktop/mobile
+    handleScroll(); // Initial check
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
+
   return (
     <div className={styles.homeRoot}>
       {/* Header Section */}
-      <aside className={styles.sidebar}>
+      <aside className={`${styles.sidebar} ${shrunk ? styles.shrunk : ""}`}>
         <div className={styles.sidebarContainer}>
           <div className={styles.sidebarHeader}>
             <div className={styles.avatar}>
