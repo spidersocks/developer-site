@@ -12,7 +12,7 @@ const projects = [
   },
   {
     title: "Pokémon VGC Teammate Calculator",
-    description: "Predict your ideal Pokémon Regulation I VGC team based on Restricted picks.",
+    description: "Predict your ideal Pokémon Regulation I VGC team based on Restricted core.",
     link: "/poke-team-predictor",
     badge: "NEW",
     date: "22nd June 2025",

@@ -1,6 +1,6 @@
 .homeRoot {
   min-height: 100vh;
-  height: 100vh;
+  /* height: 100vh; */
   width: 100vw;
   background: #f5f7fb;
   display: flex;
@@ -220,16 +220,58 @@
 }
 
 @media (max-width: 600px) {
-  .mainContent {
-    padding: 1.2rem 0.2rem 1rem 0.2rem;
-  }
-  .projects {
-    max-width: 99vw;
-  }
-  .projectCard {
-    padding: 1em 0.8em;
-  }
   .sidebar {
-    padding: 1.2rem 0.6rem 0.7rem 0.6rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 0.4rem 0.7rem 0.4rem;
+    width: 100vw;
+    min-height: unset;
+  }
+  .sidebarHeader {
+    margin-bottom: 0;
+    flex-direction: row;
+    align-items: center;
+    display: flex;
+    gap: 0.8rem;
+  }
+  .avatar {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+  }
+  .avatarImg {
+    width: 40px;
+    height: 40px;
+  }
+  .name {
+    font-size: 1.1rem;
+    margin-bottom: 0;
+    font-weight: 700;
+  }
+  .tagline {
+    font-size: 0.85rem;
+    margin-bottom: 0;
+  }
+  .sidebarNav {
+    margin: 0;
+    width: auto;
+  }
+  .sidebarNav ul {
+    display: flex;
+    gap: 0.7rem;
+    align-items: center;
+    margin: 0;
+  }
+  .sidebarNav li {
+    margin-bottom: 0;
+  }
+  .sidebarFooter {
+    padding-bottom: 0;
+    margin: 0;
+    font-size: 0.85em;
+    color: #b3b5bb;
+    margin-top: 0;
+    align-self: auto;
   }
 }

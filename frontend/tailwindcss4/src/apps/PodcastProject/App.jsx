@@ -104,6 +104,20 @@ export default function PodcastProjectApp() {
   const [topics, setTopics] = useState([]);
   const [drillPath, setDrillPath] = useState([]);
   const [loading, setLoading] = useState(false);
+  const getAxisFontSize = () => {
+    if (typeof window !== "undefined") {
+      if (window.innerWidth < 600) return 11;
+      if (window.innerWidth < 900) return 13;
+    }
+    return 14;
+  };
+  const [axisFontSize, setAxisFontSize] = useState(getAxisFontSize());
+
+  useEffect(() => {
+    const handleResize = () => setAxisFontSize(getAxisFontSize());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -305,7 +319,7 @@ export default function PodcastProjectApp() {
                       value: `${toTitleCase(broaderTopic)} subtopics`,
                       position: "bottom",
                       offset: 90,
-                      fontSize: 14,
+                      fontSize: axisFontSize,
                       fontWeight: 600,
                       fill: "#29292a",
                     }}
@@ -331,7 +345,7 @@ export default function PodcastProjectApp() {
                       angle: -90,
                       position: "insideLeft",
                       dx: -20,
-                      fontSize: 14,
+                      fontSize: axisFontSize,
                       fontWeight: 600,
                       fill: "#29292a",
                     }}

@@ -88,7 +88,7 @@
 .chartTitle {
   font-weight: 700;
   color: #29292a;
-  font-size: 1.5rem;
+  font-size: clamp(1.05rem, 2vw + 1rem, 1.5rem);
 }
 
 /* Buttons */
@@ -207,6 +207,12 @@
 /* Responsive Typography */
 @media (max-width: 600px) {
   .podcastAppRoot h1 { font-size: 1.5rem;}
+}
+
+@media (max-width: 600px) {
+  .chartTitle {
+    font-size: 1.05rem;
+  }
 }
 
 /* Responsive chart sizing */
