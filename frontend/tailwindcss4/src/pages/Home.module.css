@@ -3,7 +3,6 @@
   flex-direction: column;
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
 }
 
 .homeRoot::before {
@@ -18,32 +17,34 @@
     radial-gradient(circle at 30% 70%, rgba(6, 182, 212, 0.03) 0%, transparent 30%);
   animation: float 15s infinite alternate ease-in-out;
   z-index: -1;
+  pointer-events: none;
 }
 
 .contentWrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 .mainContent {
   flex: 1;
   padding: 2rem 0;
-}
-
-.pageFooter {
   width: 100%;
-  text-align: center;
-  padding: 1.5rem;
-  color: #6b7280;
-  font-size: 0.9rem;
-  border-top: 1px solid #ececec;
-  margin-top: auto;
 }
 
-/* Header/Sidebar Styles */
+.mainContentContainer {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 0 2rem;
+}
+
 .sidebar {
-  width: 100%;
+  width: 100vw;
+  left: 0;
+  right: 0;
   background: #fff;
   box-shadow: 0 2px 24px rgba(31, 38, 135, 0.06);
   display: flex;
@@ -55,13 +56,15 @@
   top: 0;
 }
 
-.sidebar-container {
+.sidebarContainer {
+  max-width: 1200px;
   width: 100%;
+  margin: 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 2rem;
-  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .sidebarHeader {
@@ -122,12 +125,14 @@
 
 /* Projects Section */
 .projects {
-  width: 100%;
   display: grid;
   grid-template-columns: 1fr;
   gap: 2rem;
   margin: 0 auto;
-  padding: 0 2rem;
+  max-width: 700px;
+  width: 100%;
+  box-sizing: border-box;
+  /* Remove horizontal padding here, let mainContentContainer handle it */
 }
 
 .projectCard {
@@ -140,6 +145,7 @@
   color: #23243a;
   padding: 1.6em 2em;
   transition: all 0.3s ease;
+  box-sizing: border-box;
 }
 
 .projectCard:hover {
@@ -200,9 +206,19 @@
   color: #545960;
 }
 
+.pageFooter {
+  width: 100%;
+  text-align: center;
+  padding: 1.5rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+  border-top: 1px solid #ececec;
+  margin-top: auto;
+}
+
 /* Responsive Adjustments */
 @media (max-width: 900px) {
-  .sidebar-container {
+  .sidebarContainer {
     flex-direction: column;
     gap: 1.5rem;
     padding: 1.5rem;
@@ -219,7 +235,7 @@
     height: 100px;
   }
   
-  .projects {
+  .mainContentContainer {
     padding: 0 1.5rem;
   }
   
@@ -230,17 +246,23 @@
   }
 }
 
+@media (max-width: 700px) {
+  .projects {
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 600px) {
   .avatar {
     width: 80px;
     height: 80px;
   }
   
-  .sidebar-container {
+  .sidebarContainer {
     padding: 1rem;
   }
-  
-  .projects {
+
+  .mainContentContainer {
     padding: 0 1rem;
   }
 }
