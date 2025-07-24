@@ -47,7 +47,7 @@ export default function Home() {
 
   return (
     <div className={styles.homeRoot}>
-      {/* Header Section */}
+      {/* Header Section - Now properly sticky */}
       <aside className={`${styles.sidebar} ${shrunk ? styles.shrunk : ""}`}>
         <div className={styles.sidebarContainer}>
           <div className={styles.sidebarHeader}>
@@ -66,38 +66,41 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content - Now with proper overflow control */}
       <div className={styles.contentWrapper}>
-        <main className={styles.mainContent}>
-          <div className={styles.mainContentContainer}>
-            <div className={styles.projects}>
-              {[...projects].reverse().map((project, index) => (
-                <a
-                  href={project.link}
-                  className={styles.projectCard}
-                  key={project.title}
-                  aria-label={`View ${project.title}`}
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div className={styles.projectTitle}>
-                    {project.title}
-                    {project.badge && (
-                      <span className={styles[`badge${project.badge}`] || styles.badge}>
-                        {project.badge}
-                      </span>
-                    )}
-                  </div>
-                  <div className={styles.projectDate}>{project.date}</div>
-                  <div className={styles.projectDesc}>{project.description}</div>
-                </a>
-              ))}
+        <div className={styles.scrollContainer}>
+          <main className={styles.mainContent}>
+            <div className={styles.mainContentContainer}>
+              <div className={styles.projects}>
+                {[...projects].reverse().map((project, index) => (
+                  <a
+                    href={project.link}
+                    className={styles.projectCard}
+                    key={project.title}
+                    aria-label={`View ${project.title}`}
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className={styles.projectTitle}>
+                      {project.title}
+                      {project.badge && (
+                        <span className={styles[`badge${project.badge}`] || styles.badge}>
+                          {project.badge}
+                        </span>
+                      )}
+                    </div>
+                    <div className={styles.projectDate}>{project.date}</div>
+                    <div className={styles.projectDesc}>{project.description}</div>
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
-        </main>
-        {/* Footer */}
-        <footer className={styles.pageFooter}>
-          © {new Date().getFullYear()} Sean Fontaine
-        </footer>
+          </main>
+
+          {/* Footer */}
+          <footer className={styles.pageFooter}>
+            © {new Date().getFullYear()} Sean Fontaine
+          </footer>
+        </div>
       </div>
     </div>
   );
