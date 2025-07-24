@@ -37,8 +37,8 @@ export default function Home() {
       }
     }
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll); // If switching between desktop/mobile
-    handleScroll(); // Initial check
+    window.addEventListener("resize", handleScroll);
+    handleScroll();
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
@@ -94,7 +94,6 @@ export default function Home() {
             </div>
           </div>
         </main>
-
         {/* Footer */}
         <footer className={styles.pageFooter}>
           © {new Date().getFullYear()} Sean Fontaine

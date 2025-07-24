@@ -3,6 +3,8 @@
   flex-direction: column;
   min-height: 100vh;
   position: relative;
+  /* Remove overflow-x: hidden from here */
+  width: 100%;
 }
 
 .homeRoot::before {
@@ -25,6 +27,16 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  /* Add overflow-x: hidden here instead */
+  overflow-x: hidden;
+}
+
+.contentOverflowContainer {
+  width: 100%;
+  overflow-x: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .mainContent {
@@ -42,7 +54,7 @@
 }
 
 .sidebar {
-  width: 100vw;
+  width: 100%;
   left: 0;
   right: 0;
   background: #fff;
@@ -54,6 +66,7 @@
   z-index: 2;
   position: sticky;
   top: 0;
+  transition: all 0.28s cubic-bezier(.4,0,.2,1);
 }
 
 .sidebarContainer {
@@ -132,7 +145,7 @@
   max-width: 700px;
   width: 100%;
   box-sizing: border-box;
-  /* Remove horizontal padding here, let mainContentContainer handle it */
+  overflow-x: hidden;
 }
 
 .projectCard {
@@ -246,13 +259,8 @@
   }
 }
 
-/* Shrinkable sticky sidebar for mobile */
 @media (max-width: 700px) {
-  .projects {
-    max-width: 100%;
-  }
   .sidebar {
-    transition: all 0.28s cubic-bezier(.4,0,.2,1);
     padding: 1.25rem 0;
     min-height: 88px;
   }
