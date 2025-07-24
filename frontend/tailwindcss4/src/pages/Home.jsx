@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import styles from "./Home.module.css";
 
 const projects = [
@@ -8,6 +8,7 @@ const projects = [
     link: "/en/800m-calculator",
     badge: "Tool",
     date: "4th May 2025",
+    preview: "/800m_preview.jpg",
   },
   {
     title: "Pokémon VGC Teammate Calculator",
@@ -15,6 +16,7 @@ const projects = [
     link: "/poke-team-predictor",
     badge: "NEW",
     date: "22nd June 2025",
+    preview: "/pokemon_preview.jpg",
   },
   {
     title: "Podcast Project",
@@ -22,33 +24,15 @@ const projects = [
     link: "/podcast-project",
     badge: "BETA",
     date: "Ongoing",
+    preview: "/podcast_preview.jpg",
   },
 ];
 
 export default function Home() {
-  const [shrunk, setShrunk] = useState(false);
-
-  useEffect(() => {
-    function handleScroll() {
-      if (window.innerWidth <= 700) {
-        setShrunk(window.scrollY > 20);
-      } else {
-        setShrunk(false);
-      }
-    }
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll);
-    handleScroll();
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", handleScroll);
-    };
-  }, []);
-
   return (
     <div className={styles.homeRoot}>
-      {/* Header Section - Now properly sticky */}
-      <aside className={`${styles.sidebar} ${shrunk ? styles.shrunk : ""}`}>
+      {/* Header Section */}
+      <aside className={styles.sidebar}>
         <div className={styles.sidebarContainer}>
           <div className={styles.sidebarHeader}>
             <div className={styles.avatar}>
@@ -66,7 +50,7 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* Main Content - Now with proper overflow control */}
+      {/* Main Content */}
       <div className={styles.contentWrapper}>
         <div className={styles.scrollContainer}>
           <main className={styles.mainContent}>
@@ -80,6 +64,16 @@ export default function Home() {
                     aria-label={`View ${project.title}`}
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
+                    {/* Project Preview Image */}
+                    {project.preview && (
+                      <img
+                        src={project.preview}
+                        alt={`Preview of ${project.title}`}
+                        className={styles.projectPreviewImg}
+                        loading="lazy"
+                      />
+                    )}
+
                     <div className={styles.projectTitle}>
                       {project.title}
                       {project.badge && (
