@@ -4,7 +4,6 @@ A site to host some of my projects, tools, and apps!
 
 ## Structure
 
-- `backend/`: Python Flask API to run apps
 - `frontend/`: React app for user interface
 - `.gitignore`: Ensures no virtual environments or node_modules are pushed
 
