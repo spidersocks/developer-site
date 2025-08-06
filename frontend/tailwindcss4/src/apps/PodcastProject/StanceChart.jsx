@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import Plot from "react-plotly.js";
 import styles from "./App.module.css";
-import podcastIcon from '/podcast.png';
-import newsIcon from '/news.png';
 
 const TOPIC_GROUPS = {
   People: [
