@@ -2,6 +2,7 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import styles from "./App.module.css";
 import PodcastChart from "./PodcastChart";
+import StanceChart from "./StanceChart";
 
 // Markdown content for the blog post
 const markdown = `
@@ -54,7 +55,11 @@ export default function App() {
         {/* Interactive chart inserted after the Results section */}
         <PodcastChart />
         <div style={{ fontSize: "0.98rem", color: "#64748b", marginTop: "0.8rem" }}>
-        Figure 1: Topic Distributions by Media Type.
+          Figure 1: Topic Distributions by Media Type.
+        </div>
+        <StanceChart />
+        <div style={{ fontSize: "0.98rem", color: "#64748b", marginTop: "0.8rem" }}>
+          Figure 2: Relative Stance by Topic and Source Type.
         </div>
         <div className={styles.blogContent}>
           <ReactMarkdown>{discussion}</ReactMarkdown>
