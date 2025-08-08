@@ -1,0 +1,44 @@
+.wordcloudWrapper {
+  width: 100%;
+  max-width: 660px;
+  margin: 1.3em auto 1.5em auto; 
+  position: relative;
+  min-width: 300px;
+  text-align: center;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.wordcloudLoading,
+.wordcloudEmpty {
+  color: #64748b;
+  font-size: 1.1rem;
+  margin-top: 2em;
+}
+
+.wordcloudArea {
+  position: relative;
+  width: 100%;
+  min-width: 300px;
+  max-width: 100%;
+  margin: 0 auto;
+  display: block;
+  line-height: 0;
+}
+
+.wordcloudArea svg {
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .wordcloudWrapper {
+    max-width: 98vw;
+    min-width: 0;
+    padding: 1em 0.4em 1.7em 0.4em;
+  }
+  .wordcloudArea {
+    min-width: 0;
+  }
+}

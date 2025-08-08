@@ -1,0 +1,116 @@
+.pairedWrapper {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 2.5vw;
+  align-items: flex-start;
+  margin: 0 auto; /* remove bottom margin that pushes the caption down */
+  width: 100%;
+  max-width: 1400px;
+}
+
+.wordcloudCol {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wordcloudCol > * {
+  margin-bottom: 0 !important;
+}
+
+.vsLabel {
+  flex: 0 0 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #64748b;
+  user-select: none;
+}
+
+/* Controls bar */
+.controlsBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.9rem 1.2rem;
+  margin: 0.6rem auto 1rem auto;
+  width: 100%;
+  max-width: 1400px;
+  padding: 0 0.4rem;
+}
+
+.selectGroup {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+}
+
+.selectLabel {
+  font-size: 0.86rem;
+  color: #475569;
+  margin: 0 0 0.35rem 2px;
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 0.5rem 2.0rem 0.5rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #0f172a;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  background-image:
+    linear-gradient(45deg, transparent 50%, #64748b 50%),
+    linear-gradient(135deg, #64748b 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 16px) calc(50% - 3px),
+    calc(100% - 11px) calc(50% - 3px),
+    100% 0;
+  background-size:
+    6px 6px,
+    6px 6px,
+    2.5rem 100%;
+  background-repeat: no-repeat;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.25);
+}
+
+@media (max-width: 1000px) {
+  .pairedWrapper {
+    flex-direction: column;
+    gap: 1.4em;
+    max-width: 95vw;
+  }
+  .vsLabel {
+    font-size: 1.1rem;
+    margin: 0.6em 0;
+  }
+  .controlsBar {
+    justify-content: stretch;
+    max-width: 95vw;
+    gap: 0.6rem;
+    margin: 0.4rem auto 0.8rem auto;
+  }
+  .selectGroup {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .select {
+    width: 100%;
+  }
+}

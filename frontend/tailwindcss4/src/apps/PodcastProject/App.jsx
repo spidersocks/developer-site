@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import styles from "./App.module.css";
 import PodcastChart from "./PodcastChart";
 import StanceChart from "./StanceChart";
+import PairedWordclouds from "./PairedWordclouds"; // <-- NEW
 
 // Markdown content for the blog post
 const markdown = `
@@ -60,6 +61,12 @@ export default function App() {
         <StanceChart />
         <div style={{ fontSize: "0.98rem", color: "#64748b", marginTop: "0.8rem" }}>
           Figure 2: Relative Stance by Topic and Source Type.
+        </div>
+        <div className={styles.pairedWordcloudsSpacer}>
+          <PairedWordclouds />
+        </div>
+        <div style={{ fontSize: "0.98rem", color: "#64748b", marginTop: "0.8rem" }}>
+          Figure 3: Word Cloud by Source, Colored by Sentiment Score.
         </div>
         <div className={styles.blogContent}>
           <ReactMarkdown>{discussion}</ReactMarkdown>
