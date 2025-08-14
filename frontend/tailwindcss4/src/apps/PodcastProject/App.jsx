@@ -1,6 +1,6 @@
-// App.jsx
+// apps/PodcastProject/App.jsx
 import React from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import styles from "./App.module.css";
@@ -8,7 +8,10 @@ import PodcastChart from "./PodcastChart";
 import StanceChart from "./StanceChart";
 import PairedWordclouds from "./PairedWordclouds";
 
-// Error boundary for nicer failures
+const GITHUB_REPO_URL = "https://github.com/spidersocks/podcast-project";
+const APPENDICES_PATH_IN_REPO = "appendices";
+
+// Error boundary
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -17,9 +20,7 @@ class ErrorBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch() {
-    // Optional: log to your service
-  }
+  componentDidCatch() {}
   render() {
     if (this.state.hasError) {
       return this.props.fallback ?? (
@@ -30,18 +31,12 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-/*
- We split the report into multiple Markdown constants so we can inject the
- figures (Figure 1 image, Figure 2/3/4 interactive charts) exactly where the
- document places them, and to allow JSX for styling that must bypass CSS Modules.
-*/
+// Report content
 
-// Title only (so we can inject a styled subtitle via JSX)
 const mdTitle = `
 # Podcasting the News – A Topic, Sentiment, and Stance Analysis of U.S. Podcasts and Public News Media
 `;
 
-// Intro split: Part 1 before the a)/b) lines; Part 2 after them
 const mdIntroPart1 = `
 ## 1. Introduction
 
@@ -58,7 +53,6 @@ const mdIntroPart2 = `
 Through this study, we aim to provide an evidence-based understanding of the role that podcasts play in the modern information landscape.
 `;
 
-// Related Work
 const mdRelated = `
 ## 2. Related Work
 
@@ -69,7 +63,6 @@ Our methods are grounded in established techniques for analyzing news media cont
 By greatly extending the scope of existing research and combining state-of-the-art media research techniques, our study offers a new and far more comprehensive view into the podcast-news information ecosystem.
 `;
 
-// Methods – 3.1 Data + 3.2 Topic Modeling
 const mdMethods_31_32 = `
 ## 3. Methodology
 
@@ -88,7 +81,6 @@ The assembled dataset contains 8,344 podcast transcripts from 40 publishers, and
 To gain an understanding of what is being talked about in our corpus, we employ topic modeling, an unsupervised machine learning method that extracts core topics within a source using clusters of words and phrases that tend to co-occur. We do this with BERTopic ([Grootendorst, 2022](#ref-grootendorst-2022)), an embeddings-based approach that accounts for the context of words as well as raw frequencies to generate more sophisticated human-interpretable topics. Prior to modeling, corpus documents are split into chunks (of approx. 300 words) to allow the model to focus on smaller, more cohesive units of information. Results of modeling are 402,415 chunks assigned to 3,232 unique topics based on semantic similarity.
 `;
 
-// Methods – 3.3 Topic Labeling (text before and after Figure 1)
 const mdMethods_33_beforeFig1 = `
 ### 3.3 Topic Labeling
 
@@ -101,7 +93,6 @@ An alternative labeling schema is also applied to identify specific named entiti
 The result of this is 1 hierarchically grounded IPTC media topic and up to 46 named entity topics for each of our 402,415 chunks.
 `;
 
-// Methods – 3.4 and 3.5
 const mdMethods_34_35 = `
 ### 3.4 Stance Detection
 
@@ -121,7 +112,6 @@ Sentiment analysis is performed using two methods for comparison. We use the Tex
 We set the sentiment thresholds to be the same for both models, < -0.5 for negative, > 0.5 for positive and used the compound score for the VADER model.
 `;
 
-// Analysis – 4.1 before and after Figure 2
 const mdAnalysis_41_beforeFig2 = `
 ## 4. Analysis
 
@@ -142,7 +132,6 @@ Overall, podcasts tend to under-cover hard news (e.g. war, public health, climat
 To summarize, while both public news and podcasts contain substantial news content, podcasts seem to favor vivid incidents, personalities, and culture topics; public broadcasters cover a broader range of procedural, institutional, and policy-centered topics.
 `;
 
-// Analysis – 4.2 with Figure 3 and formatted labels
 const mdAnalysis_42_beforeFig3 = `
 ### 4.2 Stance Analysis
 `;
@@ -185,7 +174,6 @@ Note: for topics like “racism”, while a negative stance reflects opposition,
 <u>Issues covered less favorably in podcasts:</u> Euthanasia (Δ = −0.53), capital punishment (−0.43), communism (−0.39), Democratic Party (−0.27), military service (−0.21).
 `;
 
-// Analysis – 4.3 with Figure 4
 const mdAnalysis_43_beforeFig4 = `
 ### 4.3 Framing Analysis
 
@@ -204,7 +192,6 @@ const mdAnalysis_43_afterFig4 = `
 Note: Most positive topics in podcasts are typically consumer / lifestyle topics (clothing, grocery, toys/games, streaming, health/beauty), suggesting noise in the data, some of which is likely sponsored advertiser content.
 `;
 
-// Discussion
 const mdDiscussion = `
 ## 5. Discussion
 
@@ -228,7 +215,6 @@ Over the course of a full year of content from podcasts and public news, we obse
 This study and its findings are exploratory in nature. We analyze only data from the calendar year July 1, 2024 – July 1, 2025, focus on only top U.S. podcasts and two public news outlets, and rely on largely automated labeling of topics, stance, sentiment, and framing. While we are careful to apply quality controls and manual review, several forms of noise and misclassification are likely still present (detailed in Section 6). We stress that results apply only to the podcasts and time period study, and that result magnitudes expressed in the paper are best interpreted as directional trends rather than exact point values.
 `;
 
-// References with anchors for internal jumps
 const mdReferences = `
 ## References
 
@@ -264,53 +250,304 @@ const mdReferences = `
 
 <a id="ref-pedregosa-2011"></a> Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J., Passos, A., Cournapeau, D., Brucher, M., Perrot, M., & Duchesnay, E. (2011). Scikit-learn: Machine learning in Python. *The Journal of Machine Learning Research, 12*, 2825–2830.
 
-<a id="ref-podscribe"></a> PodScribe. (n.d.). Transcripts of the most popular podcasts. [https://podscribe.app/](https://podscribe.app/)
-
 <a id="ref-rudnik-2019"></a> Rudnik, C., Ehrhart, T., Ferret, O., Teyssou, D., Troncy, R., & Tannier, X. (2019). Searching news articles using an event knowledge graph leveraged by Wikidata. In *Companion Proceedings of the 2019 World Wide Web Conference (WWW ’19 Companion)* (pp. 957–964). ACM. [https://doi.org/10.1145/3308560.3316761](https://doi.org/10.1145/3308560.3316761)
 
 <a id="ref-yu-yang-2024"></a> Yu, L., & Yang, L. (2024). News media in crisis: A sentiment and emotion analysis of US news articles on unemployment in the COVID-19 pandemic. *Humanities and Social Sciences Communications, 11*(1), Article 854. [https://doi.org/10.1057/s41599-024-03225-9](https://doi.org/10.1057/s41599-024-03225-9)
 `;
 
-// Pages (Dashboard embeds figures at exact positions)
+// Appendices page
+function AppendicesPage() {
+  return (
+    <article className={styles.mainCard}>
+      <div className={styles.blogContent}>
+        <h1>Appendices</h1>
+        <p className={styles.kicker} style={{ marginTop: "0.2rem" }}>
+          Supplementary materials from the full report
+        </p>
+
+        <div className={styles.resourceBar}>
+          <a
+            className={`${styles.pillLink} ${styles.pillLinkPrimary}`}
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg className={styles.pillIcon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .5C5.73.5.98 5.24.98 11.5c0 4.84 3.14 8.94 7.49 10.39.55.1.75-.24.75-.53 0-.26-.01-1.12-.02-2.04-3.05.66-3.69-1.3-3.69-1.3-.5-1.26-1.22-1.6-1.22-1.6-.99-.68.07-.66.07-.66 1.09.08 1.66 1.12 1.66 1.12.98 1.67 2.57 1.19 3.2.91.1-.71.38-1.19.69-1.46-2.44-.28-5.01-1.22-5.01-5.45 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.42.11-2.96 0 0 .92-.29 3.01 1.12.88-.25 1.83-.38 2.77-.38.94 0 1.89.13 2.77.38 2.09-1.41 3.01-1.12 3.01-1.12.6 1.54.22 2.68.11 2.96.7.77 1.13 1.75 1.13 2.95 0 4.24-2.58 5.17-5.03 5.44.39.33.74.97.74 1.95 0 1.41-.01 2.55-.01 2.9 0 .29.2.63.76.52A10.53 10.53 0 0 0 23.02 11.5C23.02 5.24 18.27.5 12 .5z" />
+            </svg>
+            GitHub Repo
+          </a>
+          <Link className={styles.pillLink} to="/podcast-project" aria-label="Back to report">
+            ← Back to report
+          </Link>
+        </div>
+
+        {/* Appendix A: Corpus Metadata */}
+        <div className={styles.detailsCard}>
+          <details open>
+            <summary>Appendix A: Corpus Metadata</summary>
+            <div className={styles.detailsBody}>
+              <div className={styles.tableWrapper} role="region" aria-label="Corpus metadata table">
+                <table className={styles.dataTable}>
+                  <thead>
+                    <tr>
+                      <th>Source Name</th>
+                      <th>Documents</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>NPR</td><td>29,425</td></tr>
+                    <tr><td>PBS</td><td>20,919</td></tr>
+
+                    <tr><td>Armchair Expert With Dax Shepard</td><td>170</td></tr>
+                    <tr><td>Bad Friends</td><td>101</td></tr>
+                    <tr><td>Call Her Daddy</td><td>97</td></tr>
+                    <tr><td>Cancelled With Tana Mongeau Brooke Schofield</td><td>35</td></tr>
+                    <tr><td>Candace</td><td>210</td></tr>
+                    <tr><td>Club Shay Shay</td><td>1,171</td></tr>
+                    <tr><td>Conan O'Brien Needs A Friend</td><td>112</td></tr>
+                    <tr><td>Crime Junkie</td><td>85</td></tr>
+                    <tr><td>Distractible</td><td>101</td></tr>
+                    <tr><td>Huberman Lab</td><td>85</td></tr>
+                    <tr><td>Impaulsive With Logan Paul</td><td>41</td></tr>
+                    <tr><td>Kill Tony</td><td>54</td></tr>
+                    <tr><td>Matt And Shane's Secret Podcast</td><td>64</td></tr>
+                    <tr><td>Million Dollaz Worth Of Game</td><td>52</td></tr>
+                    <tr><td>Morbid</td><td>111</td></tr>
+                    <tr><td>Mrballen Podcast Strange Dark Mysterious Stories</td><td>117</td></tr>
+                    <tr><td>Murder Mystery Makeup</td><td>40</td></tr>
+                    <tr><td>My Favorite Murder With Karen Kilgariff And Georgia Hardstark</td><td>155</td></tr>
+                    <tr><td>New Heights With Jason Travis Kelce</td><td>150</td></tr>
+                    <tr><td>Pardon My Take</td><td>154</td></tr>
+                    <tr><td>Pod Save America</td><td>77</td></tr>
+                    <tr><td>Rotten Mango</td><td>98</td></tr>
+                    <tr><td>Shawn Ryan Show</td><td>69</td></tr>
+                    <tr><td>Smartless</td><td>215</td></tr>
+                    <tr><td>Stuff You Should Know</td><td>15</td></tr>
+                    <tr><td>Talk Tuah With Haliey Welch</td><td>363</td></tr>
+                    <tr><td>Ted Talks Daily</td><td>321</td></tr>
+                    <tr><td>The Ben Shapiro Show</td><td>143</td></tr>
+                    <tr><td>The Bill Simmons Podcast</td><td>979</td></tr>
+                    <tr><td>The Breakfast Club</td><td>97</td></tr>
+                    <tr><td>The Joe Budden Podcast</td><td>181</td></tr>
+                    <tr><td>The Joe Rogan Experience</td><td>107</td></tr>
+                    <tr><td>The Lol Podcast</td><td>382</td></tr>
+                    <tr><td>The Megyn Kelly Show</td><td>1,219</td></tr>
+                    <tr><td>The Meidastouch Podcast</td><td>113</td></tr>
+                    <tr><td>The Mel Robbins Podcast</td><td>260</td></tr>
+                    <tr><td>The Ramsey Show</td><td>147</td></tr>
+                    <tr><td>The Tucker Carlson Show</td><td>79</td></tr>
+                    <tr><td>This Past Weekend w Theo Von</td><td>320</td></tr>
+                    <tr><td>Vince</td><td>—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        {/* Appendix B: Chain of Stance Prompting Format */}
+        <div className={styles.detailsCard}>
+          <details>
+            <summary>Appendix B: Chain of Stance Prompting Format</summary>
+            <div className={styles.detailsBody}>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "0.75rem" }}>
+{`“[TASK]
+You are an expert in stance detection. 
+Your task is to determine the stance of a given text towards a specific topic. 
+Follow these steps carefully to provide a complete analysis and a final conclusion.
+Source Name: "{source_name}"
+Title: "{title}"
+Text for Analysis: "{text}"
+Topic: "{topic}"
+Step 1: Contextual Information Analysis
+Analyze the contextual information of the text. 
+Consider the topic, the likely identity of the author, the target audience, and any relevant socio-cultural background.
+Step 2: Main Idea and Viewpoint Identification
+Based on the text and context, what are the core viewpoints and main intentions being expressed regarding the topic?
+Step 3: Language and Emotional Attitude Analysis
+Analyze the language, tone, and emotion. 
+Identify emotive words, rhetorical devices, and the author's overall tone (e.g., affirmative, negative, neutral, sarcastic).
+Step 4: Comparison with Possible Stances
+Compare the text's content and tone against the three possible stances (FAVOR, AGAINST, NONE). 
+For each stance, list evidence from the source (if any) of that stance.
+Step 5: Logical Inference and Consistency Check
+Synthesize your analysis from all previous steps to make a final decision on the most likely stance expressed in the text from (FAVOR, AGAINST, NONE).
+Step 6: Final Stance Determination
+ Output the final stance on a new line, in the format 'Final Stance: [STANCE]', where [STANCE] is one of FAVOR, AGAINST, or NONE.
+Begin your analysis now.
+[/TASK]”`}
+              </pre>
+            </div>
+          </details>
+        </div>
+
+        {/* Appendix C: Topics Used for Stance Detection */}
+        <div className={styles.detailsCard}>
+          <details>
+            <summary>Appendix C: Topics Used for Stance Detection</summary>
+            <div className={styles.detailsBody}>
+              <div className={styles.appendixCols}>
+                <div>
+                  <h3>People</h3>
+                  <ul className={styles.appendixList}>
+                    <li>Alexandria Ocasio-Cortez</li>
+                    <li>Benjamin Netanyahu</li>
+                    <li>Bernie Sanders</li>
+                    <li>Bob Menendez</li>
+                    <li>Caitlin Clark</li>
+                    <li>Chuck Schumer</li>
+                    <li>Diddy</li>
+                    <li>Donald Trump</li>
+                    <li>Elon Musk</li>
+                    <li>JD Vance</li>
+                    <li>Jeff Bezos</li>
+                    <li>Jeffrey Epstein</li>
+                    <li>Joe Biden</li>
+                    <li>Justin Trudeau</li>
+                    <li>Kamala Harris</li>
+                    <li>Kanye West</li>
+                    <li>Kevin McCarthy</li>
+                    <li>Luigi Mangione</li>
+                    <li>Mark Carney</li>
+                    <li>Mark Zuckerberg</li>
+                    <li>Mike Johnson</li>
+                    <li>Mitch McConnell</li>
+                    <li>Nancy Pelosi</li>
+                    <li>Pete Buttigieg</li>
+                    <li>Pete Hegseth</li>
+                    <li>Pope</li>
+                    <li>Robert F. Kennedy Jr.</li>
+                    <li>Ron DeSantis</li>
+                    <li>Sam Altman</li>
+                    <li>Taylor Swift</li>
+                    <li>Taylor Swift–Travis Kelce</li>
+                    <li>Tim Cook</li>
+                    <li>Tim Walz</li>
+                    <li>Vladimir Putin</li>
+                    <li>Volodymyr Zelensky</li>
+                    <li>Xi Jinping</li>
+                  </ul>
+                </div>
+                <div>
+                  <h3>Countries</h3>
+                  <ul className={styles.appendixList}>
+                    <li>Canada</li>
+                    <li>China</li>
+                    <li>El Salvador</li>
+                    <li>India</li>
+                    <li>Iran</li>
+                    <li>Israel</li>
+                    <li>Mexico</li>
+                    <li>Pakistan</li>
+                    <li>Russia</li>
+                    <li>Saudi Arabia</li>
+                    <li>Taiwan</li>
+                    <li>United Kingdom</li>
+                    <li>United States</li>
+                  </ul>
+                </div>
+                <div>
+                  <h3>Political Issues</h3>
+                  <ul className={styles.appendixList}>
+                    <li>Abortion</li>
+                    <li>Capital Punishment</li>
+                    <li>Christian Orthodoxy</li>
+                    <li>Civil Rights</li>
+                    <li>Climate Change</li>
+                    <li>Communism</li>
+                    <li>COVID-19</li>
+                    <li>Crypto</li>
+                    <li>Democratic Party</li>
+                    <li>Dictatorship</li>
+                    <li>Discrimination</li>
+                    <li>Diversity, Equity and Inclusion</li>
+                    <li>Environmental Policy</li>
+                    <li>Euthanasia</li>
+                    <li>Family Planning</li>
+                    <li>FEMA</li>
+                    <li>Genocide</li>
+                    <li>Global Warming</li>
+                    <li>Government Aid</li>
+                    <li>ICE</li>
+                    <li>Immigration</li>
+                    <li>Immigration Policy</li>
+                    <li>India–Pakistan</li>
+                    <li>Israel–Gaza</li>
+                    <li>LGBTQ</li>
+                    <li>Military Service</li>
+                    <li>Nuclear Policy</li>
+                    <li>Nuclear Power</li>
+                    <li>Opioids</li>
+                    <li>Personal Weapon Control Policy</li>
+                    <li>Police</li>
+                    <li>Pornography</li>
+                    <li>Racism</li>
+                    <li>Religion</li>
+                    <li>Republican Party</li>
+                    <li>Russia–Ukraine</li>
+                    <li>Tariffs</li>
+                    <li>Terrorism</li>
+                    <li>Texas Floods</li>
+                    <li>TikTok</li>
+                    <li>Tobacco and Nicotine</li>
+                    <li>Unions</li>
+                    <li>USAID</li>
+                    <li>Vaccine</li>
+                    <li>War</li>
+                    <li>Welfare</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* Main report */
 function DashboardPage() {
   return (
     <article className={styles.mainCard} style={{ maxWidth: 900 }}>
       <div className={styles.blogContent}>
-        {/* Title */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdTitle}</ReactMarkdown>
-
-        {/* Styled subtitle (kicker) */}
         <p className={styles.kicker}>SIADS 699 Capstone Project Final Report</p>
 
-        {/* Collage image above the Introduction heading */}
-        <img
-          src="https://seanfontaine.dev/collage.png"
-          alt="Project collage"
-          loading="lazy"
-        />
+        <div className={styles.resourceBar}>
+          <a
+            className={`${styles.pillLink} ${styles.pillLinkPrimary}`}
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg className={styles.pillIcon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .5C5.73.5.98 5.24.98 11.5c0 4.84 3.14 8.94 7.49 10.39.55.1.75-.24.75-.53 0-.26-.01-1.12-.02-2.04-3.05.66-3.69-1.3-3.69-1.3-.5-1.26-1.22-1.6-1.22-1.6-.99-.68.07-.66.07-.66 1.09.08 1.66 1.12 1.66 1.12.98 1.67 2.57 1.19 3.2.91.1-.71.38-1.19.69-1.46-2.44-.28-5.01-1.22-5.01-5.45 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.42.11-2.96 0 0 .92-.29 3.01 1.12.88-.25 1.83-.38 2.77-.38.94 0 1.89.13 2.77.38 2.09-1.41 3.01-1.12 3.01-1.12.6 1.54.22 2.68.11 2.96.7.77 1.13 1.75 1.13 2.95 0 4.24-2.58 5.17-5.03 5.44.39.33.74.97.74 1.95 0 1.41-.01 2.55-.01 2.9 0 .29.2.63.76.52A10.53 10.53 0 0 0 23.02 11.5C23.02 5.24 18.27.5 12 .5z" />
+            </svg>
+            GitHub Repo
+          </a>
+          <Link className={styles.pillLink} to="/podcast-project/appendices" aria-label="Open Appendices">
+            Appendices
+          </Link>
+        </div>
 
-        {/* Introduction (part 1) */}
+        {/* Collage! */}
+        <img src="https://seanfontaine.dev/collage.png" alt="Project collage" loading="lazy" />
+
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdIntroPart1}</ReactMarkdown>
 
-        {/* Indented a) b) lines via JSX */}
         <div style={{ marginLeft: "1.5em" }}>
           <p>a) What topics are being talked about and how do topic distributions vary across mediums?</p>
           <p>b) How do stances, sentiments, and framings of key topics compare across mediums?</p>
         </div>
 
-        {/* Intro (part 2) */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdIntroPart2}</ReactMarkdown>
 
-        {/* Related Work */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdRelated}</ReactMarkdown>
-
-        {/* Methods */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_31_32}</ReactMarkdown>
-
-        {/* 3.3 Topic Labeling – before Figure 1 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_33_beforeFig1}</ReactMarkdown>
 
-        {/* Figure 1: Static image as in the document */}
         <img
           src="https://seanfontaine.dev/iptc_media_topics_flowchart.jpg"
           alt="Excerpt of the IPTC Media Topics taxonomy"
@@ -320,17 +557,11 @@ function DashboardPage() {
           Figure 1: Excerpt of the IPTC Media Topics taxonomy (reproduced from Rudnik et al., 2019, Figure 3).
         </div>
 
-        {/* 3.3 Topic Labeling – after Figure 1 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_33_afterFig1}</ReactMarkdown>
-
-        {/* 3.4 and 3.5 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_34_35}</ReactMarkdown>
-
-        {/* 4.1 Topic Distribution Analysis – heading before Figure 2 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_41_beforeFig2}</ReactMarkdown>
       </div>
 
-      {/* Figure 2: Interactive topic distributions in-place with exact caption */}
       <div className={styles.chartScrollWrapper}>
         <PodcastChart />
       </div>
@@ -339,14 +570,10 @@ function DashboardPage() {
       </div>
 
       <div className={styles.blogContent}>
-        {/* 4.1 text after Figure 2 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_41_afterFig2}</ReactMarkdown>
-
-        {/* 4.2 Stance Analysis – heading before Figure 3 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_42_beforeFig3}</ReactMarkdown>
       </div>
 
-      {/* Figure 3: Relative stance in-place with exact caption */}
       <div className={styles.chartScrollWrapper}>
         <StanceChart />
       </div>
@@ -355,14 +582,10 @@ function DashboardPage() {
       </div>
 
       <div className={styles.blogContent}>
-        {/* 4.2 text after Figure 3 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_42_afterFig3}</ReactMarkdown>
-
-        {/* 4.3 Framing Analysis – text before Figure 4 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_43_beforeFig4}</ReactMarkdown>
       </div>
 
-      {/* Figure 4: Paired word clouds in-place with exact caption */}
       <div className={styles.chartScrollWrapper}>
         <PairedWordclouds />
       </div>
@@ -371,13 +594,8 @@ function DashboardPage() {
       </div>
 
       <div className={styles.blogContent}>
-        {/* 4.3 text after Figure 4 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_43_afterFig4}</ReactMarkdown>
-
-        {/* 5. Discussion */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdDiscussion}</ReactMarkdown>
-
-        {/* References with anchors for in-text jumps */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdReferences}</ReactMarkdown>
       </div>
     </article>
@@ -425,28 +643,26 @@ function PairedWordcloudsPage() {
 
 export default function App() {
   const location = useLocation();
-
-  // Keep a solid white background to match the report.
   const rootClass = `${styles.podcastAppRoot} ${styles.whiteBg}`;
-
-  // Optional: detect chart subroutes
   const path = location.pathname || "";
   const isChartPage =
     path.endsWith("/topics") ||
     path.endsWith("/stance") ||
-    path.endsWith("/paired-wordclouds");
+    path.endsWith("/paired-wordclouds") ||
+    path.endsWith("/appendices");
 
   return (
     <div className={rootClass} data-chart-page={isChartPage ? "true" : "false"}>
       <ErrorBoundary fallback={<div style={{ color: "#dc2626" }}>Couldn’t load this page.</div>}>
         <Routes>
-          {/* Index (dashboard) */}
+          {/* Index */}
           <Route index element={<DashboardPage />} />
-          {/* Dedicated routes */}
+          {/* Routes */}
           <Route path="topics" element={<TopicsPage />} />
           <Route path="stance" element={<StancePage />} />
           <Route path="paired-wordclouds" element={<PairedWordcloudsPage />} />
-          {/* Unknown subroutes -> dashboard */}
+          <Route path="appendices" element={<AppendicesPage />} />
+          {/* Catch all for invalid routes */}
           <Route path="*" element={<Navigate to="." replace />} />
         </Routes>
       </ErrorBoundary>

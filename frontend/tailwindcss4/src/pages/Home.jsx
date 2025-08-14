@@ -24,7 +24,7 @@ const projects = [
     link: "/podcast-project",
     badge: "BETA",
     date: "Ongoing",
-    preview: "/podcast_preview.jpg",
+    preview: "/collage_preview.png",
   },
 ];
 
