@@ -1,5 +1,4 @@
 /* App.module.css */
-/* The wrapper class for your app */
 .podcastAppRoot {
   min-height: 100vh;
   min-height: 100dvh;
@@ -251,23 +250,23 @@
   }
 }
 
+/* Report content */
 .blogContent h1 {
-  font-size: 2.1rem;
+  font-size: 2.4rem; /* larger title */
   font-weight: 700;
   margin-bottom: 0.5rem;
   color: #222;
-  letter-spacing: -1px;
 }
 .blogContent h2 {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 1.7rem 0 0.8rem 0;
+  font-size: 1.8rem; /* larger section headings */
+  font-weight: 700;
+  margin: 1.9rem 0 0.9rem 0;
   color: #222;
 }
 .blogContent h3 {
-  font-size: 1.16rem;
-  font-weight: 600;
-  margin: 1.5rem 0 0.7rem 0;
+  font-size: 1.4rem; /* larger subheadings */
+  font-weight: 700;
+  margin: 1.5rem 0 0.8rem 0;
   color: #29292a;
 }
 .blogContent p {
@@ -286,10 +285,56 @@
 .blogContent li {
   margin-bottom: 0.4em;
 }
+/* Keep italics but do not recolor them */
 .blogContent em {
+  color: inherit;
+  font-style: italic;
+}
+
+.kicker {
+  font-size: 1.4rem !important; /* bigger still */
+  font-weight: 500 !important;
+  color: #747b86; /* slightly lighter than the title */
+  margin: 0.4rem 0 1.2rem 0;
+}
+
+/* Make inline images in the report responsive and nicely styled */
+.blogContent img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  display: block;
+  margin: 0.5rem auto 0.25rem auto;
+}
+
+.figureCaption {
+  font-size: 0.98rem;
   color: #64748b;
+  margin-top: 0.4rem;
+  margin-bottom: 1rem;
+  text-align: center;
 }
 
 .pairedWordcloudsSpacer {
   margin-top: 2.3em;
+}
+
+/* ------------------------------------------ */
+/* Temporary white background for chart pages */
+/* ------------------------------------------ */
+.whiteBg {
+  background: #ffffff !important; /* page background */
+}
+
+.podcastAppRoot.whiteBg::before {
+  content: none !important;
+  display: none !important; /* hide the newspaper photo */
+  background: none !important;
+}
+
+.whiteBg .mainCard {
+  background: #ffffff !important; /* solid card */
+  box-shadow: none !important;     /* no drop shadow */
+  backdrop-filter: none !important;/* no blur */
 }
