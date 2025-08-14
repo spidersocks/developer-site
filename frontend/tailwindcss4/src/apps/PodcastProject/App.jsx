@@ -280,7 +280,7 @@ function DashboardPage() {
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdTitle}</ReactMarkdown>
 
         {/* Styled subtitle (kicker) */}
-        <p className={styles.kicker}>SIADS 699 Capstone Project Final Report by Sean Fontaine & Chelsea Simpson</p>
+        <p className={styles.kicker}>SIADS 699 Capstone Project Final Report</p>
 
         {/* Collage image above the Introduction heading */}
         <img
