@@ -69,13 +69,13 @@ Our methods are grounded in established techniques for analyzing news media cont
 By greatly extending the scope of existing research and combining state-of-the-art media research techniques, our study offers a new and far more comprehensive view into the podcast-news information ecosystem.
 `;
 
-// Methods -- 3.1 Data + 3.2 Topic Modeling
+// Methods – 3.1 Data + 3.2 Topic Modeling
 const mdMethods_31_32 = `
 ## 3. Methodology
 
 ### 3.1 Data
 
-We compiled a complete corpus of all content produced over the calendar year from July 1, 2024--July 1, 2025 by leading podcasts and public news outlets.
+We compiled a complete corpus of all content produced over the calendar year from July 1, 2024–July 1, 2025 by leading podcasts and public news outlets.
 
 **Podcasts:** We select all podcasts in the Top 50 most-listened-to podcasts in the United States ([Edison Research, 2025](#ref-edison-2025)) during Q1 of 2025, excluding those affiliated with a traditional news outlet like *The Daily*, by *The New York Times* (see Appendix A). Transcripts are downloaded from [PodScribe](#ref-podscribe) (transcription using [Google Cloud’s Speech-to-Text](#ref-google-stt)) with timestamps and speaker tags removed.
 
@@ -88,7 +88,7 @@ The assembled dataset contains 8,344 podcast transcripts from 40 publishers, and
 To gain an understanding of what is being talked about in our corpus, we employ topic modeling, an unsupervised machine learning method that extracts core topics within a source using clusters of words and phrases that tend to co-occur. We do this with BERTopic ([Grootendorst, 2022](#ref-grootendorst-2022)), an embeddings-based approach that accounts for the context of words as well as raw frequencies to generate more sophisticated human-interpretable topics. Prior to modeling, corpus documents are split into chunks (of approx. 300 words) to allow the model to focus on smaller, more cohesive units of information. Results of modeling are 402,415 chunks assigned to 3,232 unique topics based on semantic similarity.
 `;
 
-// Methods -- 3.3 Topic Labeling (text before and after Figure 1)
+// Methods – 3.3 Topic Labeling (text before and after Figure 1)
 const mdMethods_33_beforeFig1 = `
 ### 3.3 Topic Labeling
 
@@ -101,13 +101,13 @@ An alternative labeling schema is also applied to identify specific named entiti
 The result of this is 1 hierarchically grounded IPTC media topic and up to 46 named entity topics for each of our 402,415 chunks.
 `;
 
-// Methods -- 3.4 and 3.5
+// Methods – 3.4 and 3.5
 const mdMethods_34_35 = `
 ### 3.4 Stance Detection
 
 Stance detection is carried out using the Chain of Stance (CoS) prompting method ([Ma et al., 2024](#ref-ma-2024)). The method sequentially guides an LLM through six logical steps, gathering information and evidence about context, main idea, and tone before outputting a stance determination (see Appendix B for prompting details).
 
-To implement this, the corpus is first filtered to 70 topics relevant to stance labeling (Appendix C). Inferences are then run on each document--topic pair in batches of 16 using an open-source LLM hosted on an AWS EC2 G5.xlarge instance. As Mistral models are open-source and have achieved top results in leading stance-detection research ([Ma et al., 2024](#ref-ma-2024)), we use Ministral-8B-Instruct-2410 ([Mistral AI, 2025](#ref-mistral-2025)), Mistral's newest and most powerful model under 10B.
+To implement this, the corpus is first filtered to 70 topics relevant to stance labeling (Appendix C). Inferences are then run on each document–topic pair in batches of 16 using an open-source LLM hosted on an AWS EC2 G5.xlarge instance. As Mistral models are open-source and have achieved top results in leading stance-detection research ([Ma et al., 2024](#ref-ma-2024)), we use Ministral-8B-Instruct-2410 ([Mistral AI, 2025](#ref-mistral-2025)), Mistral's newest and most powerful model under 10B.
 
 The results of this process are 297,611 individual stance determinations (FAVOR, AGAINST, NONE). Outputs are encoded as both single-word strings and as numbers (1, -1, and 0) for plotting. Full model outputs for each stance are additionally logged for interpretability.
 
@@ -121,7 +121,7 @@ Sentiment analysis is performed using two methods for comparison. We use the Tex
 We set the sentiment thresholds to be the same for both models, < -0.5 for negative, > 0.5 for positive and used the compound score for the VADER model.
 `;
 
-// Analysis -- 4.1 before and after Figure 2
+// Analysis – 4.1 before and after Figure 2
 const mdAnalysis_41_beforeFig2 = `
 ## 4. Analysis
 
@@ -142,7 +142,7 @@ Overall, podcasts tend to under-cover hard news (e.g. war, public health, climat
 To summarize, while both public news and podcasts contain substantial news content, podcasts seem to favor vivid incidents, personalities, and culture topics; public broadcasters cover a broader range of procedural, institutional, and policy-centered topics.
 `;
 
-// Analysis -- 4.2 with Figure 3 and formatted labels
+// Analysis – 4.2 with Figure 3 and formatted labels
 const mdAnalysis_42_beforeFig3 = `
 ### 4.2 Stance Analysis
 `;
@@ -159,12 +159,12 @@ Note that reported stance scores use a FAVOR = 1, NONE = 0, and AGAINST = -1 enc
 <u>Bias:</u> Compared to public news, podcasts tend, on average, to cover named public figures less favorably overall (negative mean Δ).
 
 <u>People covered more favorably in podcasts:</u>
-- The Trump cabinet -- Robert F. Kennedy Jr (Δ = +0.20), Pete Hegseth (+0.16).
-- Controversial figures -- Diddy (Δ = +0.30), Luigi Mangione (+0.17), Bob Menendez (+0.15), Kanye West (+0.15).
+- The Trump cabinet – Robert F. Kennedy Jr (Δ = +0.20), Pete Hegseth (+0.16).
+- Controversial figures – Diddy (Δ = +0.30), Luigi Mangione (+0.17), Bob Menendez (+0.15), Kanye West (+0.15).
 
 <u>People covered less favorably in podcasts:</u>
-- Democratic politicians -- Kamala Harris (Δ = −0.45), Nancy Pelosi (−0.47), Joe Biden (−0.38), Pete Buttigieg (−0.36), AOC (−0.33), Tim Walz (−0.33), Bernie Sanders (−0.34).
-- Foreign leaders -- Xi Jinping (Δ = −0.45), Mark Carney (−0.19), Vladimir Putin (−0.14), Volodymyr Zelensky (−0.16).
+- Democratic politicians – Kamala Harris (Δ = −0.45), Nancy Pelosi (−0.47), Joe Biden (−0.38), Pete Buttigieg (−0.36), AOC (−0.33), Tim Walz (−0.33), Bernie Sanders (−0.34).
+- Foreign leaders – Xi Jinping (Δ = −0.45), Mark Carney (−0.19), Vladimir Putin (−0.14), Volodymyr Zelensky (−0.16).
 
 **Countries:**
 
@@ -176,7 +176,7 @@ Note that reported stance scores use a FAVOR = 1, NONE = 0, and AGAINST = -1 enc
 
 **Political Issues:**
 
-<u>Alignment:</u> r = 0.15 (weak -- showing largest divergence). Despite this, nuclear power is the topic viewed most favorably across mediums, and average stances on tariffs, immigration, and police show minimal stance score variation.
+<u>Alignment:</u> r = 0.15 (weak – showing largest divergence). Despite this, nuclear power is the topic viewed most favorably across mediums, and average stances on tariffs, immigration, and police show minimal stance score variation.
 
 <u>Issues covered more favorably in podcasts:</u> Racism (Δ = +0.31), nuclear power (+0.20), abortion (+0.17), climate change (+0.13), war (+0.10).
 
@@ -185,7 +185,7 @@ Note: for topics like “racism”, while a negative stance reflects opposition,
 <u>Issues covered less favorably in podcasts:</u> Euthanasia (Δ = −0.53), capital punishment (−0.43), communism (−0.39), Democratic Party (−0.27), military service (−0.21).
 `;
 
-// Analysis -- 4.3 with Figure 4
+// Analysis – 4.3 with Figure 4
 const mdAnalysis_43_beforeFig4 = `
 ### 4.3 Framing Analysis
 
@@ -199,7 +199,7 @@ const mdAnalysis_43_afterFig4 = `
 - **Lexical overlap:** Political podcasts also tend to use the most similar vocabulary to traditional news as measured by median Jaccard similarity of top 20 TF-IDF words by topic. Top podcasts are Ben Shapiro (0.103), Pod Save America (0.096), MeidasTouch (0.094), Megyn Kelly (0.071).
 - **Tone alignment:** Tone alignment by per-topic sentiment correlation is moderate for left-leaning political shows (Pod Save America 0.355, MeidasTouch 0.361), but much lower for right leaning shows like Ben Shapiro (0.185). Comedy shows are the least aligned (Bad Friends −0.049; Smartless 0.069).
 
-**Consensus gaps.** Overall, topics where many podcasts trend more positive than news skew towards lifestyle and behavior (e.g., sexual_behavior -- 66% of podcasts more positive, mean Δ vs NPR +0.08).
+**Consensus gaps.** Overall, topics where many podcasts trend more positive than news skew towards lifestyle and behavior (e.g., sexual_behavior – 66% of podcasts more positive, mean Δ vs NPR +0.08).
 
 Note: Most positive topics in podcasts are typically consumer / lifestyle topics (clothing, grocery, toys/games, streaming, health/beauty), suggesting noise in the data, some of which is likely sponsored advertiser content.
 `;
@@ -210,7 +210,7 @@ const mdDiscussion = `
 
 ### 5.1 Summary of Key Patterns
 
-Over the course of a full year of content from podcasts and public news, we observe consistent systemic differences in the ways in which news is covered. Notably, podcasts allocate more space to personalities, vivid incidents, and discussion of culture and values. Public news focuses more on institutions, policy, and process. From stance analysis, we see that cross-medium alignment is strongest when discussing people, moderate when discussing countries, and weakest for political issues -- a decrease as topics move from named individuals to more contested policy issues. Framing differences are reflected mainly in vocabulary, with podcasts describing more people and lived experiences, and public news centering more public officials and institutions.
+Over the course of a full year of content from podcasts and public news, we observe consistent systemic differences in the ways in which news is covered. Notably, podcasts allocate more space to personalities, vivid incidents, and discussion of culture and values. Public news focuses more on institutions, policy, and process. From stance analysis, we see that cross-medium alignment is strongest when discussing people, moderate when discussing countries, and weakest for political issues – a decrease as topics move from named individuals to more contested policy issues. Framing differences are reflected mainly in vocabulary, with podcasts describing more people and lived experiences, and public news centering more public officials and institutions.
 
 ### 5.2 Implications
 
@@ -225,7 +225,7 @@ Over the course of a full year of content from podcasts and public news, we obse
 
 ### 5.3 Limitations
 
-This study and its findings are exploratory in nature. We analyze only data from the calendar year July 1, 2024 -- July 1, 2025, focus on only top U.S. podcasts and two public news outlets, and rely on largely automated labeling of topics, stance, sentiment, and framing. While we are careful to apply quality controls and manual review, several forms of noise and misclassification are likely still present (detailed in Section 6). We stress that results apply only to the podcasts and time period study, and that result magnitudes expressed in the paper are best interpreted as directional trends rather than exact point values.
+This study and its findings are exploratory in nature. We analyze only data from the calendar year July 1, 2024 – July 1, 2025, focus on only top U.S. podcasts and two public news outlets, and rely on largely automated labeling of topics, stance, sentiment, and framing. While we are careful to apply quality controls and manual review, several forms of noise and misclassification are likely still present (detailed in Section 6). We stress that results apply only to the podcasts and time period study, and that result magnitudes expressed in the paper are best interpreted as directional trends rather than exact point values.
 `;
 
 // References with anchors for internal jumps
@@ -234,11 +234,11 @@ const mdReferences = `
 
 <a id="ref-cpb"></a> Corporation for Public Broadcasting. (n.d.). About CPB. Retrieved August 14, 2025, from [https://cpb.org/aboutcpb](https://cpb.org/aboutcpb)
 
-<a id="ref-demets-2025"></a> DeMets, S., & Spiro, E. (2025). Podcasts in the periphery: Tracing guest trajectories in political podcasts. *Social Networks, 82*, 65--79. [https://doi.org/10.1016/j.socnet.2025.01.001](https://doi.org/10.1016/j.socnet.2025.01.001)
+<a id="ref-demets-2025"></a> DeMets, S., & Spiro, E. (2025). Podcasts in the periphery: Tracing guest trajectories in political podcasts. *Social Networks, 82*, 65–79. [https://doi.org/10.1016/j.socnet.2025.01.001](https://doi.org/10.1016/j.socnet.2025.01.001)
 
 <a id="ref-edison-2025"></a> Edison Research. (2025, May 2). The top 50 podcasts in the U.S. for Q1 2025 from Edison Podcast Metrics. [https://www.edisonresearch.com/the-top-50-podcasts-in-the-u-s-for-q1-2025-from-edison-podcast-metrics/](https://www.edisonresearch.com/the-top-50-podcasts-in-the-u-s-for-q1-2025-from-edison-podcast-metrics/)
 
-<a id="ref-ferret-2016"></a> Ferret, O., Déjean, H., & Nioche, J. (2016). Knowledge-based Information Extraction from a Large-scale Text Corpus for Geopolitical Crisis Assessment. In *Proceedings of KONVENS 2016* (pp. 65--71). Bochumer Linguistische Arbeitsberichte. [https://aclanthology.org/W16-1306.pdf](https://aclanthology.org/W16-1306.pdf)
+<a id="ref-ferret-2016"></a> Ferret, O., Déjean, H., & Nioche, J. (2016). Knowledge-based Information Extraction from a Large-scale Text Corpus for Geopolitical Crisis Assessment. In *Proceedings of KONVENS 2016* (pp. 65–71). Bochumer Linguistische Arbeitsberichte. [https://aclanthology.org/W16-1306.pdf](https://aclanthology.org/W16-1306.pdf)
 
 <a id="ref-google-stt"></a> Google. (n.d.). Speech-to-Text: AI speech recognition and transcription. Google Cloud. Retrieved August 14, 2025, from [https://cloud.google.com/speech-to-text](https://cloud.google.com/speech-to-text)
 
@@ -246,7 +246,7 @@ const mdReferences = `
 
 <a id="ref-hutto-2014"></a> Hutto, C. J., & Gilbert, E. E. (2014). VADER: A parsimonious rule-based model for sentiment analysis of social media text. In *Proceedings of ICWSM-14*. The AAAI Press.
 
-<a id="ref-iptc-2025"></a> International Press Telecommunications Council. (2025, August 13). Media Topics (en-US)--IPTC NewsCodes controlled vocabularies. [https://www.iptc.org/std/NewsCodes/treeview/mediatopic/mediatopic-en-US.html](https://www.iptc.org/std/NewsCodes/treeview/mediatopic/mediatopic-en-US.html)
+<a id="ref-iptc-2025"></a> International Press Telecommunications Council. (2025, August 13). Media Topics (en-US)–IPTC NewsCodes controlled vocabularies. [https://www.iptc.org/std/NewsCodes/treeview/mediatopic/mediatopic-en-US.html](https://www.iptc.org/std/NewsCodes/treeview/mediatopic/mediatopic-en-US.html)
 
 <a id="ref-loria-2018"></a> Loria, S. (2018). TextBlob documentation (Release 0.15.2). [https://textblob.readthedocs.io/en/dev/](https://textblob.readthedocs.io/en/dev/)
 
@@ -262,11 +262,11 @@ const mdReferences = `
 
 <a id="ref-pew-2023"></a> Pew Research Center. (2023, April 18). Podcasts as a source of news and information. [https://www.pewresearch.org/journalism/2023/04/18/podcasts-as-a-source-of-news-and-information/](https://www.pewresearch.org/journalism/2023/04/18/podcasts-as-a-source-of-news-and-information/)
 
-<a id="ref-pedregosa-2011"></a> Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J., Passos, A., Cournapeau, D., Brucher, M., Perrot, M., & Duchesnay, E. (2011). Scikit-learn: Machine learning in Python. *The Journal of Machine Learning Research, 12*, 2825--2830.
+<a id="ref-pedregosa-2011"></a> Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J., Passos, A., Cournapeau, D., Brucher, M., Perrot, M., & Duchesnay, E. (2011). Scikit-learn: Machine learning in Python. *The Journal of Machine Learning Research, 12*, 2825–2830.
 
 <a id="ref-podscribe"></a> PodScribe. (n.d.). Transcripts of the most popular podcasts. [https://podscribe.app/](https://podscribe.app/)
 
-<a id="ref-rudnik-2019"></a> Rudnik, C., Ehrhart, T., Ferret, O., Teyssou, D., Troncy, R., & Tannier, X. (2019). Searching news articles using an event knowledge graph leveraged by Wikidata. In *Companion Proceedings of the 2019 World Wide Web Conference (WWW ’19 Companion)* (pp. 957--964). ACM. [https://doi.org/10.1145/3308560.3316761](https://doi.org/10.1145/3308560.3316761)
+<a id="ref-rudnik-2019"></a> Rudnik, C., Ehrhart, T., Ferret, O., Teyssou, D., Troncy, R., & Tannier, X. (2019). Searching news articles using an event knowledge graph leveraged by Wikidata. In *Companion Proceedings of the 2019 World Wide Web Conference (WWW ’19 Companion)* (pp. 957–964). ACM. [https://doi.org/10.1145/3308560.3316761](https://doi.org/10.1145/3308560.3316761)
 
 <a id="ref-yu-yang-2024"></a> Yu, L., & Yang, L. (2024). News media in crisis: A sentiment and emotion analysis of US news articles on unemployment in the COVID-19 pandemic. *Humanities and Social Sciences Communications, 11*(1), Article 854. [https://doi.org/10.1057/s41599-024-03225-9](https://doi.org/10.1057/s41599-024-03225-9)
 `;
@@ -307,7 +307,7 @@ function DashboardPage() {
         {/* Methods */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_31_32}</ReactMarkdown>
 
-        {/* 3.3 Topic Labeling -- before Figure 1 */}
+        {/* 3.3 Topic Labeling – before Figure 1 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_33_beforeFig1}</ReactMarkdown>
 
         {/* Figure 1: Static image as in the document */}
@@ -320,18 +320,20 @@ function DashboardPage() {
           Figure 1: Excerpt of the IPTC Media Topics taxonomy (reproduced from Rudnik et al., 2019, Figure 3).
         </div>
 
-        {/* 3.3 Topic Labeling -- after Figure 1 */}
+        {/* 3.3 Topic Labeling – after Figure 1 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_33_afterFig1}</ReactMarkdown>
 
         {/* 3.4 and 3.5 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_34_35}</ReactMarkdown>
 
-        {/* 4.1 Topic Distribution Analysis -- heading before Figure 2 */}
+        {/* 4.1 Topic Distribution Analysis – heading before Figure 2 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_41_beforeFig2}</ReactMarkdown>
       </div>
 
       {/* Figure 2: Interactive topic distributions in-place with exact caption */}
-      <PodcastChart />
+      <div className={styles.chartScrollWrapper}>
+        <PodcastChart />
+      </div>
       <div className={styles.figureCaption}>
         Figure 2: The above interactive paired bar chart shows IPTC topic distributions for key news topics across news and podcast mediums. The initial chart displays the highest-level topics, and the height of each bar represents the overall proportion of content dedicated to that topic by medium. Each topic can be drilled down to view a distribution of its constituent subtopics.
       </div>
@@ -340,12 +342,14 @@ function DashboardPage() {
         {/* 4.1 text after Figure 2 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_41_afterFig2}</ReactMarkdown>
 
-        {/* 4.2 Stance Analysis -- heading before Figure 3 */}
+        {/* 4.2 Stance Analysis – heading before Figure 3 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_42_beforeFig3}</ReactMarkdown>
       </div>
 
       {/* Figure 3: Relative stance in-place with exact caption */}
-      <StanceChart />
+      <div className={styles.chartScrollWrapper}>
+        <StanceChart />
+      </div>
       <div className={styles.figureCaption}>
         Figure 3: Interactive paired dot plot shows key news topics and relative stance scores (z-standardized) by medium. Dot color represents podcasts vs public news, and dot position represents relative stance. Line color indicates which source is more favorable, and line intensity shows the size of the gap. Rows are sorted in ascending order by Δ, where Δ is equal to mean_podcast minus mean_news (Δ &gt; 0: podcasts more favorable).
       </div>
@@ -354,12 +358,14 @@ function DashboardPage() {
         {/* 4.2 text after Figure 3 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_42_afterFig3}</ReactMarkdown>
 
-        {/* 4.3 Framing Analysis -- text before Figure 4 */}
+        {/* 4.3 Framing Analysis – text before Figure 4 */}
         <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_43_beforeFig4}</ReactMarkdown>
       </div>
 
       {/* Figure 4: Paired word clouds in-place with exact caption */}
-      <PairedWordclouds />
+      <div className={styles.chartScrollWrapper}>
+        <PairedWordclouds />
+      </div>
       <div className={styles.figureCaption}>
         Figure 4: Interactive paired sentiment word cloud showing top 10 words by in-topic TF-IDF from two sources on a given topic. Color gradient represents sentiment (negative = red, neutral = gray, positive = green).
       </div>
@@ -381,7 +387,9 @@ function DashboardPage() {
 function TopicsPage() {
   return (
     <article className={styles.mainCard}>
-      <PodcastChart />
+      <div className={styles.chartScrollWrapper}>
+        <PodcastChart />
+      </div>
       <div className={styles.figureCaption}>
         Figure 2: The above interactive paired bar chart shows IPTC topic distributions for key news topics across news and podcast mediums. The initial chart displays the highest-level topics, and the height of each bar represents the overall proportion of content dedicated to that topic by medium. Each topic can be drilled down to view a distribution of its constituent subtopics.
       </div>
@@ -392,7 +400,9 @@ function TopicsPage() {
 function StancePage() {
   return (
     <article className={styles.mainCard}>
-      <StanceChart />
+      <div className={styles.chartScrollWrapper}>
+        <StanceChart />
+      </div>
       <div className={styles.figureCaption}>
         Figure 3: Interactive paired dot plot shows key news topics and relative stance scores (z-standardized) by medium. Dot color represents podcasts vs public news, and dot position represents relative stance. Line color indicates which source is more favorable, and line intensity shows the size of the gap. Rows are sorted in ascending order by Δ, where Δ is equal to mean_podcast minus mean_news (Δ &gt; 0: podcasts more favorable).
       </div>
@@ -403,7 +413,9 @@ function StancePage() {
 function PairedWordcloudsPage() {
   return (
     <article className={styles.mainCard}>
-      <PairedWordclouds />
+      <div className={styles.chartScrollWrapper}>
+        <PairedWordclouds />
+      </div>
       <div className={styles.figureCaption}>
         Figure 4: Interactive paired sentiment word cloud showing top 10 words by in-topic TF-IDF from two sources on a given topic. Color gradient represents sentiment (negative = red, neutral = gray, positive = green).
       </div>

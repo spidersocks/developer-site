@@ -9,6 +9,14 @@
   box-sizing: border-box;
   font-family: 'Inter', sans-serif;
   position: relative;
+  overflow-x: hidden; /* prevent page-level horizontal scroll */
+}
+
+:global(html, body, #root) {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: hidden; /* prevent page-level horizontal scroll */
 }
 
 .podcastAppRoot::before {
@@ -39,6 +47,7 @@
   flex-direction: column;
   min-height: 60vh;
   box-sizing: border-box;
+  overflow-x: hidden; /* ensure children don’t cause card to overflow */
 }
 
 /* Headings (scoped to just your app) */
@@ -172,7 +181,9 @@
 /* Chart wrappers: contain inside card */
 .chartScrollWrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: auto; /* allow inner chart scroll without page scrolling */
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   padding-bottom: 1em;
   background: none;
 }
@@ -229,14 +240,14 @@
   .chartInner {
     min-width: 500px;
     width: calc(80px * var(--bar-count, 8));
-    max-width: 100vw;
+    max-width: 100%;
   }
 }
 
 @media (max-width: 600px) {
   .mainCard {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;          /* use 100% instead of 100vw to avoid horizontal overflow */
+    max-width: 100%;
     padding: 1.1rem;
   }
   .breadcrumbs { font-size: 0.9em;}
