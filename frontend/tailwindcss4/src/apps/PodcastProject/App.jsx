@@ -239,6 +239,37 @@ Over the course of a full year of content from podcasts and public news, we obse
 This study and its findings are exploratory in nature. We analyze only data from the calendar year July 1, 2024 – July 1, 2025, focus on only top U.S. podcasts and two public news outlets, and rely on largely automated labeling of topics, stance, sentiment, and framing. While we are careful to apply quality controls and manual review, several forms of noise and misclassification are likely still present (detailed in Section 6). We stress that results apply only to the podcasts and time period study, and that result magnitudes expressed in the paper are best interpreted as directional trends rather than exact point values.
 `;
 
+/* NEW: Section 6 (added back in) */
+const mdSection6 = `
+## 6. Methodological Evaluation and Critique
+
+### 6.1 Topic Modeling and Labeling
+
+**IPTC Media Topics**
+- **Advertiser noise:** Despite filtering for news-related topics and conducting manual review, advertising content, particularly from podcast ad-reads, sometimes slipped into our news topic data under economy or business subcategories.
+- **Similar categories:** IPTC topics are assigned one-per-document. Some similar topics (i.e., “Immigration” vs “Immigration Policy”) are subtopics of completely different major topics (i.e., “Society” vs “Governments and Politics”), and this may affect distributions.
+
+**Alternative string-matching labels**
+- **Heuristic matching:** Searching for special topics with heuristic matching (e.g., requiring “Trump” plus one of {Donald, President, Republican, Candidate}) reduces many false positives but is imperfect at reducing them all. Multi-word entities are especially error prone when searching through tokenized documents due to single-word acronyms colliding with other common words. Sentiment for US federal agency ICE, for instance, was spuriously positive due to podcast “ice-cold” beverage ads. This may be solved in future implementations with tools like spaCy PhraseMatcher.
+
+### 6.3 Stance detection
+- **Model-human agreement:** Reliability is moderate. In a 100-document audit, LLM labels matched human labels 66% of the time. FAVOR was the hardest class for the LLM to label correctly (recall = 0.36; F1 = 0.43).
+- **Directional bias:** Hand labels were distributed NONE (52%), AGAINST (34%) and FAVOR (14%). The model, on the other hand, returned more AGAINST (47%) and fewer FAVOR (9%). Nearly half of mismatches followed a model=AGAINST and hand=NONE pattern. This suggests a tendency of the model to systematically read generalized criticism as being against the target topic (e.g., criticism of a specific Trump policy was read as being against the United States).
+- **Source-specific bias:** Degree of agreement with hand labels varied by source, with higher alignment for more opinionated sources (e.g., NPR 0.44 vs The Ben Shapiro Show 0.75). This is likely due to negative directional bias when opinions are not present or are stated less clearly.
+
+Note, however, that this is a limited sample-size, unstratified, single person audit. Further validation requires a larger sample stratified by source with multiple human raters.
+
+- **Future improvements:** An additional step to Chain of Stance prompting could be prompting the model to identify where in the document the topic appears, and whether the evaluative language is directed at that topic. If the negativity is directed at another topic, default to NONE. This would be a relatively easy step to implement, and could potentially mitigate the biases encountered in this study.
+
+### 6.4 Sentiment analysis
+- **Context:** Even though we use two different sentiment analysis models – TextBlob (general) and VADER (social-media oriented) – both are rule-based, and can struggle with challenging tasks that involve sarcasm, negation, unusual slang, and topic-dependent context.
+- **Chunking:** Using fixed thresholds of ±0.5 may over- or underclassify certain sentiment labels.
+
+### 6.5 Framing analysis
+
+- **Noise reduction:** Use of TF-IDF to identify unique words can pick up on sponsors, numerics, and filler, especially in podcasts, reducing potentially useful lexical overlap. This could potentially be mitigated in future work by building a stoplist of tokens frequent in advertising or that are unique to the lexicon of certain podcasts. These can then be excluded before computing top TF-IDF words.
+`;
+
 const mdReferences = `
 ## References
 
@@ -380,7 +411,7 @@ function AppendicesPage() {
                     <tr><td>The Ramsey Show</td><td>147</td></tr>
                     <tr><td>The Tucker Carlson Show</td><td>79</td></tr>
                     <tr><td>This Past Weekend w Theo Von</td><td>320</td></tr>
-                    <tr><td>Vince</td><td>—</td></tr>
+                    <tr><td>Vince</td><td>–</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -667,6 +698,10 @@ function DashboardPage() {
         </ReactMarkdown>
         <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
           {mdDiscussion}
+        </ReactMarkdown>
+        {/* NEW: render Section 6 before references */}
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdSection6}
         </ReactMarkdown>
         <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
           {mdReferences}
