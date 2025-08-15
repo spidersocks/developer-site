@@ -8,7 +8,8 @@ import PodcastChart from "./PodcastChart";
 import StanceChart from "./StanceChart";
 import PairedWordclouds from "./PairedWordclouds";
 
-const GITHUB_REPO_URL = "https://github.com/spidersocks/podcast-project";
+// GitHub link
+const GITHUB_REPO_URL = "https://github.com/spidersocks/podcast-project"; // TODO: replace with your repo URL
 const APPENDICES_PATH_IN_REPO = "appendices";
 
 // Error boundary
@@ -31,8 +32,31 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Report content
+/* React Markdown */
+const MdLink = ({ href = "", children, ...props }) => {
+  const isInternal = href.startsWith("/");
+  if (isInternal) {
+    return (
+      <Link to={href} {...props}>
+        {children}
+      </Link>
+    );
+  }
+  const isExternal = /^https?:\/\//i.test(href);
+  return (
+    <a
+      href={href}
+      {...props}
+      target={isExternal ? "_blank" : undefined}
+      rel={isExternal ? "noopener noreferrer" : undefined}
+    >
+      {children}
+    </a>
+  );
+};
+const mdComponents = { a: MdLink };
 
+/* Title and body MD */
 const mdTitle = `
 # Podcasting the News – A Topic, Sentiment, and Stance Analysis of U.S. Podcasts and Public News Media
 `;
@@ -70,7 +94,7 @@ const mdMethods_31_32 = `
 
 We compiled a complete corpus of all content produced over the calendar year from July 1, 2024–July 1, 2025 by leading podcasts and public news outlets.
 
-**Podcasts:** We select all podcasts in the Top 50 most-listened-to podcasts in the United States ([Edison Research, 2025](#ref-edison-2025)) during Q1 of 2025, excluding those affiliated with a traditional news outlet like *The Daily*, by *The New York Times* (see Appendix A). Transcripts are downloaded from [PodScribe](#ref-podscribe) (transcription using [Google Cloud’s Speech-to-Text](#ref-google-stt)) with timestamps and speaker tags removed.
+**Podcasts:** We select all podcasts in the Top 50 most-listened-to podcasts in the United States ([Edison Research, 2025](#ref-edison-2025)) during Q1 of 2025, excluding those affiliated with a traditional news outlet like *The Daily*, by *The New York Times* (see [Appendix A](/podcast-project/appendices#appendix-a)). Transcripts are downloaded from [PodScribe](#ref-podscribe) (transcription using [Google Cloud’s Speech-to-Text](#ref-google-stt)) with timestamps and speaker tags removed.
 
 **Public News Sources:** To serve as a ground comparison for our podcasts, we select NPR and PBS, the two largest public broadcasters in the United States. Articles are scraped and HTML parsed from the archive of each site ([NPR, 2025](#ref-npr-2025); [PBS, 2025](#ref-pbs-2025)).
 
@@ -96,9 +120,9 @@ The result of this is 1 hierarchically grounded IPTC media topic and up to 46 na
 const mdMethods_34_35 = `
 ### 3.4 Stance Detection
 
-Stance detection is carried out using the Chain of Stance (CoS) prompting method ([Ma et al., 2024](#ref-ma-2024)). The method sequentially guides an LLM through six logical steps, gathering information and evidence about context, main idea, and tone before outputting a stance determination (see Appendix B for prompting details).
+Stance detection is carried out using the Chain of Stance (CoS) prompting method ([Ma et al., 2024](#ref-ma-2024)). The method sequentially guides an LLM through six logical steps, gathering information and evidence about context, main idea, and tone before outputting a stance determination (see [Appendix B](/podcast-project/appendices#appendix-b) for prompting details).
 
-To implement this, the corpus is first filtered to 70 topics relevant to stance labeling (Appendix C). Inferences are then run on each document–topic pair in batches of 16 using an open-source LLM hosted on an AWS EC2 G5.xlarge instance. As Mistral models are open-source and have achieved top results in leading stance-detection research ([Ma et al., 2024](#ref-ma-2024)), we use Ministral-8B-Instruct-2410 ([Mistral AI, 2025](#ref-mistral-2025)), Mistral's newest and most powerful model under 10B.
+To implement this, the corpus is first filtered to 70 topics relevant to stance labeling ([Appendix C](/podcast-project/appendices#appendix-c)). Inferences are then run on each document–topic pair in batches of 16 using an open-source LLM hosted on an AWS EC2 G5.xlarge instance. As Mistral models are open-source and have achieved top results in leading stance-detection research ([Ma et al., 2024](#ref-ma-2024)), we use Ministral-8B-Instruct-2410 ([Mistral AI, 2025](#ref-mistral-2025)), Mistral's newest and most powerful model under 10B.
 
 The results of this process are 297,611 individual stance determinations (FAVOR, AGAINST, NONE). Outputs are encoded as both single-word strings and as numbers (1, -1, and 0) for plotting. Full model outputs for each stance are additionally logged for interpretability.
 
@@ -255,8 +279,26 @@ const mdReferences = `
 <a id="ref-yu-yang-2024"></a> Yu, L., & Yang, L. (2024). News media in crisis: A sentiment and emotion analysis of US news articles on unemployment in the COVID-19 pandemic. *Humanities and Social Sciences Communications, 11*(1), Article 854. [https://doi.org/10.1057/s41599-024-03225-9](https://doi.org/10.1057/s41599-024-03225-9)
 `;
 
-// Appendices page
+/* Helper to jump to appendix */
+function useOpenAppendixOnHash() {
+  const location = useLocation();
+  React.useEffect(() => {
+    const hash = (location.hash || "").replace("#", "");
+    if (!hash) return;
+    const node = document.getElementById(hash);
+    if (!node) return;
+    if (node.tagName.toLowerCase() === "details" && !node.hasAttribute("open")) {
+      node.setAttribute("open", "");
+    }
+    setTimeout(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, [location.hash]);
+}
+
 function AppendicesPage() {
+  useOpenAppendixOnHash();
+
   return (
     <article className={styles.mainCard}>
       <div className={styles.blogContent}>
@@ -284,7 +326,7 @@ function AppendicesPage() {
 
         {/* Appendix A: Corpus Metadata */}
         <div className={styles.detailsCard}>
-          <details open>
+          <details id="appendix-a" open>
             <summary>Appendix A: Corpus Metadata</summary>
             <div className={styles.detailsBody}>
               <div className={styles.tableWrapper} role="region" aria-label="Corpus metadata table">
@@ -348,7 +390,7 @@ function AppendicesPage() {
 
         {/* Appendix B: Chain of Stance Prompting Format */}
         <div className={styles.detailsCard}>
-          <details>
+          <details id="appendix-b">
             <summary>Appendix B: Chain of Stance Prompting Format</summary>
             <div className={styles.detailsBody}>
               <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "0.75rem" }}>
@@ -384,7 +426,7 @@ Begin your analysis now.
 
         {/* Appendix C: Topics Used for Stance Detection */}
         <div className={styles.detailsCard}>
-          <details>
+          <details id="appendix-c">
             <summary>Appendix C: Topics Used for Stance Detection</summary>
             <div className={styles.detailsBody}>
               <div className={styles.appendixCols}>
@@ -505,15 +547,17 @@ Begin your analysis now.
       </div>
     </article>
   );
-}
+};
 
-/* Main report */
+/* Main report pages */
 function DashboardPage() {
   return (
     <article className={styles.mainCard} style={{ maxWidth: 900 }}>
       <div className={styles.blogContent}>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdTitle}</ReactMarkdown>
-        <p className={styles.kicker}>SIADS 699 Capstone Project Final Report</p>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdTitle}
+        </ReactMarkdown>
+        <p className={styles.kicker}>SIADS 699 Capstone Project Final Report | August 2025</p>
 
         <div className={styles.resourceBar}>
           <a
@@ -535,18 +579,28 @@ function DashboardPage() {
         {/* Collage! */}
         <img src="https://seanfontaine.dev/collage.png" alt="Project collage" loading="lazy" />
 
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdIntroPart1}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdIntroPart1}
+        </ReactMarkdown>
 
         <div style={{ marginLeft: "1.5em" }}>
           <p>a) What topics are being talked about and how do topic distributions vary across mediums?</p>
           <p>b) How do stances, sentiments, and framings of key topics compare across mediums?</p>
         </div>
 
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdIntroPart2}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdIntroPart2}
+        </ReactMarkdown>
 
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdRelated}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_31_32}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_33_beforeFig1}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdRelated}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdMethods_31_32}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdMethods_33_beforeFig1}
+        </ReactMarkdown>
 
         <img
           src="https://seanfontaine.dev/iptc_media_topics_flowchart.jpg"
@@ -557,9 +611,15 @@ function DashboardPage() {
           Figure 1: Excerpt of the IPTC Media Topics taxonomy (reproduced from Rudnik et al., 2019, Figure 3).
         </div>
 
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_33_afterFig1}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdMethods_34_35}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_41_beforeFig2}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdMethods_33_afterFig1}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdMethods_34_35}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdAnalysis_41_beforeFig2}
+        </ReactMarkdown>
       </div>
 
       <div className={styles.chartScrollWrapper}>
@@ -570,8 +630,12 @@ function DashboardPage() {
       </div>
 
       <div className={styles.blogContent}>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_41_afterFig2}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_42_beforeFig3}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdAnalysis_41_afterFig2}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdAnalysis_42_beforeFig3}
+        </ReactMarkdown>
       </div>
 
       <div className={styles.chartScrollWrapper}>
@@ -582,8 +646,12 @@ function DashboardPage() {
       </div>
 
       <div className={styles.blogContent}>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_42_afterFig3}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_43_beforeFig4}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdAnalysis_42_afterFig3}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdAnalysis_43_beforeFig4}
+        </ReactMarkdown>
       </div>
 
       <div className={styles.chartScrollWrapper}>
@@ -594,9 +662,15 @@ function DashboardPage() {
       </div>
 
       <div className={styles.blogContent}>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdAnalysis_43_afterFig4}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdDiscussion}</ReactMarkdown>
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{mdReferences}</ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdAnalysis_43_afterFig4}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdDiscussion}
+        </ReactMarkdown>
+        <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
+          {mdReferences}
+        </ReactMarkdown>
       </div>
     </article>
   );
@@ -662,7 +736,7 @@ export default function App() {
           <Route path="stance" element={<StancePage />} />
           <Route path="paired-wordclouds" element={<PairedWordcloudsPage />} />
           <Route path="appendices" element={<AppendicesPage />} />
-          {/* Catch all for invalid routes */}
+          {/* Invalid subroute default to main */}
           <Route path="*" element={<Navigate to="." replace />} />
         </Routes>
       </ErrorBoundary>
