@@ -7,7 +7,38 @@
     }
   ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/800m-calculator",
+      "destination": "/calculator.html"
+    },
+    {
+      "source": "/800m-calculator/**",
+      "destination": "/calculator.html"
+    },
+    {
+      "source": "/poke-team-predictor",
+      "destination": "/poke-team-predictor.html"
+    },
+    {
+      "source": "/poke-team-predictor/**",
+      "destination": "/poke-team-predictor.html"
+    },
+    {
+      "source": "/podcast-project",
+      "destination": "/podcast-project.html"
+    },
+    {
+      "source": "/podcast-project/**",
+      "destination": "/podcast-project.html"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "build": {
     "env": {
