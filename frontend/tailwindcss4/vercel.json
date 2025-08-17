@@ -1,4 +1,5 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "redirects": [
     {
       "source": "/800m-calculator",
@@ -12,7 +13,7 @@
       "destination": "/calculator.html"
     },
     {
-      "source": "/800m-calculator/**",
+      "source": "/800m-calculator/:path*",
       "destination": "/calculator.html"
     },
     {
@@ -20,7 +21,7 @@
       "destination": "/poke-team-predictor.html"
     },
     {
-      "source": "/poke-team-predictor/**",
+      "source": "/poke-team-predictor/:path*",
       "destination": "/poke-team-predictor.html"
     },
     {
@@ -28,7 +29,7 @@
       "destination": "/podcast-project.html"
     },
     {
-      "source": "/podcast-project/**",
+      "source": "/podcast-project/:path*",
       "destination": "/podcast-project.html"
     },
     {
@@ -36,13 +37,8 @@
       "destination": "/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/:path*",
       "destination": "/index.html"
     }
-  ],
-  "build": {
-    "env": {
-      "NPM_FLAGS": "--legacy-peer-deps"
-    }
-  }
+  ]
 }
