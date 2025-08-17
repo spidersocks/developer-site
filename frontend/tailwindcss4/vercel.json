@@ -9,12 +9,20 @@
   ],
   "rewrites": [
     {
-      "source": "/800m-calculator",
-      "destination": "/calculator.html"
+      "source": "/en/800m-calculator",
+      "destination": "/calculator-en.html"
     },
     {
-      "source": "/800m-calculator/:path*",
-      "destination": "/calculator.html"
+      "source": "/en/800m-calculator/:path*",
+      "destination": "/calculator-en.html"
+    },
+    {
+      "source": "/zh/800m-calculator",
+      "destination": "/calculator-zh.html"
+    },
+    {
+      "source": "/zh/800m-calculator/:path*",
+      "destination": "/calculator-zh.html"
     },
     {
       "source": "/poke-team-predictor",
