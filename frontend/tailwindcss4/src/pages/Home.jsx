@@ -20,7 +20,7 @@ const projects = [
   },
   {
     title: "Podcast Project",
-    description: "Explore topic distributions across podcasts and public news media.",
+    description: "Large-scale study comparing how news content in podcast systematically differs from that in traditional news. Includes interactive charts.",
     link: "/podcast-project",
     badge: "New",
     date: "August 2025",
