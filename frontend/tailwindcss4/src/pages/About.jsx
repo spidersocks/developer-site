@@ -9,8 +9,6 @@ export default function About() {
 
       <main className={styles.aboutContent}>
         <div className={styles.aboutContainer}>
-          <h1 className={styles.aboutTitle}>About Me</h1>
-
           {/* Image spans the same width as the text column */}
           <img
             src="/about_me.png"
@@ -23,7 +21,8 @@ export default function About() {
               marginBottom: "1.25rem",
             }}
           />
-
+          
+          <h1 className={styles.aboutTitle}>About Me</h1>
           <p className={styles.aboutText}>
             I am a data scientist with a background in
             education, communications, and sport. I have a passion for applying
