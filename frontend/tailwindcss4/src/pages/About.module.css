@@ -1,0 +1,41 @@
+.aboutRoot {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--primary-bg);
+}
+
+.aboutContent {
+  flex: 1;
+  padding: 2rem 0;
+}
+
+.aboutContainer {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  line-height: 1.6;
+}
+
+.aboutTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+  color: var(--text-main);
+}
+
+.aboutText {
+  margin-bottom: 1rem;
+  font-size: 1.05rem;
+  color: var(--text-subtle);
+}
+
+.pageFooter {
+  width: 100%;
+  text-align: center;
+  padding: 1.5rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+  border-top: 1px solid #ececec;
+  margin-top: auto;
+}

@@ -5,6 +5,8 @@ import EightHundredCalculatorApp from "./apps/EightHundredCalculator/App";
 import PokeTeamPredictorApp from "./apps/PokeTeamPredictor/App";
 import PodcastProjectApp from "./apps/PodcastProject/App";
 import { Analytics } from "@vercel/analytics/react";
+import About from "./pages/About";
+import Resume from "./pages/Resume";
 
 // Class-based Error Boundary (per React docs)
 class ErrorBoundary extends React.Component {
@@ -38,19 +40,20 @@ export default function App() {
         <Routes>
           {/* Homepage */}
           <Route path="/" element={<Home />} />
-
+          {/* About page */}
+          <Route path="/about" element={<About />} />
+          {/* Resume */}
+          <Route path="/resume" element={<Resume />} />
           {/* 800m Calculator (with language support) */}
           <Route path="/800m-calculator" element={<EightHundredCalculatorApp lang="en" />} />
           <Route path="/en/800m-calculator/*" element={<EightHundredCalculatorApp lang="en" />} />
           <Route path="/zh/800m-calculator/*" element={<EightHundredCalculatorApp lang="zh" />} />
-
-          {/* Other apps */}
+          {/* Poke Team Predictor App */}
           <Route path="/poke-team-predictor" element={<PokeTeamPredictorApp />} />
-
-          {/* Podcast project: delegate all subroutes to this app */}
+          {/* Podcast project and all subroutes */}
           <Route path="/podcast-project/*" element={<PodcastProjectApp />} />
 
-          {/* Optional: catch-all -> home (or create a NotFound component) */}
+          {/* Catch all for not found components */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
