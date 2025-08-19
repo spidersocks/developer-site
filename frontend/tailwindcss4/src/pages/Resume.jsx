@@ -6,7 +6,7 @@ export default function Resume() {
     <div className={styles.resumeRoot}>
       {/* Download PDF pinned top-right */}
       <a
-        href="/resume.pdf"
+        href="/Sean_Fontaine_Resume.pdf"
         className={styles.downloadBtn}
         download="Sean_Fontaine_Resume.pdf"
       >
