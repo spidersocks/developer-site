@@ -26,14 +26,16 @@ export default function Resume() {
               rel="noopener noreferrer"
             >
               LinkedIn
-            </a> ·
+            </a>{" "}
+            ·
             <a
               href="https://github.com/spidersocks"
               target="_blank"
               rel="noopener noreferrer"
             >
               GitHub
-            </a> ·
+            </a>{" "}
+            ·
             <a
               href="https://www.seanfontaine.dev/"
               target="_blank"
@@ -47,9 +49,10 @@ export default function Resume() {
         {/* Summary */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Summary</h2>
-          <p className={styles.skills}>
-            Applied Data Scientist (MADS @ Michigan) with end‑to‑end ML experience and product mindset.
-            Strengths in feature engineering, interactive applications, and LLM‑based pipelines.
+          <p>
+            Applied Data Scientist (MADS @ Michigan) with end‑to‑end ML
+            experience and product mindset. Strengths in feature engineering,
+            interactive applications, and LLM‑based pipelines.
           </p>
         </section>
 
@@ -65,15 +68,25 @@ export default function Resume() {
               </h3>
               <p className={styles.inlineDates}>Apr 2025 — Present</p>
             </div>
-            <ul className={styles.bullets}>
+            <ul>
               <li>
-                <strong>News vs. Podcasts Analysis:</strong> Multi‑stage NLP pipeline with LLM integration analyzing 25K+ articles/transcripts; interactive visualizations for cross‑medium comparison.
+                <strong>News vs. Podcasts Analysis:</strong> Multi‑stage NLP
+                pipeline with LLM integration analyzing 25K+ articles/transcripts;
+                interactive visualizations for cross‑medium comparison.
               </li>
               <li>
-                <strong>800m Performance Calculator:</strong> FastAPI + React app achieving 84% accuracy (±1 sec) on race predictions; widely used by Hong Kong athletes.
+                <strong>800m Performance Calculator:</strong> FastAPI + React app
+                achieving 84% accuracy (±1 sec) on race predictions; widely used
+                by Hong Kong athletes.
               </li>
               <li>
-                <strong>VGC Team Recommender:</strong> Multi‑label XGBoost classifier; F1‑score 0.78 (23% improvement over baseline).
+                <strong>VGC Team Recommender:</strong> Multi‑label XGBoost
+                classifier; F1‑score 0.78 (23% improvement over baseline).
+              </li>
+              <li>
+                <strong>Enron Chatbot (LLM + RAG):</strong> Built LangChain/Streamlit
+                system integrating email corpus and stock data for cited,
+                conversational analysis.
               </li>
             </ul>
           </div>
@@ -82,13 +95,18 @@ export default function Resume() {
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
                 CS & Mathematics Tutor
-                <span className={styles.company}> · All Round Education Academy</span>
+                <span className={styles.company}>
+                  {" "}
+                  · All Round Education Academy
+                </span>
               </h3>
               <p className={styles.inlineDates}>Sep 2022 — Jul 2023</p>
             </div>
-            <ul className={styles.bullets}>
+            <ul>
               <li>
-                <strong>Project Guidance:</strong> Mentored IB/A‑Level students through reak-world Python/Java projects; emphasized problem decomposition and object-oriented programming.
+                <strong>Project Guidance:</strong> Mentored IB/A‑Level students
+                through real‑world Python/Java projects; emphasized problem
+                decomposition and object‑oriented programming.
               </li>
             </ul>
           </div>
@@ -97,16 +115,22 @@ export default function Resume() {
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
                 Teacher | TFA Corps Member
-                <span className={styles.company}> · Alliance MIT (Teach For America)</span>
+                <span className={styles.company}>
+                  {" "}
+                  · Alliance MIT (Teach For America)
+                </span>
               </h3>
               <p className={styles.inlineDates}>Jun 2020 — Jun 2022</p>
             </div>
-            <ul className={styles.bullets}>
+            <ul>
               <li>
-                <strong>Curriculum Design:</strong> Developed 10-week JavaScript curriculum for students.
+                <strong>Curriculum Design:</strong> Developed 10‑week JavaScript
+                curriculum for students.
               </li>
               <li>
-                <strong>Student Growth:</strong> Led data‑driven instruction. Students achieved 97% pass rate on programming assessments; 193.5% average annual growth on reading.
+                <strong>Student Growth:</strong> Led data‑driven instruction.
+                Students achieved 97% pass rate on programming assessments;
+                193.5% average annual growth on reading.
               </li>
             </ul>
           </div>
@@ -115,23 +139,25 @@ export default function Resume() {
         {/* Education */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Education</h2>
-          
+
           <div className={styles.roleHeader}>
-            <p className={styles.skills}>
-              <strong>Master of Applied Data Science</strong> · University of Michigan
+            <p>
+              <strong>Master of Applied Data Science</strong> · University of
+              Michigan
             </p>
             <p className={styles.inlineDates}>May 2023 — Aug 2025</p>
           </div>
-          
+
           <div className={styles.roleHeader}>
-            <p className={styles.skills}>
-              <strong>M.Ed., Urban Education & Leadership</strong> · Loyola Marymount University
+            <p>
+              <strong>M.Ed., Urban Education & Leadership</strong> · Loyola
+              Marymount University
             </p>
             <p className={styles.inlineDates}>Sep 2021 — Jul 2022</p>
           </div>
-          
+
           <div className={styles.roleHeader}>
-            <p className={styles.skills}>
+            <p>
               <strong>B.A., Communication</strong> · UCLA
             </p>
             <p className={styles.inlineDates}>Sep 2016 — Jul 2020</p>
@@ -141,11 +167,13 @@ export default function Resume() {
         {/* Skills */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Skills</h2>
-          <p className={styles.skills}>
-            <strong>ML:</strong> Random Forest, XGBoost, clustering, feature engineering, F1/AUC evaluation • 
-            <strong>Programming:</strong> Python (pandas, scikit‑learn, NumPy), FastAPI, React • 
-            <strong>NLP:</strong> Text classification, stance detection, transformer models, prompt chaining • 
-            <strong>Viz:</strong> Altair, Plotly, D3.js • 
+          <p>
+            <strong>ML:</strong> Random Forest, XGBoost, clustering, feature
+            engineering, F1/AUC evaluation ·{" "}
+            <strong>Programming:</strong> Python (pandas, scikit‑learn, NumPy),
+            FastAPI, React · <strong>NLP:</strong> Text classification, stance
+            detection, transformer models, prompt chaining ·{" "}
+            <strong>Viz:</strong> Altair, Plotly, D3.js ·{" "}
             <strong>Languages:</strong> English (Native), Mandarin (Professional)
           </p>
         </section>

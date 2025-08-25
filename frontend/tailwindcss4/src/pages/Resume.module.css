@@ -1,37 +1,38 @@
 .resumeRoot {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: var(--primary-bg);
-  position: relative;
+  font-family: "Calibri", "Helvetica", sans-serif;
+  background: #fdfdfd;
+  color: #222;
+  margin: 0;
+  padding: 0;
 }
 
 .content {
-  width: min(100%, 100ch);
-  margin-inline: auto;
-  padding-inline: clamp(1rem, 3vw, 3rem);
-  padding-top: clamp(1rem, 4vh, 3rem);
+  max-width: 900px;
+  margin: auto;
+  padding: 30px 20px;
+  line-height: 1.5;
   box-sizing: border-box;
 }
 
 .headerSection {
   text-align: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 30px;
 }
 
 .name {
-  font-size: 2.4rem;
-  font-weight: 800;
-  color: var(--text-main);
-  margin-bottom: 0.5rem;
+  margin: 0;
+  font-size: 2.2em;
+  font-weight: bold;
+  letter-spacing: 0.5px;
 }
 
 .contact {
+  margin: 5px 0;
   font-size: 1rem;
-  color: var(--text-subtle);
+  color: #444;
 }
 .contact a {
-  color: var(--accent);
+  color: #222;
   text-decoration: none;
 }
 .contact a:hover {
@@ -39,161 +40,96 @@
 }
 
 .section {
-  margin-bottom: 2rem;
+  margin-bottom: 20px;
 }
 
 .sectionTitle {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--text-main);
-  border-bottom: 2px solid var(--accent-fade);
-  padding-bottom: 0.3rem;
-  margin-bottom: 1rem;
-  display: block;          
-  width: 100%;              
+  margin-top: 30px;
+  border-bottom: 2px solid #444;
+  padding-bottom: 5px;
+  font-size: 1.4em;
+  font-weight: bold;
 }
 
 .entry {
-  margin-bottom: 1.2rem;
+  margin-bottom: 15px;
+}
+
+.roleHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
 }
 
 .role {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-main);
-  margin-bottom: 0.2rem;
+  font-size: 1.1em;
+  font-weight: bold;
+  margin: 0;
 }
 
 .company {
-  font-weight: 500;
-  color: var(--text-subtle);
+  font-weight: normal;
+  color: #666;
 }
 
-.dates {
-  font-size: 0.95rem;
-  color: #8a8da1;
-  margin-bottom: 0.5rem;
+.inlineDates {
+  font-size: 0.95em;
+  color: #666;
+  margin: 0;
 }
 
-.bullets {
-  margin-left: 1.2rem;
-  color: #444;
+ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+li {
+  margin-bottom: 5px;
+  color: #222;
   font-size: 1rem;
-}
-
-.skills {
-  font-size: 1rem;
-  color: #444;
 }
 
 .downloadBtn {
   position: absolute;
-  top: 1.2rem;
+  top: 1rem;
   right: 2rem;
   font-size: 0.9rem;
   font-weight: 500;
-  color: var(--text-subtle);
+  color: #444;
   text-decoration: none;
-  border: 1px solid var(--border);
+  border: 1px solid #ccc;
   padding: 0.35rem 0.75rem;
   border-radius: 4px;
-  transition: all 0.2s ease;
-  background: var(--primary-bg);
+  background: #fff;
 }
 
 .downloadBtn:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+  background: #f0f0f0;
+  color: #000;
 }
 
-/* Hide on mobile */
 @media (max-width: 600px) {
   .downloadBtn {
     display: none;
   }
 }
 
-.footer {
-  display: none; /* hidden by default */
-  text-align: center;
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
-}
-
-.downloadFooter {
-  font-size: 0.9rem;
-  color: var(--text-subtle);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.downloadFooter:hover {
-  color: var(--accent);
-}
-
-/* Update the existing CSS in Resume.module.css */
-
-.roleHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 0.5rem;
-}
-
-.inlineDates {
-  font-size: 1rem;
-  color: #8a8da1;
-  margin: 0;
-  white-space: nowrap;
-}
-
 @media print {
-  .downloadBtn,
-  .footer {
+  .downloadBtn {
     display: none !important;
   }
 
-  /* Remove scrollbars from the printed page */
-  html, body {
-    overflow: visible !important;        
-    height: auto !important;             
-    width: 100% !important;
-    -ms-overflow-style: none !important; 
-    scrollbar-width: none !important;    
-  }
-  body::-webkit-scrollbar { display: none !important; }
-
-  .resumeRoot {
-    overflow: visible !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    font-size: 0.95rem; 
-  }
-
   .content {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding-inline: 1rem !important;
-    padding-top: 0.75rem !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
+    padding: 0;
   }
 
-  .name { font-size: 2rem !important; margin-bottom: 0.3rem !important; }
-  .headerSection { margin-bottom: 0.8rem !important; }
-  .section { margin-bottom: 1rem !important; page-break-inside: avoid; }
-  .sectionTitle { font-size: 1.2rem !important; margin-bottom: 0.5rem !important; }
-  .entry { margin-bottom: 0.7rem !important; page-break-inside: avoid; }
-  .bullets { margin-left: 1rem !important; }
-  .bullets li { margin-bottom: 0.2rem !important; }
-
-  .roleHeader { margin-bottom: 0.3rem !important; page-break-inside: avoid; }
-  .inlineDates { font-size: 0.95rem !important; }
+  .section {
+    page-break-inside: avoid;
+  }
 
   @page {
-    size: A4; 
-    margin: 12mm; 
+    size: A4;
+    margin: 12mm;
   }
 }
