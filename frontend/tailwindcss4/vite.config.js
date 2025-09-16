@@ -1,3 +1,5 @@
+// vite.config.js
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -11,7 +13,9 @@ export default defineConfig({
         calculatorEn: 'calculator-en.html',
         calculatorZh: 'calculator-zh.html',
         poke: 'poke-team-predictor.html',
-        podcast: 'podcast-project.html'
+        podcast: 'podcast-project.html',
+        // --- ADD THIS LINE ---
+        medicalScribe: 'medical-scribe.html' 
       }
     }
   }
