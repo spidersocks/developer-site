@@ -6,8 +6,8 @@ import "./App.css"; // Assuming CSS is in the same folder
 // --- CHANGE: Use environment variables for backend URLs ---
 // This allows the app to connect to the live backend when deployed,
 // and fall back to localhost for local development.
-const BACKEND_WS_URL = process.env.REACT_APP_BACKEND_WS_URL || "ws://localhost:8000/client-transcribe";
-const BACKEND_API_URL = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:8000";
+const BACKEND_WS_URL = import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:8000/client-transcribe";
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || "http://localhost:8000";
 // --- END OF CHANGE ---
 
 const getFriendlySpeakerLabel = (speakerId, speakerRoles) => {
