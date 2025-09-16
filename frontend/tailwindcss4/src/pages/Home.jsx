@@ -26,9 +26,18 @@ const projects = [
     description:
       "Large-scale study comparing how news content in podcast systematically differs from that in traditional news. Includes interactive charts.",
     link: "/podcast-project",
-    badge: "New",
+    badge: "Research", // <-- Changed from "New"
     date: "August 2025",
     preview: "/collage_preview.png",
+  },
+  {
+    title: "StethoScribe",
+    description:
+      "A real-time, AI-powered medical scribe for generating clinical notes from conversations using AWS Transcribe and Bedrock.",
+    link: "/medical-scribe",
+    badge: "BETA",
+    date: "September 2025",
+    preview: "/stethoscribe_preview.jpg",
   },
 ];
 
