@@ -422,6 +422,7 @@ export default function MedicalScribeApp() {
   // If zh-HK or zh-TW selected: that Chinese is primary, English backup.
   // If en-US selected: English primary, Cantonese backup (handled by backend).
   const [language, setLanguage] = useState("en-US");
+
   // Speaker roles
   const [speakerRoles, setSpeakerRoles] = useState(() => {
     try {
@@ -478,6 +479,13 @@ export default function MedicalScribeApp() {
     hasShownHintRef.current = false;
   };
 
+  const getFriendlySpeakerLabel = (speakerId, speakerRoles) => {
+    if (!speakerId) return "...";
+    if (speakerRoles[speakerId]) return speakerRoles[speakerId];
+    const speakerNum = parseInt(String(speakerId).replace("spk_", ""), 10);
+    return !isNaN(speakerNum) ? `Speaker ${speakerNum + 1}` : speakerId;
+  };
+
   const handleSpeakerRoleToggle = (speakerId) => {
     if (!speakerId) return;
     const currentRole = speakerRoles[speakerId];
@@ -485,6 +493,24 @@ export default function MedicalScribeApp() {
     const currentIndex = rolesCycle.indexOf(currentRole);
     const nextRole = rolesCycle[(currentIndex + 1) % rolesCycle.length];
     setSpeakerRoles((prev) => ({ ...prev, [speakerId]: nextRole }));
+  };
+
+  // NEW: finalize any visible interim as a proper segment
+  const finalizeInterimAsSegment = () => {
+    const text = (interimTranscript || "").trim();
+    if (!text) return;
+    const id = `local-final-${Date.now()}`;
+    const finalSegment = {
+      id,
+      speaker: interimSpeaker,
+      text,
+      entities: [],          // no entities for locally finalized interim
+      translatedText: null,  // unknown locally
+      displayText: text,
+    };
+    setTranscriptSegments((prev) => new Map(prev).set(id, finalSegment));
+    setInterimTranscript("");
+    setInterimSpeaker(null);
   };
 
   // Start session: open WS, then start microphone on open
@@ -604,34 +630,39 @@ export default function MedicalScribeApp() {
   };
 
   const handlePause = () => {
-  finalizeInterimAsSegment();
-  setSessionState("paused");
+    // Lock in any grey interim before pausing
+    finalizeInterimAsSegment();
+    setSessionState("paused");
   };
 
   const handleResume = () => setSessionState("recording");
 
+  // Graceful stop: nudge AWS, wait briefly for finals, then finalize locally if needed
   const stopSession = async (closeSocket = true) => {
     if (sessionStateRef.current === "stopped" || sessionStateRef.current === "idle")
       return;
 
     setSessionState("stopped");
 
-    // Stop mic immediately
+    // Stop mic immediately so we don't send more audio
     microphoneStreamRef.current?.getTracks().forEach((t) => t.stop());
     if (audioContextRef.current?.state !== "closed")
       audioContextRef.current?.close();
 
     // Try to flush AWS by sending an empty chunk and waiting briefly
-    let finalizedByAws = false;
+    let awsHadTimeToFinalize = false;
     if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
       try { websocketRef.current.send(new ArrayBuffer(0)); } catch {}
-      await new Promise((resolve) => setTimeout(resolve, 700)); // adjust as needed
-      finalizedByAws = !interimTranscript; // if interim cleared due to receiving a final
+      // Wait up to ~700ms for a final message to arrive
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      // If AWS produced a final, the interim should have been cleared by onmessage handler
+      awsHadTimeToFinalize = !interimTranscript;
       websocketRef.current?.close();
     }
 
-    if (!finalizedByAws) {
-      finalizeInterimAsSegment(); // fallback to local finalize
+    // If no final came, lock the grey interim into the transcript
+    if (!awsHadTimeToFinalize) {
+      finalizeInterimAsSegment();
     }
   };
 
@@ -770,18 +801,15 @@ export default function MedicalScribeApp() {
           <div className="language-selector-container">
             <label htmlFor="language-select">Language</label>
             <select
-            id="language-select"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            disabled={!(sessionState === "idle" || sessionState === "stopped")}
-            className="language-selector">
-
-            <option value="en-US">English</option>
-
-            <option value="zh-HK">Cantonese (粵語)</option>
-
-            <option value="zh-TW">Mandarin (Traditional) (國語)</option>
-
+              id="language-select"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              disabled={!(sessionState === "idle" || sessionState === "stopped")}
+              className="language-selector"
+            >
+              <option value="en-US">English</option>
+              <option value="zh-HK">Cantonese (粵語)</option>
+              <option value="zh-TW">Mandarin (Traditional) (國語)</option>
             </select>
           </div>
 
