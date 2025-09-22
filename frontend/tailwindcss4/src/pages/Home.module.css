@@ -5,7 +5,7 @@
   background: var(--primary-bg);
 }
 
-/* === Main Content === */
+/* main content styling */
 .mainContent {
   flex: 1;
   padding: 2rem 0;
@@ -65,7 +65,7 @@
   gap: 0.7em;
 }
 
-/* === Pill Badge === */
+/* pill badge stylings */
 .badge {
   background: var(--accent-fade);
   color: var(--accent);
@@ -93,7 +93,7 @@
   width: 100%;
 }
 
-/* === Footer === */
+/* footer*/
 .pageFooter {
   width: 100%;
   text-align: center;
@@ -104,7 +104,7 @@
   margin-top: auto;
 }
 
-/* === Responsive === */
+/* responsive */
 @media (max-width: 700px) {
   .mainContentContainer {
     padding: 0 1rem;

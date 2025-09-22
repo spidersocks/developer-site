@@ -1,6 +1,6 @@
 import React from "react";
 import styles from "./Home.module.css";
-import Header from "../components/Header"; // adjust path if needed
+import Header from "../components/Header";
 
 const projects = [
   {
@@ -26,7 +26,7 @@ const projects = [
     description:
       "Large-scale study comparing how news content in podcast systematically differs from that in traditional news. Includes interactive charts.",
     link: "/podcast-project",
-    badge: "Research", // <-- Changed from "New"
+    badge: "Research", 
     date: "August 2025",
     preview: "/collage_preview.png",
   },

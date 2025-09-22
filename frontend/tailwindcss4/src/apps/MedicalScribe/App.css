@@ -63,8 +63,7 @@ body {
 }
 
 .logo-image {
-  /* --- CHANGE: Increased logo height from 2.5rem to 4rem --- */
-  height: 4rem; /* Adjust this value to fit your logo's design */
+  height: 4rem;
   width: auto;
   object-fit: contain;
 }
@@ -73,6 +72,34 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.language-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.language-selector-container label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.language-selector {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+
+.language-selector:disabled {
+  background-color: #f1f1f1;
+  cursor: not-allowed;
 }
 
 .status-display {
@@ -152,31 +179,94 @@ body {
   flex-grow: 1; overflow-y: auto; font-size: 1rem;
   line-height: 1.7; padding: 1.5rem; max-height: 70vh;
 }
-.transcript-box p { margin: 0 0 1em 0; overflow-wrap: break-word; }
+.transcript-box p { margin: 0; overflow-wrap: break-word; }
 
-.speaker-label-clickable {
-  cursor: pointer; border-radius: 4px; padding: 2px 6px;
-  transition: background-color 0.2s ease; user-select: none; font-weight: 600;
+.transcript-segment-container {
+  margin-bottom: 1.25em;
 }
-.speaker-label-clickable:hover { background-color: #eef2f6; }
+
+.original-transcript-text {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+  margin-bottom: 0.25em;
+}
+
+.translated-transcript-text {
+  padding-left: 1rem;
+  border-left: 2px solid var(--border-color);
+}
+
+.english-only-transcript {
+  margin-bottom: 1em;
+}
+
+.original-transcript-text .speaker-label-clickable,
+.english-only-transcript .speaker-label-clickable,
+.speaker-label-clickable {
+cursor: pointer;
+border-radius: 4px;
+padding: 2px 6px;
+transition: background-color 0.2s ease;
+user-select: none;
+display: inline-flex;
+align-items: center;
+
+/* Absolute size so it ignores parent's 0.9em /
+font-size: 16px; / or 1rem if your root is 16px */
+line-height: 1.2;
+font-weight: 600;
+color: var(--text-primary);
+}
+
+.speaker-label-clickable:hover {
+background-color: #eef2f6;
+}
+
+.original-transcript-text {
+font-size: 1em;
+color: var(--text-secondary);
+margin-bottom: 0.25em;
+line-height: 1.6; /* add this if lines feel vertically cramped */
+}
 
 .entity {
-  position: relative; padding: 2px 4px; border-radius: 4px; font-weight: 500;
+  position: relative;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 500;
 }
+
 .entity::after {
-  content: attr(data-tooltip); position: absolute; bottom: 130%; left: 50%;
-  transform: translateX(-50%); background-color: #343a40; color: #ffffff;
-  padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; white-space: nowrap;
-  text-transform: capitalize; opacity: 0; visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease; z-index: 10;
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 130%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #343a40;
+  color: #ffffff;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-transform: capitalize;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 10;
 }
-.entity:hover::after { opacity: 1; visibility: visible; }
+
+.entity:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
 
 .entity-MEDICATION { background-color: var(--entity-medication-bg); color: var(--entity-medication-text); }
 .entity-ANATOMY { background-color: var(--entity-anatomy-bg); color: var(--entity-anatomy-text); }
 .entity-MEDICAL_CONDITION { background-color: var(--entity-condition-bg); color: var(--entity-condition-text); }
 .entity-TEST_TREATMENT_PROCEDURE { background-color: var(--entity-ttp-bg); color: var(--entity-ttp-text); }
 .entity-PROTECTED_HEALTH_INFORMATION { background-color: var(--entity-phi-bg); color: var(--entity-phi-text); }
+/* --- END OF REVERTED SECTION --- */
+
 
 .interim-transcript { color: var(--text-secondary); font-style: italic; margin: 0; padding: 0; }
 
@@ -324,6 +414,6 @@ body {
 }
 @media (max-width: 768px) {
   .app-header { flex-direction: column; gap: 1rem; align-items: flex-start;}
-  .session-controls { width: 100%; justify-content: space-between; }
+  .session-controls { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
   .action-buttons { flex-grow: 1; display: grid; grid-template-columns: 1fr 1fr; }
 }

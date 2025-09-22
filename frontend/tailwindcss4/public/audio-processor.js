@@ -1,22 +1,19 @@
 // audio-processor.js
 
-/**
- * An AudioWorkletProcessor that buffers audio, downsamples it to 16kHz,
- * and sends it to the main thread in appropriately sized chunks.
- */
+// An audio worklet processor that buffers audio, downsamples it to 16kHz,
+// and sends it to the main thread in appropriately sized chunks.
 class AudioDownsamplerProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.outputRate = 16000; // Target sample rate for AWS
     this.buffer = [];        // Buffer to hold incoming audio data
     
-    // --- THE KEY CHANGE: SET A TARGET BUFFER SIZE ---
-    // We want to send audio chunks of ~100ms.
+    // Sending audio chunks of ~100ms.
     // 16000 samples/sec * 0.1 sec = 1600 samples per chunk.
     this.bufferSize = 1600; 
   }
 
-  // Helper to downsample. No changes needed here.
+  // Downsampling function
   downsampleBuffer(buffer, inputRate, outputRate) {
     if (inputRate === outputRate) return buffer;
     const ratio = inputRate / outputRate;
@@ -47,11 +44,10 @@ class AudioDownsamplerProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    // Downsample the incoming 128-sample chunk
+    // downsample the incoming 128-sample chunk
     const downsampled = this.downsampleBuffer(inputChannel, inputRate, this.outputRate);
 
-    // --- BUFFERING LOGIC ---
-    // Add the new downsampled audio to our internal buffer
+    // Add downsampled audio to our internal buffer
     this.buffer.push(...downsampled);
 
     // While our buffer is larger than the target size, send chunks
