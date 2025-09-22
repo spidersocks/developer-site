@@ -15,6 +15,22 @@ const getFriendlySpeakerLabel = (speakerId, speakerRoles) => {
   return !isNaN(speakerNum) ? `Speaker ${speakerNum + 1}` : speakerId;
 };
 
+const finalizeInterimAsSegment = () => {
+  if (!interimTranscript?.trim()) return;
+  const id = `local-final-${Date.now()}`;
+  const finalSegment = {
+    id,
+    speaker: interimSpeaker,
+    text: interimTranscript,
+    entities: [],
+    translatedText: null,
+    displayText: interimTranscript,
+  };
+  setTranscriptSegments((prev) => new Map(prev).set(id, finalSegment));
+  setInterimTranscript("");
+  setInterimSpeaker(null);
+};
+
 // Entity-highlighted text
 const HighlightedText = React.memo(({ text, entities }) => {
   if (!text || !entities || entities.length === 0) return <>{text}</>;
@@ -587,18 +603,36 @@ export default function MedicalScribeApp() {
     }
   };
 
-  const handlePause = () => setSessionState("paused");
+  const handlePause = () => {
+  finalizeInterimAsSegment();
+  setSessionState("paused");
+  };
+
   const handleResume = () => setSessionState("recording");
 
-  const stopSession = (closeSocket = true) => {
+  const stopSession = async (closeSocket = true) => {
     if (sessionStateRef.current === "stopped" || sessionStateRef.current === "idle")
       return;
+
     setSessionState("stopped");
+
+    // Stop mic immediately
     microphoneStreamRef.current?.getTracks().forEach((t) => t.stop());
     if (audioContextRef.current?.state !== "closed")
       audioContextRef.current?.close();
-    if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN)
+
+    // Try to flush AWS by sending an empty chunk and waiting briefly
+    let finalizedByAws = false;
+    if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
+      try { websocketRef.current.send(new ArrayBuffer(0)); } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 700)); // adjust as needed
+      finalizedByAws = !interimTranscript; // if interim cleared due to receiving a final
       websocketRef.current?.close();
+    }
+
+    if (!finalizedByAws) {
+      finalizeInterimAsSegment(); // fallback to local finalize
+    }
   };
 
   const to16BitPCM = (input) => {
