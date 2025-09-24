@@ -1,10 +1,11 @@
+// Resume.jsx
 import React from "react";
 import styles from "./Resume.module.css";
 
 export default function Resume() {
   return (
     <div className={styles.resumeRoot}>
-      {/* Download PDF pinned top-right */}
+      {/* Download PDF button located top right */}
       <a
         href="/Sean_Fontaine_Resume.pdf"
         className={styles.downloadBtn}
@@ -56,6 +57,105 @@ export default function Resume() {
           </p>
         </section>
 
+        {/* Selected Projects*/}
+        <section className={`${styles.section} ${styles.projects}`}>
+          <h2 className={styles.sectionTitle}>Selected Projects</h2>
+
+          <p>
+            <strong>
+              <a
+                href="https://www.seanfontaine.dev/medical-scribe"
+                className={styles.projectTitleLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                StethoscribeAI — Real‑time Medical Scribe:
+              </a>
+            </strong>{" "}
+            Live transcription of clinician–patient conversations, medical entity extraction, and structured
+            clinical notes; supports English/Cantonese/Mandarin.{" "}
+            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
+              Stack: React, FastAPI, WebSockets, AWS Transcribe, AWS Translate, Comprehend Medical, AWS Bedrock (Mistral 70B).
+            </span>
+          </p>
+
+          <p>
+            <strong>
+              <a
+                href="https://www.seanfontaine.dev/podcast-project"
+                className={styles.projectTitleLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                News vs. Podcasts Analysis:
+              </a>
+            </strong>{" "}
+            BERTopic topic modeling, LLM‑based stance (Mistral, CoS), and sentiment (VADER/TextBlob) over 25K+ articles/transcripts,
+            with interactive dashboards comparing podcasts vs public news.{" "}
+            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
+              Stack: Python, BERTopic, sentence‑transformers, FastAPI, Plotly/Recharts.
+            </span>
+          </p>
+
+          <p>
+            <strong>
+              <a
+                href="https://www.seanfontaine.dev/800m-calculator"
+                className={styles.projectTitleLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                800m Performance Calculator:
+              </a>
+            </strong>{" "}
+            FastAPI + React app using linear regression to predict race times from training splits; 84% of test predictions
+            within ±1s on test data; widely used by Hong Kong athletes.{" "}
+            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
+              Stack: FastAPI, React, scikit‑learn.
+            </span>
+          </p>
+
+          <p>
+            <strong>
+              <a
+                href="https://www.seanfontaine.dev/poke-team-predictor"
+                className={styles.projectTitleLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                VGC Team Recommender:
+              </a>
+            </strong>{" "}
+            Multi‑label XGBoost for teammate recommendation from a restricted core; example‑based F1 0.78 (+23% vs baseline).{" "}
+            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
+              Stack: XGBoost, scikit‑learn, FastAPI, Joblib.
+            </span>
+          </p>
+
+          <p>
+            <strong>Enron Chatbot:</strong> LangChain/Streamlit system integrating Enron
+            emails and stock data for cited, conversational analysis.{" "}
+            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
+              Stack: LangChain, RAG, Streamlit, OpenAI Agents SDK.
+            </span>
+          </p>
+        </section>
+
+        {/* Very concise Technical Skills */}
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Technical Skills</h2>
+
+          <p>
+            <strong>Machine Learning:</strong> XGBoost, Random Forest; clustering, PCA; evaluation (F1 micro/macro, ROC‑AUC).{" "}
+            <strong>NLP:</strong> BERTopic; transformers (sentence‑transformers, Hugging Face); LLM prompting/pipelines.{" "}
+            <strong>Data &amp; Backend:</strong> Python (pandas, NumPy, scikit‑learn), FastAPI; WebSockets.{" "}
+            <strong>Frontend &amp; Vis:</strong> React, Plotly, D3.js, Altair.{" "}
+            <strong>Databases:</strong> SQL (PostgreSQL, SQLite).{" "}
+            <strong>Programming Languages:</strong> Python, Java, JavaScript/TypeScript.{" "}
+            <strong>Languages:</strong> English (Native), Mandarin (Advanced), Cantonese (Limited Working).
+          </p>
+        </section>
+
         {/* Experience */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Experience</h2>
@@ -63,50 +163,14 @@ export default function Resume() {
           <div className={styles.entry}>
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
-                Independent Data Scientist
-                <span className={styles.company}> · Portfolio Projects</span>
-              </h3>
-              <p className={styles.inlineDates}>Apr 2025 — Present</p>
-            </div>
-            <ul>
-              <li>
-                <strong>News vs. Podcasts Analysis:</strong> Multi‑stage NLP
-                pipeline with LLM integration analyzing 25K+ articles/transcripts;
-                interactive visualizations for cross‑medium comparison.
-              </li>
-              <li>
-                <strong>800m Performance Calculator:</strong> FastAPI + React app
-                achieving 84% accuracy (±1 sec) on race predictions; widely used
-                by Hong Kong athletes.
-              </li>
-              <li>
-                <strong>VGC Team Recommender:</strong> Multi‑label XGBoost
-                classifier; F1‑score 0.78 (23% improvement over baseline).
-              </li>
-              <li>
-                <strong>Enron Chatbot (LLM + RAG):</strong> Built LangChain/Streamlit
-                system integrating email corpus and stock data for cited,
-                conversational analysis.
-              </li>
-            </ul>
-          </div>
-
-          <div className={styles.entry}>
-            <div className={styles.roleHeader}>
-              <h3 className={styles.role}>
                 CS & Mathematics Tutor
-                <span className={styles.company}>
-                  {" "}
-                  · All Round Education Academy
-                </span>
+                <span className={styles.company}> · All Round Education Academy</span>
               </h3>
               <p className={styles.inlineDates}>Sep 2022 — Jul 2023</p>
             </div>
             <ul>
               <li>
-                <strong>Project Guidance:</strong> Mentored IB/A‑Level students
-                through real‑world Python/Java projects; emphasized problem
-                decomposition and object‑oriented programming.
+                Mentored IB/A‑Level students on Python/Java projects; taught advanced math and OOP.
               </li>
             </ul>
           </div>
@@ -115,22 +179,13 @@ export default function Resume() {
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
                 Teacher | TFA Corps Member
-                <span className={styles.company}>
-                  {" "}
-                  · Alliance MIT (Teach For America)
-                </span>
+                <span className={styles.company}> · Alliance MIT (Teach For America)</span>
               </h3>
               <p className={styles.inlineDates}>Jun 2020 — Jun 2022</p>
             </div>
             <ul>
               <li>
-                <strong>Curriculum Design:</strong> Developed 10‑week JavaScript
-                curriculum for students.
-              </li>
-              <li>
-                <strong>Student Growth:</strong> Led data‑driven instruction.
-                Students achieved 97% pass rate on programming assessments;
-                193.5% average annual growth on reading.
+                Designed 10‑week JS curriculum; 97% programming pass and 193.5% reading growth
               </li>
             </ul>
           </div>
@@ -162,20 +217,6 @@ export default function Resume() {
             </p>
             <p className={styles.inlineDates}>Sep 2016 — Jul 2020</p>
           </div>
-        </section>
-
-        {/* Skills */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Skills</h2>
-          <p>
-            <strong>ML:</strong> Random Forest, XGBoost, clustering, feature
-            engineering, F1/AUC evaluation ·{" "}
-            <strong>Programming:</strong> Python (pandas, scikit‑learn, NumPy),
-            FastAPI, React · <strong>NLP:</strong> Text classification, stance
-            detection, transformer models, prompt chaining ·{" "}
-            <strong>Viz:</strong> Altair, Plotly, D3.js ·{" "}
-            <strong>Languages:</strong> English (Native), Mandarin (Professional)
-          </p>
         </section>
       </main>
     </div>

@@ -1,5 +1,3 @@
-/* App.css */
-
 :root {
   --bg-primary: #f7f9fc;
   --bg-panel: #ffffff;
@@ -211,8 +209,6 @@ user-select: none;
 display: inline-flex;
 align-items: center;
 
-/* Absolute size so it ignores parent's 0.9em /
-font-size: 16px; / or 1rem if your root is 16px */
 line-height: 1.2;
 font-weight: 600;
 color: var(--text-primary);
@@ -226,7 +222,7 @@ background-color: #eef2f6;
 font-size: 1em;
 color: var(--text-secondary);
 margin-bottom: 0.25em;
-line-height: 1.6; /* add this if lines feel vertically cramped */
+line-height: 1.6;
 }
 
 .entity {
@@ -265,8 +261,6 @@ line-height: 1.6; /* add this if lines feel vertically cramped */
 .entity-MEDICAL_CONDITION { background-color: var(--entity-condition-bg); color: var(--entity-condition-text); }
 .entity-TEST_TREATMENT_PROCEDURE { background-color: var(--entity-ttp-bg); color: var(--entity-ttp-text); }
 .entity-PROTECTED_HEALTH_INFORMATION { background-color: var(--entity-phi-bg); color: var(--entity-phi-text); }
-/* --- END OF REVERTED SECTION --- */
-
 
 .interim-transcript { color: var(--text-secondary); font-style: italic; margin: 0; padding: 0; }
 
@@ -292,7 +286,7 @@ line-height: 1.6; /* add this if lines feel vertically cramped */
 .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: var(--accent-primary); animation: spin 1s ease infinite; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-/* --- Button Styles --- */
+/* Button styling */
 .button {
   padding: 0.6rem 1.25rem; border-radius: 0.5rem; font-weight: 600;
   cursor: pointer; border: 1px solid transparent; transition: all 0.2s ease-in-out;
@@ -324,7 +318,7 @@ line-height: 1.6; /* add this if lines feel vertically cramped */
 .assessment-plan p { margin: 0 0 0.75em 0; overflow-wrap: break-word; }
 .assessment-plan p:last-child { margin-bottom: 0; }
 
-/* --- Editing Styles --- */
+/* Editing interface styles */
 .editable-section { position: relative; cursor: pointer; border-radius: 0.5rem; padding: 0.5rem; margin: -0.5rem; transition: background-color 0.2s ease; }
 .editable-section:hover { background-color: var(--bg-primary); }
 .edit-pencil-icon { position: absolute; top: 8px; right: 8px; color: var(--text-tertiary); opacity: 0; transition: opacity 0.2s ease-in-out; }
@@ -344,7 +338,7 @@ line-height: 1.6; /* add this if lines feel vertically cramped */
 .button-cancel { background-color: var(--text-secondary); border-color: var(--text-secondary); color: white; }
 .button-cancel:hover { background-color: #4a5568; border-color: #4a5568; }
 
-/* --- Command Bar --- */
+/* Command bar */
 .command-bar-container {
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--border-color);
@@ -369,7 +363,7 @@ line-height: 1.6; /* add this if lines feel vertically cramped */
   color: white;
 }
 
-/* --- Command Output Modal --- */
+/* Command output window */
 .modal-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background-color: rgba(0, 0, 0, 0.6);
@@ -406,7 +400,7 @@ line-height: 1.6; /* add this if lines feel vertically cramped */
   background-color: var(--bg-primary);
 }
 
-/* --- Responsive Design --- */
+/* Responsive design */
 @media (max-width: 1024px) {
   .app-container { padding: 1rem; }
   .content-container { grid-template-columns: 1fr; }

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
 
-// Backend URLs (env or defaults)
+// Backend URLs securely stored in ENV; defaults to localhost dev site
 const BACKEND_WS_URL =
   import.meta.env.VITE_BACKEND_WS_URL || "ws://localhost:8000/client-transcribe";
 const BACKEND_API_URL =
@@ -146,7 +146,7 @@ const EditPencilIcon = () => (
   </svg>
 );
 
-// Command bar and modal
+// Command bar and window
 const CommandBar = ({ notes, setNotes }) => {
   const [command, setCommand] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -419,7 +419,7 @@ export default function MedicalScribeApp() {
   const [error, setError] = useState(null);
 
   // Language dropdown (controls backend behavior)
-  // If zh-HK or zh-TW selected: that Chinese is primary, English backup.
+  // If zh-HK or zh-TW selected: Chinese is primary, English backup.
   // If en-US selected: English primary, Cantonese backup (handled by backend).
   const [language, setLanguage] = useState("en-US");
 
@@ -495,7 +495,7 @@ export default function MedicalScribeApp() {
     setSpeakerRoles((prev) => ({ ...prev, [speakerId]: nextRole }));
   };
 
-  // NEW: finalize any visible interim as a proper segment
+  // Make sure interrupted interim transcript segments are included in final transcript
   const finalizeInterimAsSegment = () => {
     const text = (interimTranscript || "").trim();
     if (!text) return;
@@ -504,8 +504,8 @@ export default function MedicalScribeApp() {
       id,
       speaker: interimSpeaker,
       text,
-      entities: [],          // no entities for locally finalized interim
-      translatedText: null,  // unknown locally
+      entities: [],          // no entities for partial entry
+      translatedText: null,  // unknown
       displayText: text,
     };
     setTranscriptSegments((prev) => new Map(prev).set(id, finalSegment));
@@ -590,7 +590,7 @@ export default function MedicalScribeApp() {
     }
   };
 
-  // Start microphone capture and worklet
+  // Start microphone capture
   const startMicrophone = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -637,7 +637,6 @@ export default function MedicalScribeApp() {
 
   const handleResume = () => setSessionState("recording");
 
-  // Graceful stop: nudge AWS, wait briefly for finals, then finalize locally if needed
   const stopSession = async (closeSocket = true) => {
     if (sessionStateRef.current === "stopped" || sessionStateRef.current === "idle")
       return;
@@ -649,18 +648,17 @@ export default function MedicalScribeApp() {
     if (audioContextRef.current?.state !== "closed")
       audioContextRef.current?.close();
 
-    // Try to flush AWS by sending an empty chunk and waiting briefly
+    // Clear AWS
     let awsHadTimeToFinalize = false;
     if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
       try { websocketRef.current.send(new ArrayBuffer(0)); } catch {}
-      // Wait up to ~700ms for a final message to arrive
+      // Programmed wait time for final message to arrive
       await new Promise((resolve) => setTimeout(resolve, 700));
-      // If AWS produced a final, the interim should have been cleared by onmessage handler
       awsHadTimeToFinalize = !interimTranscript;
       websocketRef.current?.close();
     }
 
-    // If no final came, lock the grey interim into the transcript
+    // If no final message comes, lock in the partial message
     if (!awsHadTimeToFinalize) {
       finalizeInterimAsSegment();
     }
@@ -809,7 +807,7 @@ export default function MedicalScribeApp() {
             >
               <option value="en-US">English</option>
               <option value="zh-HK">Cantonese (粵語)</option>
-              <option value="zh-TW">Mandarin (Traditional) (國語)</option>
+              <option value="zh-TW">Mandarin Traditional (國語)</option>
             </select>
           </div>
 
