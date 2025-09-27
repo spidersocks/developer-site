@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, memo } from "react";
 import './App.css'
 import { Listbox } from "@headlessui/react";
 import { ChevronUpDownIcon } from "@heroicons/react/20/solid";
-import translations from "../../translations"; // <-- Make sure path is correct
+import translations from "../../translations";
 import { useLocation, useNavigate } from "react-router-dom";
 
 const SPLIT_FEATURES = {
@@ -25,7 +25,8 @@ const PLACEHOLDERS = {
   "200m_x8": ["27.0", "27.0", "27.0", "27.0", "27.0", "27.0", "27.0", "27.0"],
 };
 
-const API_URL = "https://eight00m-calculator.onrender.com";
+// --- CHANGED: Updated API URL
+const API_URL = "https://unified-backend.fly.dev/running";
 
 function cleanLabel(label) {
   return label.replace(/average/gi, '').replace(/\s{2,}/g, ' ').trim();
@@ -65,12 +66,11 @@ const renderSplitInputs = (label, placeholders, values, onChange) => (
 );
 
 const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t }) => {
+  if (!trainingType) return null; // Add a guard clause
   const phArray = PLACEHOLDERS[trainingType.key] || [];
 
-  // Special handling for ladder training
   if (trainingType.key === "ladder") {
     if (inputAverages) {
-      // Four input boxes: avg 300m, avg 400m, 500m, 200m
       return (
         <>
           {renderInput(
@@ -100,7 +100,6 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
         </>
       );
     } else {
-      // Six input boxes, in race order
       const splitOrder = [
         { label: t.splitLabels["First 300m"] || "First 300m", ph: phArray[0] || t.defaultPlaceholder },
         { label: t.splitLabels["First 400m"] || "First 400m", ph: phArray[1] || t.defaultPlaceholder },
@@ -124,7 +123,6 @@ const TrainingInputs = memo(({ trainingType, inputs, setInputs, inputAverages, t
     }
   }
 
-  // --- Default logic for all other types ---
   const handleInputChange = useCallback((value, idx, splitIdx = null) => {
     setInputs((prev) => {
       const updatedInputs = [...prev];
@@ -202,6 +200,7 @@ function formatTime(seconds) {
 }
 
 function TrainingTypeDropdown({ trainingType, setTrainingType, trainingTypes }) {
+  if (!trainingType) return null; // Add a guard clause
   return (
     <Listbox value={trainingType} onChange={setTrainingType}>
       <div className="relative">
@@ -255,7 +254,6 @@ function LangButton({ lang }) {
   const location = useLocation();
   const navigate = useNavigate();
   const otherLang = lang === "zh" ? "en" : "zh";
-  // Replace /en or /zh at the start of the path
   const newPath = location.pathname.replace(/^\/(en|zh)/, `/${otherLang}`);
 
   return (
@@ -273,11 +271,12 @@ function LangButton({ lang }) {
   );
 }
 
+
 export default function App({ lang = "en" }) {
   const t = translations[lang] || translations.en;
   const [mode, setMode] = useState("predict");
-  const [trainingTypes, setTrainingTypes] = useState(t.trainingTypes);
-  const [trainingType, setTrainingType] = useState(t.trainingTypes[0]);
+  const [trainingTypes, setTrainingTypes] = useState([]); // Start with an empty array
+  const [trainingType, setTrainingType] = useState(null); // Start with null
   const [inputs, setInputs] = useState([]);
   const [goalTime, setGoalTime] = useState("");
   const [result, setResult] = useState(null);
@@ -286,20 +285,52 @@ export default function App({ lang = "en" }) {
   const [showRest, setShowRest] = useState(false);
   const [inputAverages, setInputAverages] = useState(false);
 
+  // Fetch training types from the backend on component load
+  useEffect(() => {
+    const fetchTrainingTypes = async () => {
+      try {
+        const response = await fetch(`${API_URL}/get-training-types`);
+        if (!response.ok) {
+          throw new Error('Could not fetch training types');
+        }
+        const backendTypes = await response.json();
+        
+        // Merge backend data with frontend translations
+        const mergedTypes = backendTypes.map(backendType => {
+          const frontendType = t.trainingTypes.find(ft => ft.key === backendType.key);
+          return {
+            ...backendType, // includes key, features, intervals from backend
+            label: frontendType ? frontendType.label : backendType.key, // Use translated label if available
+            rest: frontendType ? frontendType.rest : 'N/A', // Use translated rest info if available
+          };
+        });
+
+        setTrainingTypes(mergedTypes);
+        if (mergedTypes.length > 0) {
+          setTrainingType(mergedTypes[0]); // Set the first available type as default
+        }
+      } catch (err) {
+        setError(t.genericError);
+        // Fallback to static types if API fails
+        setTrainingTypes(t.trainingTypes);
+        setTrainingType(t.trainingTypes[0]);
+      }
+    };
+
+    fetchTrainingTypes();
+  }, [lang, t.trainingTypes, t.genericError]);
+
   const supportsAverages = useCallback(() => {
+    if (!trainingType) return false;
     return (
       typeof SPLIT_FEATURES[trainingType.key] === "number" ||
       Object.keys(SPLIT_FEATURES[trainingType.key] || {}).length > 0
     );
   }, [trainingType]);
 
-  // Update training type list and selected training type on language change
   useEffect(() => {
-    setTrainingTypes(t.trainingTypes);
-    setTrainingType(t.trainingTypes[0]);
-  }, [lang]);
+    if (!trainingType) return; // Don't run if no training type is selected yet
 
-  useEffect(() => {
     let defaultInputs;
     if (trainingType.key === "ladder") {
       if (inputAverages) {
@@ -311,7 +342,8 @@ export default function App({ lang = "en" }) {
       defaultInputs = Array(SPLIT_FEATURES[trainingType.key]).fill("");
     } else {
       defaultInputs = trainingType.features.map((f) => {
-        const splits = SPLIT_FEATURES[trainingType.key]?.[f.key];
+        const featureKey = typeof f === 'string' ? f : f.key;
+        const splits = SPLIT_FEATURES[trainingType.key]?.[featureKey];
         return splits ? Array(splits).fill("") : "";
       });
     }
@@ -326,7 +358,6 @@ export default function App({ lang = "en" }) {
     setInputAverages(checked);
   
     if (trainingType.key === "ladder") {
-      // Always reset to fresh array to avoid shape mismatches
       if (checked) {
         setInputs(["", "", "", ""]);
       } else {
@@ -346,7 +377,8 @@ export default function App({ lang = "en" }) {
     } else {
       setInputs(prev =>
         prev.map((v, idx) => {
-          const splits = SPLIT_FEATURES[trainingType.key]?.[trainingType.features[idx].key];
+          const featureKey = typeof trainingType.features[idx] === 'string' ? trainingType.features[idx] : trainingType.features[idx].key;
+          const splits = SPLIT_FEATURES[trainingType.key]?.[featureKey];
           if (splits) {
             if (checked) {
               return Array.isArray(v) ? (v[0] || "") : "";
@@ -368,46 +400,29 @@ export default function App({ lang = "en" }) {
     try {
       let input_values;
   
-      // Special handling for ladder training
       if (trainingType.key === "ladder") {
         if (inputAverages) {
-          // [avg300m, avg400m, 500m, 200m] -> [avg300m, avg400m, 500m, avg400m, avg300m, 200m]
           const avg300 = inputs[0] || "";
           const avg400 = inputs[1] || "";
           const s500 = inputs[2] || "";
           const s200 = inputs[3] || "";
-          input_values = [
-            avg300,      // First 300m
-            avg400,      // First 400m
-            s500,        // 500m
-            avg400,      // Second 400m
-            avg300,      // Second 300m
-            s200         // 200m
-          ];
+          input_values = [avg300, avg400, s500, avg400, avg300, s200];
         } else {
-          // Inputs are already in race order!
-          input_values = [
-            inputs[0] || "", // First 300m
-            inputs[1] || "", // First 400m
-            inputs[2] || "", // 500m
-            inputs[3] || "", // Second 400m
-            inputs[4] || "", // Second 300m
-            inputs[5] || ""  // 200m
-          ];
+          input_values = inputs.map(s => s.trim());
         }
       }
-      // --- Other training types ---
       else if (typeof SPLIT_FEATURES[trainingType.key] === "number") {
         if (inputAverages) {
           const avg = inputs[0] || "";
-          const count = SPLIT_FEATURES[trainingType.key]; // This will be 8 for 8x200m, 3 for 3x600, etc.
+          const count = SPLIT_FEATURES[trainingType.key];
           input_values = Array(count).fill(avg);
         } else {
           input_values = inputs.map(s => s.trim());
         }
       } else {
         input_values = trainingType.features.map((f, idx) => {
-          const splits = SPLIT_FEATURES[trainingType.key]?.[f.key];
+          const featureKey = typeof f === 'string' ? f : f.key;
+          const splits = SPLIT_FEATURES[trainingType.key]?.[featureKey];
           if (splits) {
             if (inputAverages) {
               const avg = inputs[idx] || "";
@@ -420,6 +435,7 @@ export default function App({ lang = "en" }) {
         });
       }
   
+      // Switched to new backend API url
       const res = await fetch(`${API_URL}/predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -449,6 +465,7 @@ export default function App({ lang = "en" }) {
     setResult(null);
     setError("");
     try {
+      // New backend URL
       const res = await fetch(`${API_URL}/reverse-predict`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -474,7 +491,6 @@ export default function App({ lang = "en" }) {
 
   return (
     <div className="calculator-app-wrapper" style={{ overflowY: 'auto' }}>
-      {/* Metadata */}
       <title>{t.metaTitle}</title>
       <meta name="description" content={t.metaDescription} />
       <link rel="canonical" href={t.metaUrl} />
@@ -536,40 +552,42 @@ export default function App({ lang = "en" }) {
                   setTrainingType={setTrainingType}
                   trainingTypes={trainingTypes}
                 />
-                <div className="mt-2 flex items-center justify-between">
-                  <button
-                    type="button"
-                    className={`
-                      flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
-                      ${showRest ? "text-indigo-700" : "text-gray-600"}
-                    `}
-                    style={{ padding: "2px 0" }}
-                    onClick={() => setShowRest((v) => !v)}
-                    aria-expanded={showRest}
-                    aria-controls="rest-info"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                      <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    {showRest ? t.hideTrainingInfo : t.showTrainingInfo}
-                  </button>
-                  {supportsAverages() && (
-                    <div className="flex items-center ml-auto">
-                      <input
-                        type="checkbox"
-                        id="input-averages"
-                        checked={inputAverages}
-                        onChange={handleAveragesToggle}
-                        className="accent-indigo-600"
-                      />
-                      <label htmlFor="input-averages" className="text-sm text-gray-700 cursor-pointer ml-2">
-                        {t.inputAverages}
-                      </label>
+                {trainingType && (
+                    <div className="mt-2 flex items-center justify-between">
+                    <button
+                        type="button"
+                        className={`
+                        flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
+                        ${showRest ? "text-indigo-700" : "text-gray-600"}
+                        `}
+                        style={{ padding: "2px 0" }}
+                        onClick={() => setShowRest((v) => !v)}
+                        aria-expanded={showRest}
+                        aria-controls="rest-info"
+                    >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                        <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {showRest ? t.hideTrainingInfo : t.showTrainingInfo}
+                    </button>
+                    {supportsAverages() && (
+                        <div className="flex items-center ml-auto">
+                        <input
+                            type="checkbox"
+                            id="input-averages"
+                            checked={inputAverages}
+                            onChange={handleAveragesToggle}
+                            className="accent-indigo-600"
+                        />
+                        <label htmlFor="input-averages" className="text-sm text-gray-700 cursor-pointer ml-2">
+                            {t.inputAverages}
+                        </label>
+                        </div>
+                    )}
                     </div>
-                  )}
-                </div>
-                {showRest && (
+                )}
+                {showRest && trainingType && (
                   <div
                     id="rest-info"
                     className="mt-2 p-3 rounded bg-indigo-50 border border-indigo-100 text-indigo-800 animate-fade-in text-sm"
@@ -597,33 +615,7 @@ export default function App({ lang = "en" }) {
                 `}
                 disabled={loading}
               >
-                {loading ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white inline-block mr-2 align-middle"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      ></path>
-                    </svg>
-                    {t.calculating}
-                  </>
-                ) : (
-                  t.calculate
-                )}
+                {loading ? t.calculating : t.calculate}
               </button>
             </form>
           ) : (
@@ -635,26 +627,28 @@ export default function App({ lang = "en" }) {
                   setTrainingType={setTrainingType}
                   trainingTypes={trainingTypes}
                 />
-                <div className="mt-2 flex items-center">
-                  <button
-                    type="button"
-                    className={`
-                      flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
-                      ${showRest ? "text-indigo-700" : "text-gray-600"}
-                    `}
-                    style={{ padding: "2px 0" }}
-                    onClick={() => setShowRest((v) => !v)}
-                    aria-expanded={showRest}
-                    aria-controls="rest-info"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                      <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    {showRest ? t.hideTrainingInfo : t.showTrainingInfo}
-                  </button>
-                </div>
-                {showRest && (
+                {trainingType && (
+                    <div className="mt-2 flex items-center">
+                    <button
+                        type="button"
+                        className={`
+                        flex items-center gap-1 text-xs font-medium focus:outline-none hover:underline
+                        ${showRest ? "text-indigo-700" : "text-gray-600"}
+                        `}
+                        style={{ padding: "2px 0" }}
+                        onClick={() => setShowRest((v) => !v)}
+                        aria-expanded={showRest}
+                        aria-controls="rest-info"
+                    >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                        <path d="M12 8v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        {showRest ? t.hideTrainingInfo : t.showTrainingInfo}
+                    </button>
+                    </div>
+                )}
+                {showRest && trainingType && (
                   <div
                     id="rest-info"
                     className="mt-2 p-3 rounded bg-indigo-50 border border-indigo-100 text-indigo-800 animate-fade-in text-sm"
@@ -686,33 +680,7 @@ export default function App({ lang = "en" }) {
                 `}
                 disabled={loading}
               >
-                {loading ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white inline-block mr-2 align-middle"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      ></path>
-                    </svg>
-                    {t.calculating}
-                  </>
-                ) : (
-                  t.calculate
-                )}
+                {loading ? t.calculating : t.calculate}
               </button>
             </form>
           )}

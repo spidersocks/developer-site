@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
-const API_URL = "https://poke-team-predictor.onrender.com/predict-teammates";
+// --- CHANGED: Updated API_URL to point to the new unified backend ---
+// The endpoint is now /pokemon/predict-teammates
+const API_URL = "https://unified-backend.fly.dev/pokemon/predict-teammates";
 
-// Fetches the correct sprite for a Pokemon from PokeAPI
-// With consideration for special forms
-
+// --- UNCHANGED: This helper is still needed for the two selected core Pokémon ---
+// The backend does not provide a separate endpoint for fetching individual sprites,
+// so the frontend is still responsible for the two main images.
 async function fetchSpriteUrl(pokeName) {
   const FALLBACKS = {
     "ogerpon-cornerstone": "ogerpon-cornerstone-mask",
@@ -32,31 +34,28 @@ async function fetchSpriteUrl(pokeName) {
       if (!res.ok) continue;
       const data = await res.json();
       const sprite =
-        data.sprites.front_default ||
-        (data.sprites.other &&
-          data.sprites.other["official-artwork"] &&
-          data.sprites.other["official-artwork"].front_default);
+        data.sprites.other["official-artwork"].front_default ||
+        data.sprites.front_default;
       if (sprite) return sprite;
     } catch {}
   }
-  // Transparent fallback
   return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/0.png";
 }
 
-// Converts a Pokémon name to the correct Pikalytics VGC 2025 Regulation I URL.
-//Example: "Calyrex-Ice" -> "https://www.pikalytics.com/pokedex/gen9vgc2025regi/calyrex-ice"
-
+// --- UNCHANGED: This helper function is purely for frontend linking ---
 function toPikalyticsUrl(name) {
   return (
     "https://www.pikalytics.com/pokedex/gen9vgc2025regi/" +
     name
       .toLowerCase()
-      .replace(/[\s.']/g, "-")    // spaces, dots, apostrophes to dash
-      .replace(/[^a-z0-9-]/g, "") // remove anything that's not alphanumeric or dash
+      .replace(/[\s.']/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
   );
 }
 
 export default function PokeTeamPredictorApp() {
+  // --- UNCHANGED: State management and hardcoded list remain the same ---
+  // The backend does not currently offer an endpoint to fetch this list dynamically.
   const [pokemonList] = useState([
     "Mewtwo","Lugia","Ho-Oh","Kyogre","Groudon","Rayquaza","Dialga","Dialga-Origin","Palkia","Palkia-Origin",
     "Giratina","Giratina-Origin","Reshiram","Zekrom","Kyurem","Kyurem-White","Kyurem-Black","Cosmog","Cosmoem",
@@ -66,13 +65,13 @@ export default function PokeTeamPredictorApp() {
   ]);
   const [core1, setCore1] = useState("Calyrex-Ice");
   const [core2, setCore2] = useState("Miraidon");
-  const [core1Img, setCore1Img] = useState("");
-  const [core2Img, setCore2Img] = useState("");
+  const [core1Img, setCore1Img] = useState(null);
+  const [core2Img, setCore2Img] = useState(null);
   const [loading, setLoading] = useState(false);
   const [teammates, setTeammates] = useState([]);
   const [error, setError] = useState("");
 
-  // Fetch sprite for core1 when it changes
+  // --- UNCHANGED: These useEffect hooks are still needed for the core Pokémon images ---
   useEffect(() => {
     let ignore = false;
     fetchSpriteUrl(core1).then(url => {
@@ -81,7 +80,6 @@ export default function PokeTeamPredictorApp() {
     return () => { ignore = true; };
   }, [core1]);
 
-  // Fetch sprite for core2 when it changes
   useEffect(() => {
     let ignore = false;
     fetchSpriteUrl(core2).then(url => {
@@ -90,7 +88,7 @@ export default function PokeTeamPredictorApp() {
     return () => { ignore = true; };
   }, [core2]);
 
-  // Handle prediction request
+  // --- UNCHANGED: The request body and error handling logic are still valid ---
   async function handlePredict(e) {
     e.preventDefault();
     setError("");
@@ -102,7 +100,10 @@ export default function PokeTeamPredictorApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ core1, core2 })
       });
-      if (!resp.ok) throw new Error("Prediction failed. Please try again.");
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => null);
+        throw new Error(errData?.detail || "Prediction failed. The selected core may not be valid.");
+      }
       const data = await resp.json();
       setTeammates(data);
     } catch (err) {
@@ -115,6 +116,8 @@ export default function PokeTeamPredictorApp() {
     return (p * 100).toFixed(1) + "%";
   }
 
+  // --- UNCHANGED: The JSX for rendering the UI remains the same ---
+  // The new backend provides the same response structure, including the `sprite_url` for results.
   return (
     <div className="poke-bg">
       <div className="min-h-screen flex justify-center items-start">
@@ -123,7 +126,6 @@ export default function PokeTeamPredictorApp() {
             Pokémon VGC Teammate Predictor
           </h1>
 
-          {/* Centered dropdowns */}
           <form
             onSubmit={handlePredict}
             className="flex flex-col md:flex-row gap-4 md:gap-8 items-center justify-center mb-10"
@@ -159,7 +161,6 @@ export default function PokeTeamPredictorApp() {
             </div>
           </form>
 
-          {/* Restricted Core display */}
           <div className="mb-8">
             <div className="text-lg font-semibold text-gray-700 mb-6 text-center">
               Restricted Core:
@@ -199,7 +200,6 @@ export default function PokeTeamPredictorApp() {
                 </a>
               </div>
             </div>
-            {/* Centered, larger transparent button below core images */}
             <div className="flex justify-center">
               <button
                 type="button"
@@ -217,7 +217,6 @@ export default function PokeTeamPredictorApp() {
             </div>
           </div>
 
-          {/* Prediction Results */}
           {error && <div className="text-red-600 font-semibold mb-5 text-center">{error}</div>}
 
           {teammates.length > 0 && (
