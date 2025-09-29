@@ -22,7 +22,7 @@ const projects = [
     preview: "/pokemon_preview.jpg",
   },
   {
-    title: "Podcast Project",
+    title: "Podcasting the News",
     description:
       "Large-scale study comparing how news content in podcast systematically differs from that in traditional news. Includes interactive charts.",
     link: "/podcast-project",
