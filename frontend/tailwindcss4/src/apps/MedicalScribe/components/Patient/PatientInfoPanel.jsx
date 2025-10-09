@@ -1,10 +1,53 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 
 export const PatientInfoPanel = ({
   activeConsultation,
   updateConsultation,
   activeConsultationId,
+  onRegenerateNote,
 }) => {
+  const previousPatientInfoRef = useRef(null);
+
+  useEffect(() => {
+    // Initialize the ref on first render
+    if (previousPatientInfoRef.current === null) {
+      previousPatientInfoRef.current = {
+        ...activeConsultation.patientProfile,
+        additionalContext: activeConsultation.additionalContext,
+      };
+      return;
+    }
+
+    // Check if note exists and if patient info has changed
+    if (!activeConsultation.notes) {
+      // Update ref even if no note exists
+      previousPatientInfoRef.current = {
+        ...activeConsultation.patientProfile,
+        additionalContext: activeConsultation.additionalContext,
+      };
+      return;
+    }
+
+    const currentPatientInfo = {
+      ...activeConsultation.patientProfile,
+      additionalContext: activeConsultation.additionalContext,
+    };
+
+    const hasChanged = JSON.stringify(currentPatientInfo) !== JSON.stringify(previousPatientInfoRef.current);
+
+    if (hasChanged) {
+      // Patient info changed and note exists - regenerate
+      console.log('Patient info changed, regenerating note...');
+      onRegenerateNote();
+      previousPatientInfoRef.current = currentPatientInfo;
+    }
+  }, [
+    activeConsultation.patientProfile,
+    activeConsultation.additionalContext,
+    activeConsultation.notes,
+    onRegenerateNote,
+  ]);
+
   return (
     <div className="patient-info-tab">
       <h3>Patient Information</h3>

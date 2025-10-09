@@ -10,6 +10,17 @@ export const DEFAULT_NOTE_TYPES = [
   { id: "consultation", name: "Consultation Note" },
 ];
 
+// ✅ NEW: Default patient profile template
+export const DEFAULT_PATIENT_PROFILE = {
+  name: "",
+  dateOfBirth: "",
+  sex: "",
+  medicalRecordNumber: "",
+  referringPhysician: "",
+  email: "",
+  phoneNumber: "",
+};
+
 export const DEFAULT_CONSULTATION = {
   sessionState: "idle",
   connectionStatus: "disconnected",
@@ -21,18 +32,14 @@ export const DEFAULT_CONSULTATION = {
   error: null,
   language: "en-US",
   speakerRoles: {},
-  activeTab: "transcript",
+  activeTab: "patient",
   hasShownHint: false,
-  patientProfile: {
-    name: "",
-    dateOfBirth: "",
-    sex: "",
-    medicalRecordNumber: "",
-    referringPhysician: "",
-    email: "",
-    phoneNumber: "",
-  },
+  patientProfile: { ...DEFAULT_PATIENT_PROFILE }, // ✅ Use template
   additionalContext: "",
   customNameSet: false,
   noteType: "standard",
+  patientId: null,       
+  patientName: null,     
+  createdAt: null,      
+  updatedAt: null,       
 };

@@ -6,6 +6,7 @@ import {
   UnderlineIcon, StrikethroughIcon, SaveIcon, CancelIcon, DownloadIcon 
 } from '../shared/Icons';
 import { NoteTypeConfirmationModal } from '../shared/Modal';
+import { LoadingAnimation } from '../shared/LoadingAnimation';
 
 export const NoteEditor = ({ 
   notes, 
@@ -152,12 +153,54 @@ export const NoteEditor = ({
   };
 
   const handleCopy = () => {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = formatNotesAsHTML(notes);
-    const textToCopy = tempDiv.textContent;
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const notesElement = document.querySelector('.notes-display');
+    if (!notesElement) return;
+
+    let textContent = '';
+    
+    // Iterate through all child elements
+    notesElement.childNodes.forEach((node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        if (node.tagName === 'DIV') {
+          // Each section container
+          node.childNodes.forEach((childNode) => {
+            if (childNode.nodeType === Node.ELEMENT_NODE) {
+              if (childNode.tagName === 'H3') {
+                // Section headers with spacing
+                textContent += '\n' + childNode.textContent + '\n';
+              } else if (childNode.tagName === 'P') {
+                // Paragraphs with line break
+                textContent += childNode.textContent + '\n';
+              } else if (childNode.tagName === 'UL') {
+                // Handle lists
+                const listItems = childNode.querySelectorAll('li');
+                listItems.forEach(li => {
+                  textContent += '• ' + li.textContent + '\n';
+                });
+                textContent += '\n'; // Extra space after list
+              } else if (childNode.className === 'nested-section') {
+                // Handle nested sections (like ROS)
+                childNode.querySelectorAll('p').forEach(p => {
+                  textContent += p.textContent + '\n';
+                });
+                textContent += '\n';
+              } else {
+                // Other elements
+                textContent += childNode.textContent + '\n';
+              }
+            }
+          });
+        }
+      }
+    });
+
+    // Clean up excessive newlines and copy
+    textContent = textContent.replace(/\n{3,}/g, '\n\n').trim();
+    
+    navigator.clipboard.writeText(textContent).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const handleDownloadPDF = () => {
@@ -470,13 +513,7 @@ export const NoteEditor = ({
   const check = pendingNoteType ? checkNoteTypeAppropriateness(pendingNoteType) : null;
   const recommendedTypeInfo = check ? availableNoteTypes.find(t => t.id === check.recommendedType) : null;
 
-  if (loading)
-    return (
-      <div className="spinner-container">
-        <div className="spinner" />
-        <p>Generating clinical note...</p>
-      </div>
-    );
+  if (loading) return <LoadingAnimation message="Generating clinical note..." />;
   if (error) return <div className="error-box">{error}</div>;
   if (!notes)
     return (

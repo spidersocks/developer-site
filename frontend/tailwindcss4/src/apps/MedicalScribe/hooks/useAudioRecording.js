@@ -7,7 +7,8 @@ export const useAudioRecording = (
   activeConsultationId,
   updateConsultation,
   resetConsultation,
-  setConsultations
+  setConsultations,
+  finalizeConsultationTimestamp
 ) => {
   const websocketRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -254,7 +255,13 @@ export const useAudioRecording = (
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || "An unknown server error occurred.");
+      
       updateConsultation(activeConsultationId, { notes: data.notes, noteType: noteTypeToUse });
+      
+      // ✅ Set consultation timestamp on first note generation
+      if (finalizeConsultationTimestamp) {
+        finalizeConsultationTimestamp(activeConsultationId);
+      }
     } catch (err) {
       updateConsultation(activeConsultationId, {
         error: `Failed to generate final note: ${err.message}`,

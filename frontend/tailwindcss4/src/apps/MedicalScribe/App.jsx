@@ -1,29 +1,35 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
-import { getAssetPath, hasPatientProfileContent, generatePatientName } from "./utils/helpers";
-import { PencilIcon, MenuIcon, CloseIcon } from "./components/shared/Icons";
+import { getAssetPath, hasPatientProfileContent } from "./utils/helpers";
+import { MenuIcon } from "./components/shared/Icons";
 import { useConsultations } from "./hooks/useConsultations";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { TranscriptPanel } from "./components/Transcript/TranscriptPanel";
 import { PatientInfoPanel } from "./components/Patient/PatientInfoPanel";
+import { NewPatientModal } from "./components/Patient/NewPatientModal";
 import { NoteEditor } from "./components/Notes/NoteEditor";
 import { CommandBar } from "./components/Notes/CommandBar";
+import { Sidebar } from "./components/Sidebar/Sidebar";
 
 export default function MedicalScribeApp() {
   const {
     consultations,
+    patients,
     activeConsultation,
     activeConsultationId,
     setActiveConsultationId,
-    addNewConsultation,
+    addNewPatient,
+    addConsultationForPatient,
     updateConsultation,
+    deleteConsultation,
+    deletePatient,
     resetConsultation,
+    finalizeConsultationTimestamp,
     setConsultations,
   } = useConsultations();
 
-  const [editingConsultationId, setEditingConsultationId] = useState(null);
-  const [editingName, setEditingName] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
 
   const transcriptEndRef = useRef(null);
 
@@ -38,7 +44,8 @@ export default function MedicalScribeApp() {
     activeConsultationId,
     updateConsultation,
     resetConsultation,
-    setConsultations
+    setConsultations,
+    finalizeConsultationTimestamp
   );
 
   useEffect(() => {
@@ -47,31 +54,18 @@ export default function MedicalScribeApp() {
 
   const handleRenameConsultation = (id, newName) => {
     updateConsultation(id, { name: newName, customNameSet: true });
-    setEditingConsultationId(null);
-    setEditingName("");
   };
 
-  const handleEditClick = (consultationId, currentName) => {
-    setEditingConsultationId(consultationId);
-    setEditingName(currentName);
+  const handleDeleteConsultation = (id) => {
+    deleteConsultation(id);
+  };
+
+  const handleDeletePatient = (patientId) => {
+    deletePatient(patientId);
   };
 
   const handleTabChange = (tab) => {
     if (!activeConsultation) return;
-    
-    if (
-      activeConsultation.activeTab === "patient" &&
-      tab !== "patient" &&
-      !activeConsultation.customNameSet &&
-      hasPatientProfileContent(activeConsultation.patientProfile)
-    ) {
-      const generatedName = generatePatientName(activeConsultation.patientProfile);
-      if (generatedName) {
-        updateConsultation(activeConsultationId, { name: generatedName, activeTab: tab });
-        return;
-      }
-    }
-    
     updateConsultation(activeConsultationId, { activeTab: tab });
   };
 
@@ -95,6 +89,12 @@ export default function MedicalScribeApp() {
     if (activeConsultation && activeConsultation.transcriptSegments.size > 0) {
       handleGenerateNote();
     }
+  };
+
+  const handleAddNewPatient = (patientData) => {
+    addNewPatient(patientData);
+    setShowNewPatientModal(false);
+    setSidebarOpen(false);
   };
 
   const getStatusDisplay = () => {
@@ -173,99 +173,26 @@ export default function MedicalScribeApp() {
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`} aria-label="Primary">
-        <button className="mobile-sidebar-close" onClick={() => setSidebarOpen(false)}>
-          <CloseIcon />
-        </button>
-        <div className="sidebar-brand">
-          <img
-            src={getAssetPath("/stethoscribe.png")}
-            alt="StethoscribeAI"
-            className="sidebar-logo"
-          />
-        </div>
-
-        {consultations.length === 0 ? (
-          <div className="sidebar-empty centered">
-            <div className="empty-title subtle">No consultations yet</div>
-            <div className="empty-sub">Create your first consultation to get started</div>
-          </div>
-        ) : (
-          <nav className="sidebar-nav">
-            {consultations.map((consultation) => (
-              <div key={consultation.id} className="sidebar-link-wrapper">
-                {editingConsultationId === consultation.id ? (
-                  <input
-                    type="text"
-                    className="sidebar-rename-input"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onBlur={() => handleRenameConsultation(consultation.id, editingName)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleRenameConsultation(consultation.id, editingName);
-                      if (e.key === "Escape") {
-                        setEditingConsultationId(null);
-                        setEditingName("");
-                      }
-                    }}
-                    autoFocus
-                  />
-                ) : (
-                  <>
-                    <a
-                      className={`sidebar-link ${
-                        activeConsultationId === consultation.id ? "active" : ""
-                      }`}
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setActiveConsultationId(consultation.id);
-                        setSidebarOpen(false);
-                      }}
-                      onDoubleClick={() => handleEditClick(consultation.id, consultation.name)}
-                    >
-                      {consultation.name}
-                    </a>
-                    <div 
-                      className="edit-icon-wrapper"
-                      onClick={() => handleEditClick(consultation.id, consultation.name)}
-                    >
-                      <PencilIcon />
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-            <button className="add-consultation-button" onClick={() => {
-              addNewConsultation();
-              setSidebarOpen(false);
-            }}>
-              + Add Consultation
-            </button>
-          </nav>
-        )}
-
-        <div className="sidebar-footer">
-          <div className="user-block">
-            <div className="avatar" aria-hidden="true">
-              D
-            </div>
-            <div className="user-info">
-              <div className="user-name">demoUser</div>
-              <button className="manage-settings">Placeholder</button>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      <Sidebar
+        consultations={consultations}
+        patients={patients}
+        activeConsultationId={activeConsultationId}
+        onConsultationSelect={setActiveConsultationId}
+        onAddConsultationForPatient={addConsultationForPatient}
+        onAddNewPatient={() => setShowNewPatientModal(true)}
+        onRenameConsultation={handleRenameConsultation}
+        onDeleteConsultation={handleDeleteConsultation}
+        onDeletePatient={handleDeletePatient}
+        sidebarOpen={sidebarOpen}
+        onCloseSidebar={() => setSidebarOpen(false)}
+      />
 
       <div className="app-main">
         <button className="mobile-menu-button" onClick={() => setSidebarOpen(true)}>
           <MenuIcon />
         </button>
 
-        {consultations.length === 0 ? (
+        {consultations.length === 0 && patients.length === 0 ? (
           <main className="workspace">
             <div className="panel start-screen-panel">
               <img
@@ -273,8 +200,14 @@ export default function MedicalScribeApp() {
                 alt="StethoscribeAI Icon"
                 className="start-logo"
               />
-              <button className="button button-primary start-button" onClick={addNewConsultation}>
-                New Consultation +
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                Welcome to StethoscribeAI
+              </h2>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '2rem', textAlign: 'center', maxWidth: '400px' }}>
+                Add your first patient to get started
+              </p>
+              <button className="button button-primary start-button" onClick={() => setShowNewPatientModal(true)}>
+                + Add New Patient
               </button>
             </div>
           </main>
@@ -284,33 +217,25 @@ export default function MedicalScribeApp() {
               <div className="panel-header-sticky">
                 <div className="tabs-container">
                   <button
+                    className={`tab-link ${activeConsultation.activeTab === "patient" ? "active" : ""}`}
+                    onClick={() => handleTabChange("patient")}
+                  >
+                    Patient Information
+                  </button>
+                  
+                  <button
                     className={`tab-link ${activeConsultation.activeTab === "transcript" ? "active" : ""}`}
                     onClick={() => handleTabChange("transcript")}
                   >
                     Live Transcript
                   </button>
-                  {hasPatientInfo && (
-                    <button
-                      className={`tab-link ${activeConsultation.activeTab === "patient" ? "active" : ""}`}
-                      onClick={() => handleTabChange("patient")}
-                    >
-                      Patient Information
-                    </button>
-                  )}
+                  
                   <button
                     className={`tab-link ${activeConsultation.activeTab === "note" ? "active" : ""}`}
                     onClick={() => handleTabChange("note")}
                   >
                     Clinical Note
                   </button>
-                  {!hasPatientInfo && (
-                    <button
-                      className={`tab-link add-patient-tab ${activeConsultation.activeTab === "patient" ? "active" : ""}`}
-                      onClick={() => handleTabChange("patient")}
-                    >
-                      + Patient Information
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -330,6 +255,7 @@ export default function MedicalScribeApp() {
                     activeConsultation={activeConsultation}
                     updateConsultation={updateConsultation}
                     activeConsultationId={activeConsultationId}
+                    onRegenerateNote={handleGenerateNote}
                   />
                 ) : (
                   <>
@@ -358,8 +284,34 @@ export default function MedicalScribeApp() {
               </div>
             </div>
           </main>
-        ) : null}
+        ) : (
+          <main className="workspace">
+            <div className="panel start-screen-panel">
+              <img
+                src={getAssetPath("/stethoscribe_icon.png")}
+                alt="StethoscribeAI Icon"
+                className="start-logo"
+              />
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                Select a consultation
+              </h2>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '2rem', textAlign: 'center', maxWidth: '400px' }}>
+                Choose a patient from the sidebar or add a new one
+              </p>
+              <button className="button button-primary start-button" onClick={() => setShowNewPatientModal(true)}>
+                + Add New Patient
+              </button>
+            </div>
+          </main>
+        )}
       </div>
+
+      {showNewPatientModal && (
+        <NewPatientModal
+          onClose={() => setShowNewPatientModal(false)}
+          onSave={handleAddNewPatient}
+        />
+      )}
     </div>
   );
 }
