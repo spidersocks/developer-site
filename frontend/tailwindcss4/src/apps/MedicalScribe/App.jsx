@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
+import { useAuth } from "./AuthGate";
 import { getAssetPath, hasPatientProfileContent } from "./utils/helpers";
 import { MenuIcon } from "./components/shared/Icons";
 import { useConsultations } from "./hooks/useConsultations";
@@ -12,6 +13,8 @@ import { CommandBar } from "./components/Notes/CommandBar";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 
 export default function MedicalScribeApp() {
+  const { signOut: handleSignOut } = useAuth();
+
   const {
     consultations,
     patients,
@@ -50,7 +53,10 @@ export default function MedicalScribeApp() {
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConsultation?.transcriptSegments, activeConsultation?.interimTranscript]);
+  }, [
+    activeConsultation?.transcriptSegments,
+    activeConsultation?.interimTranscript,
+  ]);
 
   const handleRenameConsultation = (id, newName) => {
     updateConsultation(id, { name: newName, customNameSet: true });
@@ -105,13 +111,15 @@ export default function MedicalScribeApp() {
       case "recording":
         return (
           <>
-            <div className="recording-indicator"></div> <span className="status-text">Recording</span>
+            <div className="recording-indicator"></div>{" "}
+            <span className="status-text">Recording</span>
           </>
         );
       case "paused":
         return (
           <>
-            <div className="recording-indicator paused"></div> <span className="status-text">Paused</span>
+            <div className="recording-indicator paused"></div>{" "}
+            <span className="status-text">Paused</span>
           </>
         );
       case "stopped":
@@ -131,7 +139,9 @@ export default function MedicalScribeApp() {
         case "stopped":
           return (
             <button onClick={startSession} className="button button-primary">
-              {activeConsultation.sessionState === "idle" ? "Start Recording" : "New Recording"}
+              {activeConsultation.sessionState === "idle"
+                ? "Start Recording"
+                : "New Recording"}
             </button>
           );
         case "recording":
@@ -161,7 +171,10 @@ export default function MedicalScribeApp() {
         {primary()}
         {(activeConsultation.sessionState === "recording" ||
           activeConsultation.sessionState === "paused") && (
-          <button onClick={handleStopAndGenerate} className="button button-secondary">
+          <button
+            onClick={handleStopAndGenerate}
+            className="button button-secondary"
+          >
             Stop Session
           </button>
         )}
@@ -169,7 +182,9 @@ export default function MedicalScribeApp() {
     );
   };
 
-  const hasPatientInfo = activeConsultation ? hasPatientProfileContent(activeConsultation.patientProfile) : false;
+  const hasPatientInfo = activeConsultation
+    ? hasPatientProfileContent(activeConsultation.patientProfile)
+    : false;
 
   return (
     <div className="app-shell">
@@ -187,6 +202,15 @@ export default function MedicalScribeApp() {
         onCloseSidebar={() => setSidebarOpen(false)}
       />
 
+      <button
+        type="button"
+        className="global-signout-button"
+        onClick={handleSignOut}
+        aria-label="Sign out of StethoscribeAI"
+      >
+        Sign out
+      </button>
+
       <div className="app-main">
         <button className="mobile-menu-button" onClick={() => setSidebarOpen(true)}>
           <MenuIcon />
@@ -200,13 +224,31 @@ export default function MedicalScribeApp() {
                 alt="StethoscribeAI Icon"
                 className="start-logo"
               />
-              <h2 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+              <h2
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "600",
+                  marginBottom: "0.5rem",
+                  color: "var(--text-primary)",
+                }}
+              >
                 Welcome to StethoscribeAI
               </h2>
-              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '2rem', textAlign: 'center', maxWidth: '400px' }}>
+              <p
+                style={{
+                  fontSize: "1rem",
+                  color: "var(--text-secondary)",
+                  marginBottom: "2rem",
+                  textAlign: "center",
+                  maxWidth: "400px",
+                }}
+              >
                 Add your first patient to get started
               </p>
-              <button className="button button-primary start-button" onClick={() => setShowNewPatientModal(true)}>
+              <button
+                className="button button-primary start-button"
+                onClick={() => setShowNewPatientModal(true)}
+              >
                 + Add New Patient
               </button>
             </div>
@@ -217,21 +259,27 @@ export default function MedicalScribeApp() {
               <div className="panel-header-sticky">
                 <div className="tabs-container">
                   <button
-                    className={`tab-link ${activeConsultation.activeTab === "patient" ? "active" : ""}`}
+                    className={`tab-link ${
+                      activeConsultation.activeTab === "patient" ? "active" : ""
+                    }`}
                     onClick={() => handleTabChange("patient")}
                   >
                     Patient Information
                   </button>
-                  
+
                   <button
-                    className={`tab-link ${activeConsultation.activeTab === "transcript" ? "active" : ""}`}
+                    className={`tab-link ${
+                      activeConsultation.activeTab === "transcript" ? "active" : ""
+                    }`}
                     onClick={() => handleTabChange("transcript")}
                   >
                     Live Transcript
                   </button>
-                  
+
                   <button
-                    className={`tab-link ${activeConsultation.activeTab === "note" ? "active" : ""}`}
+                    className={`tab-link ${
+                      activeConsultation.activeTab === "note" ? "active" : ""
+                    }`}
                     onClick={() => handleTabChange("note")}
                   >
                     Clinical Note
@@ -292,13 +340,31 @@ export default function MedicalScribeApp() {
                 alt="StethoscribeAI Icon"
                 className="start-logo"
               />
-              <h2 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+              <h2
+                style={{
+                  fontSize: "1.5rem",
+                  fontWeight: "600",
+                  marginBottom: "0.5rem",
+                  color: "var(--text-primary)",
+                }}
+              >
                 Select a consultation
               </h2>
-              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '2rem', textAlign: 'center', maxWidth: '400px' }}>
+              <p
+                style={{
+                  fontSize: "1rem",
+                  color: "var(--text-secondary)",
+                  marginBottom: "2rem",
+                  textAlign: "center",
+                  maxWidth: "400px",
+                }}
+              >
                 Choose a patient from the sidebar or add a new one
               </p>
-              <button className="button button-primary start-button" onClick={() => setShowNewPatientModal(true)}>
+              <button
+                className="button button-primary start-button"
+                onClick={() => setShowNewPatientModal(true)}
+              >
                 + Add New Patient
               </button>
             </div>

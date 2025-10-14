@@ -5,6 +5,8 @@ import EightHundredCalculatorApp from "./apps/EightHundredCalculator/App";
 import PokeTeamPredictorApp from "./apps/PokeTeamPredictor/App";
 import PodcastProjectApp from "./apps/PodcastProject/App";
 import MedicalScribeApp from "./apps/MedicalScribe/App";
+import MedicalScribeDemo from "./apps/MedicalScribe/MedicalScribeDemo";
+import { AuthGate } from "./apps/MedicalScribe/AuthGate";
 import { Analytics } from "@vercel/analytics/react";
 import About from "./pages/About";
 import Resume from "./pages/Resume";
@@ -53,9 +55,17 @@ export default function App() {
           <Route path="/poke-team-predictor" element={<PokeTeamPredictorApp />} />
           {/* Podcast project and all subroutes */}
           <Route path="/podcast-project/*" element={<PodcastProjectApp />} />
-          {/* Medical scribe project */}
-          <Route path="/medical-scribe" element={<MedicalScribeApp />} />
-
+          {/* Medical scribe demo (public) */}
+          <Route path="/medical-scribe/demo" element={<MedicalScribeDemo />} />
+          {/* Medical scribe project (requires auth) */}
+          <Route
+            path="/medical-scribe"
+            element={
+              <AuthGate>
+                <MedicalScribeApp />
+              </AuthGate>
+            }
+          />
           {/* Catch all for not found components */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,0 +1,141 @@
+ASCII Directory Tree
+developer-site/
+└── frontend/
+    ├── .env.local
+    ├── html/
+    ├── package.json
+    ├── package-lock.json
+    ├── vercel.json
+    ├── vite.config.js
+    └── public/
+        ├── Logo/
+        │   ├── stethoscribe.png
+        │   └── stethoscribe-16x16.png
+        └── audio processor/
+    └── src/
+        ├── aws/
+        │   └── amplifyConfig.js
+        └── apps/
+            └── MedicalScribe/
+                ├── App.jsx
+                ├── App.css
+                ├── AuthGate.jsx
+                ├── AuthGate.module.css
+                ├── MedicalScribeDemo.jsx
+                ├── MedicalScribeDemo.module.css
+                ├── assets/
+                ├── utils/
+                │   ├── helpers.js
+                │   ├── noteFormatters.js
+                │   ├── apiClient.js
+                │   └── constants.js
+                ├── hooks/
+                │   ├── useAudioRecording.js
+                │   └── useConsultations.js
+                └── components/
+                    ├── Notes/
+                    │   ├── NoteEditor.jsx
+                    │   ├── NoteEditor.module.css
+                    │   ├── HighlightedText.jsx
+                    │   ├── HighlightedText.module.css
+                    │   ├── CommandBar.jsx
+                    │   └── CommandBar.module.css
+                    ├── Patient/
+                    │   ├── PatientInfoPanel.jsx
+                    │   ├── PatientInfoPanel.module.css
+                    │   ├── NewPatientModal.jsx
+                    │   └── NewPatientModal.module.css
+                    ├── shared/
+                    │   ├── Icons.jsx
+                    │   ├── LoadingAnimation.jsx
+                    │   ├── LoadingAnimation.module.css
+                    │   ├── Modal.jsx
+                    │   └── Modal.module.css
+                    ├── Sidebar/
+                    │   ├── Sidebar.jsx
+                    │   └── Sidebar.module.css
+                    └── Transcript/
+                        ├── TranscriptPanel.jsx
+                        ├── TranscriptPanel.module.css
+                        ├── TranscriptSegment.jsx
+                        └── TranscriptSegment.module.css
+
+Notes on key files (quick reference)
+
+App.jsx (MedicalScribe)
+Core layout: Sidebar + main workspace
+Tabs: Patient Information, Live Transcript, Clinical Note
+Data/controllers: uses useConsultations.js and useAudioRecording.js
+Renders: TranscriptPanel, PatientInfoPanel, NoteEditor, CommandBar, NewPatientModal, MedicalScribeDemo
+
+App.css
+Defines design tokens (colors, typography, spacing, shadows) and global layout primitives (grid shell, tabs, buttons, modals, etc.).
+All component-specific styling now lives in their respective `.module.css` files.
+
+AuthGate.jsx / AuthGate.module.css
+Route guard handling Cognito sign-in flow, session state, and sign-out UI with scoped styling.
+
+MedicalScribeDemo.jsx / MedicalScribeDemo.module.css
+Demo harness for showcasing the scribe experience; styles isolated via CSS module.
+
+utils/helpers.js
+getAssetPath, getFriendlySpeakerLabel, calculateAge, generate IDs/names
+
+utils/constants.js
+BACKEND_WS_URL, BACKEND_API_URL, DEFAULT_NOTES, DEFAULT_PATIENT_PROFILE, DEFAULT_CONSULTATION
+
+hooks/useConsultations.js
+Manages consultations, patients, activeConsultation
+CRUD actions: addNewPatient, addConsultationForPatient, updateConsultation, deleteConsultation, deletePatient
+Persists to localStorage
+
+hooks/useAudioRecording.js
+WebSocket transcription pipeline
+Audio capture and processing with Web Audio API
+Exposes startSession, stopSession, handlePause, handleResume, handleGenerateNote
+
+components/Sidebar/
+Sidebar.jsx + Sidebar.module.css handle patient grouping, search, consultation actions, and adaptive layout.
+
+components/Transcript/
+TranscriptPanel.jsx + TranscriptPanel.module.css manage language controls, recording status bar, transcript scroll.
+TranscriptSegment.jsx + TranscriptSegment.module.css cover segment layout, speaker label toggles, and translation display.
+
+components/Patient/
+PatientInfoPanel.jsx + module pair manage the patient profile form.
+NewPatientModal.jsx + module pair provide the add-patient dialog styling.
+
+components/Notes/
+NoteEditor.jsx + module pair power the rich text editor UI.
+CommandBar.jsx + module pair style the natural-language command HUD.
+HighlightedText.jsx + module pair render entity highlights with tooltips.
+
+components/shared/
+Modal.jsx + module pair supply the generalized modal shell.
+LoadingAnimation.jsx + module pair provide spinner/empty states.
+Icons.jsx remains purely presentational (SVG exports only).
+
+assets/public
+Logos, icons, and audio-processor worklet remain under `public/`.
+
+note-formatters.js
+formatNotesAsHTML, parseHTMLToNotes (HTML ⇄ notes conversion)
+
+How to read this ASCII diagram
+Hierarchy: Each indentation level represents a deeper package or folder.
+Key modules map to UI pieces:
+UI: App.jsx, TranscriptPanel.jsx, PatientInfoPanel.jsx, NoteEditor.jsx, MedicalScribeDemo.jsx
+Data/State: useConsultations.js, useAudioRecording.js
+Utilities: helpers.js, constants.js, noteFormatters.js
+Shared/UI: Modal.jsx, LoadingAnimation.jsx, Icons.jsx
+
+Data flow (quick mental model):
+Live transcription: useAudioRecording.js streams via WebSocket → TranscriptPanel updates transcriptSegments/interim transcript.
+Note generation: NoteEditor + CommandBar → /generate-final-note endpoint → notes stored in activeConsultation.notes.
+Patient/Consultation management: Sidebar & NewPatientModal feed useConsultations.js.
+
+Styling:
+App.css supplies cross-app tokens and shared primitives; each React component now imports its own `.module.css` for scoped styles, eliminating redundant global classes.
+
+Persistence:
+LocalStorage stores consultations, patients, and activeConsultationId to persist across reloads.

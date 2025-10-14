@@ -1,22 +1,30 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { BACKEND_API_URL } from '../../utils/constants';
-import { formatNotesAsHTML, parseHTMLToNotes } from '../../utils/noteFormatters';
-import { 
-  UndoIcon, RedoIcon, BoldIcon, ItalicIcon, 
-  UnderlineIcon, StrikethroughIcon, SaveIcon, CancelIcon, DownloadIcon 
-} from '../shared/Icons';
-import { NoteTypeConfirmationModal } from '../shared/Modal';
-import { LoadingAnimation } from '../shared/LoadingAnimation';
+import React, { useState, useRef, useEffect } from "react";
+import { BACKEND_API_URL } from "../../utils/constants";
+import { formatNotesAsHTML, parseHTMLToNotes } from "../../utils/noteFormatters";
+import {
+  UndoIcon,
+  RedoIcon,
+  BoldIcon,
+  ItalicIcon,
+  UnderlineIcon,
+  StrikethroughIcon,
+  SaveIcon,
+  CancelIcon,
+  DownloadIcon,
+} from "../shared/Icons";
+import { NoteTypeConfirmationModal } from "../shared/Modal";
+import { LoadingAnimation } from "../shared/LoadingAnimation";
+import styles from "./NoteEditor.module.css";
 
-export const NoteEditor = ({ 
-  notes, 
-  setNotes, 
-  loading, 
-  error, 
-  noteType, 
-  onNoteTypeChange, 
+export const NoteEditor = ({
+  notes,
+  setNotes,
+  loading,
+  error,
+  noteType,
+  onNoteTypeChange,
   onRegenerate,
-  transcriptSegments 
+  transcriptSegments,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
@@ -25,6 +33,7 @@ export const NoteEditor = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingNoteType, setPendingNoteType] = useState(null);
   const editorRef = useRef(null);
+  const notesDisplayRef = useRef(null);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const lastContentRef = useRef("");
@@ -53,78 +62,98 @@ export const NoteEditor = ({
     if (!isEditing) return;
 
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
       }
-      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') || 
-          ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+      if (
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z") ||
+        ((e.ctrlKey || e.metaKey) && e.key === "y")
+      ) {
         e.preventDefault();
         handleRedo();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isEditing, undoStack, redoStack]);
 
   const getFullTranscript = () => {
     if (!transcriptSegments || transcriptSegments.size === 0) return "";
     return Array.from(transcriptSegments.values())
-      .map(seg => seg.displayText || seg.text || "")
+      .map((seg) => seg.displayText || seg.text || "")
       .join(" ");
   };
 
   const checkNoteTypeAppropriateness = (newType) => {
     const transcript = getFullTranscript().toLowerCase();
-    
+
     if (newType === "consultation") {
       const consultIndicators = [
-        'consult', 'asked to see', 'thank you for asking',
-        'referred by dr', 'requested by dr', 'specialist',
-        'consultation requested'
+        "consult",
+        "asked to see",
+        "thank you for asking",
+        "referred by dr",
+        "requested by dr",
+        "specialist",
+        "consultation requested",
       ];
-      const hasConsult = consultIndicators.some(ind => transcript.includes(ind));
-      
+      const hasConsult = consultIndicators.some((ind) =>
+        transcript.includes(ind)
+      );
+
       if (!hasConsult) {
         return {
           appropriate: false,
-          warning: "This transcript appears to be a direct patient visit, not a consultation.",
+          warning:
+            "This transcript appears to be a direct patient visit, not a consultation.",
           recommendedType: "standard",
-          explanation: "Consultation notes are for specialist evaluations requested by another provider."
+          explanation:
+            "Consultation notes are for specialist evaluations requested by another provider.",
         };
       }
     }
-    
+
     if (newType === "hp") {
-      const admissionIndicators = ['admitted', 'admission', 'hospital', 'inpatient'];
-      const hasAdmission = admissionIndicators.some(ind => transcript.includes(ind));
-      
+      const admissionIndicators = [
+        "admitted",
+        "admission",
+        "hospital",
+        "inpatient",
+      ];
+      const hasAdmission = admissionIndicators.some((ind) =>
+        transcript.includes(ind)
+      );
+
       if (!hasAdmission && transcript.length < 3000) {
         return {
           appropriate: false,
-          warning: "H&P notes are typically for hospital admissions or comprehensive evaluations.",
+          warning:
+            "H&P notes are typically for hospital admissions or comprehensive evaluations.",
           recommendedType: "standard",
-          explanation: "For outpatient visits, consider Standard or SOAP notes."
+          explanation: "For outpatient visits, consider Standard or SOAP notes.",
         };
       }
     }
-    
+
     return { appropriate: true };
   };
 
   const getNoteTypeWarning = () => {
     if (!notes) return null;
-    
+
     const check = checkNoteTypeAppropriateness(noteType);
     if (!check.appropriate) {
-      const recommendedTypeName = availableNoteTypes.find(t => t.id === check.recommendedType)?.name || check.recommendedType;
+      const recommendedTypeName =
+        availableNoteTypes.find((t) => t.id === check.recommendedType)?.name ||
+        check.recommendedType;
       return {
         message: `${check.warning} Consider using "${recommendedTypeName}" instead.`,
-        severity: "info"
+        severity: "info",
       };
     }
-    
+
     return null;
   };
 
@@ -153,40 +182,33 @@ export const NoteEditor = ({
   };
 
   const handleCopy = () => {
-    const notesElement = document.querySelector('.notes-display');
+    const notesElement = notesDisplayRef.current;
     if (!notesElement) return;
 
-    let textContent = '';
-    
-    // Iterate through all child elements
+    let textContent = "";
+
     notesElement.childNodes.forEach((node) => {
       if (node.nodeType === Node.ELEMENT_NODE) {
-        if (node.tagName === 'DIV') {
-          // Each section container
+        if (node.tagName === "DIV") {
           node.childNodes.forEach((childNode) => {
             if (childNode.nodeType === Node.ELEMENT_NODE) {
-              if (childNode.tagName === 'H3') {
-                // Section headers with spacing
-                textContent += '\n' + childNode.textContent + '\n';
-              } else if (childNode.tagName === 'P') {
-                // Paragraphs with line break
-                textContent += childNode.textContent + '\n';
-              } else if (childNode.tagName === 'UL') {
-                // Handle lists
-                const listItems = childNode.querySelectorAll('li');
-                listItems.forEach(li => {
-                  textContent += '• ' + li.textContent + '\n';
+              if (childNode.tagName === "H3") {
+                textContent += `\n${childNode.textContent}\n`;
+              } else if (childNode.tagName === "P") {
+                textContent += `${childNode.textContent}\n`;
+              } else if (childNode.tagName === "UL") {
+                const listItems = childNode.querySelectorAll("li");
+                listItems.forEach((li) => {
+                  textContent += `• ${li.textContent}\n`;
                 });
-                textContent += '\n'; // Extra space after list
-              } else if (childNode.className === 'nested-section') {
-                // Handle nested sections (like ROS)
-                childNode.querySelectorAll('p').forEach(p => {
-                  textContent += p.textContent + '\n';
+                textContent += "\n";
+              } else if (childNode.className === styles.nestedSection) {
+                childNode.querySelectorAll("p").forEach((p) => {
+                  textContent += `${p.textContent}\n`;
                 });
-                textContent += '\n';
+                textContent += "\n";
               } else {
-                // Other elements
-                textContent += childNode.textContent + '\n';
+                textContent += `${childNode.textContent}\n`;
               }
             }
           });
@@ -194,9 +216,8 @@ export const NoteEditor = ({
       }
     });
 
-    // Clean up excessive newlines and copy
-    textContent = textContent.replace(/\n{3,}/g, '\n\n').trim();
-    
+    textContent = textContent.replace(/\n{3,}/g, "\n\n").trim();
+
     navigator.clipboard.writeText(textContent).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -204,15 +225,17 @@ export const NoteEditor = ({
   };
 
   const handleDownloadPDF = () => {
-    const noteTypeName = availableNoteTypes.find(t => t.id === noteType)?.name || "Clinical Note";
-    const currentDate = new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const noteTypeName =
+      availableNoteTypes.find((t) => t.id === noteType)?.name ||
+      "Clinical Note";
+    const currentDate = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
 
-    const printWindow = window.open('', '', 'height=800,width=800');
-    
+    const printWindow = window.open("", "", "height=800,width=800");
+
     let htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -311,14 +334,14 @@ export const NoteEditor = ({
 
     Object.entries(notes).forEach(([section, items]) => {
       if (!items || (Array.isArray(items) && items.length === 0)) return;
-      
+
       htmlContent += `<div class="section"><h3>${section}</h3>`;
-      
+
       if (typeof items === "string") {
         if (items === "None") {
           htmlContent += `<p><em>${items}</em></p>`;
         } else if (section === "Assessment and Plan") {
-          items.split("\n").forEach(line => {
+          items.split("\n").forEach((line) => {
             if (line.trim()) htmlContent += `<p>${line.trim()}</p>`;
           });
         } else {
@@ -332,10 +355,12 @@ export const NoteEditor = ({
         htmlContent += "</ul>";
       } else if (typeof items === "object") {
         Object.entries(items).forEach(([key, value]) => {
-          htmlContent += `<p><strong>${key}:</strong> ${typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}</p>`;
+          htmlContent += `<p><strong>${key}:</strong> ${
+            typeof value === "boolean" ? (value ? "Yes" : "No") : value
+          }</p>`;
         });
       }
-      
+
       htmlContent += `</div>`;
     });
 
@@ -346,7 +371,7 @@ export const NoteEditor = ({
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-    
+
     printWindow.onload = () => {
       printWindow.print();
       printWindow.onafterprint = () => printWindow.close();
@@ -356,31 +381,31 @@ export const NoteEditor = ({
   const saveCursorPosition = () => {
     const selection = window.getSelection();
     if (!selection.rangeCount) return null;
-    
+
     const range = selection.getRangeAt(0);
     const preCaretRange = range.cloneRange();
     preCaretRange.selectNodeContents(editorRef.current);
     preCaretRange.setEnd(range.endContainer, range.endOffset);
-    
+
     return {
       offset: preCaretRange.toString().length,
       container: range.endContainer,
-      containerOffset: range.endOffset
+      containerOffset: range.endOffset,
     };
   };
 
   const restoreCursorPosition = (position) => {
     if (!position || !editorRef.current) return;
-    
+
     const selection = window.getSelection();
     const range = document.createRange();
-    
+
     let currentOffset = 0;
     let found = false;
-    
+
     const findNode = (node) => {
       if (found) return;
-      
+
       if (node.nodeType === Node.TEXT_NODE) {
         const nodeLength = node.textContent.length;
         if (currentOffset + nodeLength >= position.offset) {
@@ -397,9 +422,9 @@ export const NoteEditor = ({
         }
       }
     };
-    
+
     findNode(editorRef.current);
-    
+
     if (found) {
       selection.removeAllRanges();
       selection.addRange(range);
@@ -408,18 +433,18 @@ export const NoteEditor = ({
 
   const handleEditorInput = (e) => {
     if (isUpdatingRef.current) return;
-    
+
     const cursorPos = saveCursorPosition();
     const content = e.currentTarget.innerHTML;
-    
+
     if (content !== lastContentRef.current) {
-      setUndoStack(prev => [...prev.slice(-19), lastContentRef.current]);
+      setUndoStack((prev) => [...prev.slice(-19), lastContentRef.current]);
       setRedoStack([]);
       lastContentRef.current = content;
     }
-    
+
     setEditedContent(content);
-    
+
     requestAnimationFrame(() => {
       restoreCursorPosition(cursorPos);
     });
@@ -428,20 +453,20 @@ export const NoteEditor = ({
   const handleUndo = () => {
     if (undoStack.length > 1) {
       isUpdatingRef.current = true;
-      
+
       const newUndoStack = [...undoStack];
       const current = newUndoStack.pop();
       const previous = newUndoStack[newUndoStack.length - 1];
-      
-      setRedoStack(prev => [...prev, current]);
+
+      setRedoStack((prev) => [...prev, current]);
       setUndoStack(newUndoStack);
       setEditedContent(previous);
       lastContentRef.current = previous;
-      
+
       if (editorRef.current) {
         editorRef.current.innerHTML = previous;
       }
-      
+
       setTimeout(() => {
         isUpdatingRef.current = false;
       }, 0);
@@ -451,19 +476,19 @@ export const NoteEditor = ({
   const handleRedo = () => {
     if (redoStack.length > 0) {
       isUpdatingRef.current = true;
-      
+
       const newRedoStack = [...redoStack];
       const next = newRedoStack.pop();
-      
-      setUndoStack(prev => [...prev, next]);
+
+      setUndoStack((prev) => [...prev, next]);
       setRedoStack(newRedoStack);
       setEditedContent(next);
       lastContentRef.current = next;
-      
+
       if (editorRef.current) {
         editorRef.current.innerHTML = next;
       }
-      
+
       setTimeout(() => {
         isUpdatingRef.current = false;
       }, 0);
@@ -478,7 +503,7 @@ export const NoteEditor = ({
   const handleNoteTypeChangeInternal = (e) => {
     const newType = e.target.value;
     const check = checkNoteTypeAppropriateness(newType);
-    
+
     if (!check.appropriate) {
       setPendingNoteType(newType);
       setShowConfirmModal(true);
@@ -509,93 +534,117 @@ export const NoteEditor = ({
   };
 
   const warning = getNoteTypeWarning();
-  const pendingTypeInfo = availableNoteTypes.find(t => t.id === pendingNoteType);
-  const check = pendingNoteType ? checkNoteTypeAppropriateness(pendingNoteType) : null;
-  const recommendedTypeInfo = check ? availableNoteTypes.find(t => t.id === check.recommendedType) : null;
+  const pendingTypeInfo = availableNoteTypes.find(
+    (t) => t.id === pendingNoteType
+  );
+  const check = pendingNoteType
+    ? checkNoteTypeAppropriateness(pendingNoteType)
+    : null;
+  const recommendedTypeInfo = check
+    ? availableNoteTypes.find((t) => t.id === check.recommendedType)
+    : null;
 
   if (loading) return <LoadingAnimation message="Generating clinical note..." />;
   if (error) return <div className="error-box">{error}</div>;
   if (!notes)
     return (
-      <div className="empty-note">
-        <h3>No clinical note yet</h3>
-        <p className="empty-note-sub">Complete a recording session to generate a structured clinical note.</p>
+      <div className={styles.emptyNote}>
+        <h3 className={styles.emptyNoteTitle}>No clinical note yet</h3>
+        <p className={styles.emptyNoteSub}>
+          Complete a recording session to generate a structured clinical note.
+        </p>
       </div>
     );
 
   if (isEditing) {
     return (
       <>
-        <div className="rich-editor-toolbar">
-          <div className="toolbar-section">
-            <button 
-              onClick={handleUndo} 
-              className="toolbar-button" 
+        <div className={styles.richEditorToolbar}>
+          <div className={styles.toolbarSection}>
+            <button
+              type="button"
+              onClick={handleUndo}
+              className={styles.toolbarButton}
               disabled={undoStack.length <= 1}
               title="Undo (Ctrl+Z)"
             >
               <UndoIcon />
             </button>
-            <button 
-              onClick={handleRedo} 
-              className="toolbar-button" 
+            <button
+              type="button"
+              onClick={handleRedo}
+              className={styles.toolbarButton}
               disabled={redoStack.length === 0}
               title="Redo (Ctrl+Y)"
             >
               <RedoIcon />
             </button>
           </div>
-          
-          <div className="toolbar-divider" />
-          
-          <div className="toolbar-section">
-            <button 
-              onClick={() => applyFormat('bold')} 
-              className="toolbar-button"
+
+          <div className={styles.toolbarDivider} />
+
+          <div className={styles.toolbarSection}>
+            <button
+              type="button"
+              onClick={() => applyFormat("bold")}
+              className={styles.toolbarButton}
               title="Bold (Ctrl+B)"
             >
               <BoldIcon />
             </button>
-            <button 
-              onClick={() => applyFormat('italic')} 
-              className="toolbar-button"
+            <button
+              type="button"
+              onClick={() => applyFormat("italic")}
+              className={styles.toolbarButton}
               title="Italic (Ctrl+I)"
             >
               <ItalicIcon />
             </button>
-            <button 
-              onClick={() => applyFormat('underline')} 
-              className="toolbar-button"
+            <button
+              type="button"
+              onClick={() => applyFormat("underline")}
+              className={styles.toolbarButton}
               title="Underline (Ctrl+U)"
             >
               <UnderlineIcon />
             </button>
-            <button 
-              onClick={() => applyFormat('strikeThrough')} 
-              className="toolbar-button"
+            <button
+              type="button"
+              onClick={() => applyFormat("strikeThrough")}
+              className={styles.toolbarButton}
               title="Strikethrough"
             >
               <StrikethroughIcon />
             </button>
           </div>
 
-          <div className="toolbar-divider" />
+          <div className={styles.toolbarDivider} />
 
-          <div className="toolbar-section toolbar-actions">
-            <button onClick={handleCancel} className="toolbar-action-button toolbar-cancel">
+          <div
+            className={`${styles.toolbarSection} ${styles.toolbarActions}`}
+          >
+            <button
+              type="button"
+              onClick={handleCancel}
+              className={`${styles.toolbarActionButton} ${styles.toolbarCancel}`}
+            >
               <CancelIcon />
               <span>Cancel</span>
             </button>
-            <button onClick={handleSave} className="toolbar-action-button toolbar-save">
+            <button
+              type="button"
+              onClick={handleSave}
+              className={`${styles.toolbarActionButton} ${styles.toolbarSave}`}
+            >
               <SaveIcon />
               <span>Save Changes</span>
             </button>
           </div>
         </div>
 
-        <div 
+        <div
           ref={editorRef}
-          className="rich-editor-content"
+          className={styles.richEditorContent}
           contentEditable
           onInput={handleEditorInput}
           suppressContentEditableWarning
@@ -616,15 +665,20 @@ export const NoteEditor = ({
         onConfirm={handleConfirmModalContinue}
         onCancel={handleConfirmModalCancel}
       />
-      
-      <div className="notes-header-controls">
-        <div className="note-type-selector-container">
-          <label htmlFor="note-type-select" className="note-type-label">Note Type:</label>
+
+      <div className={styles.notesHeaderControls}>
+        <div className={styles.noteTypeSelectorContainer}>
+          <label
+            htmlFor="note-type-select"
+            className={styles.noteTypeLabel}
+          >
+            Note Type:
+          </label>
           <select
             id="note-type-select"
             value={noteType}
             onChange={handleNoteTypeChangeInternal}
-            className="note-type-selector"
+            className={styles.noteTypeSelect}
             disabled={loading}
           >
             {availableNoteTypes.map((type) => (
@@ -634,38 +688,63 @@ export const NoteEditor = ({
             ))}
           </select>
         </div>
-        <div className="notes-actions">
-          <button onClick={handleEdit} className="icon-button">
+        <div className={styles.notesActions}>
+          <button
+            type="button"
+            onClick={handleEdit}
+            className={`button ${styles.iconButton}`}
+          >
             ✎ Edit
           </button>
-          <button onClick={handleCopy} className={`icon-button ${copied ? "copied" : ""}`}>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className={`button ${styles.iconButton} ${
+              copied ? styles.iconButtonCopied : ""
+            }`}
+          >
             {copied ? "✓ Copied" : "📋 Copy"}
           </button>
-          <button onClick={handleDownloadPDF} className="icon-button">
+          <button
+            type="button"
+            onClick={handleDownloadPDF}
+            className={`button ${styles.iconButton}`}
+          >
             <DownloadIcon /> PDF
           </button>
         </div>
       </div>
-      
+
       {warning && (
-        <div className={`note-type-hint note-type-hint-${warning.severity}`}>
-          <span className="hint-icon">ℹ️</span>
+        <div
+          className={`${styles.noteTypeHint} ${
+            warning.severity === "warning"
+              ? styles.noteTypeHintWarning
+              : styles.noteTypeHintInfo
+          }`}
+        >
+          <span className={styles.hintIcon}>ℹ️</span>
           <span>{warning.message}</span>
         </div>
       )}
-      
-      <div className="notes-display">
+
+      <div ref={notesDisplayRef} className={styles.notesDisplay}>
         {Object.entries(notes).map(([section, items]) => {
-          if (!items || (Array.isArray(items) && items.length === 0)) return null;
-          
+          if (!items || (Array.isArray(items) && items.length === 0))
+            return null;
+
           return (
             <div key={section}>
               <h3>{section}</h3>
               {typeof items === "string" ? (
                 items === "None" ? (
-                  <p className="none-text">{items}</p>
+                  <p className={styles.noneText}>{items}</p>
                 ) : section === "Assessment and Plan" ? (
-                  items.split("\n").map((line, idx) => (line.trim() ? <p key={idx}>{line.trim()}</p> : null))
+                  items
+                    .split("\n")
+                    .map((line, idx) =>
+                      line.trim() ? <p key={idx}>{line.trim()}</p> : null
+                    )
                 ) : (
                   <p>{items}</p>
                 )
@@ -676,10 +755,11 @@ export const NoteEditor = ({
                   ))}
                 </ul>
               ) : typeof items === "object" ? (
-                <div className="nested-section">
+                <div className={styles.nestedSection}>
                   {Object.entries(items).map(([key, value]) => (
                     <p key={key}>
-                      <strong>{key}:</strong> {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : value}
+                      <strong>{key}:</strong>{" "}
+                      {typeof value === "boolean" ? (value ? "Yes" : "No") : value}
                     </p>
                   ))}
                 </div>

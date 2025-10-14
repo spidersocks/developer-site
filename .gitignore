@@ -1,21 +1,35 @@
-# Ignore Python virtual environment
-venv/
+# === Dev environments & IDEs ===
+.venv/
+.env.*         # optional: e.g. .env.dev, .env.local
+*.code-workspace
+.vscode/
+.idea/
 
-# Ignore Python cache files
-__pycache__/
+frontend/tailwindcss4/.env.local
+
+# === Python tooling ===
+.mypy_cache/
+.pytest_cache/
+ruff_cache/
+.coverage
+coverage/
+htmlcov/
+
+# === Node/Vite builds ===
+frontend/tailwindcss4/node_modules/
+
+# === Logs & runtime junk ===
+*.log
+*.pid
 *.pyc
+*.pyo
+*.pyd
+*.so
+pip-wheel-metadata/
+*.egg-info/
 
-# Ignore Jupyter notebook checkpoints
-.ipynb_checkpoints/
-
-# Ignore node_modules (from React frontend)
-frontend/node_modules/
-
-# Ignore environment variables, secrets, etc.
-.env
-backend/.env
-frontend/.env
-
-# Ignore OS files
+# === Misc ===
+*.sqlite3
+*.db
 .DS_Store
 Thumbs.db

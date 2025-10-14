@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { BACKEND_API_URL } from '../../utils/constants';
+import React, { useState } from "react";
+import { BACKEND_API_URL } from "../../utils/constants";
+import styles from "./CommandBar.module.css";
 
 export const CommandBar = ({ notes, setNotes }) => {
   const [command, setCommand] = useState("");
@@ -12,14 +13,14 @@ export const CommandBar = ({ notes, setNotes }) => {
     setModalContent(null);
     setCopied(false);
   };
-  
+
   const handleCopyResult = () => {
     if (!modalContent) return;
     navigator.clipboard.writeText(modalContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!command.trim() || !notes) return;
@@ -31,7 +32,8 @@ export const CommandBar = ({ notes, setNotes }) => {
         body: JSON.stringify({ note_content: notes, command }),
       });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "An unknown server error occurred.");
+      if (!resp.ok)
+        throw new Error(data.detail || "An unknown server error occurred.");
       setModalTitle(`Result for: "${command}"`);
       setModalContent(data.result);
     } catch (err) {
@@ -45,17 +47,21 @@ export const CommandBar = ({ notes, setNotes }) => {
 
   return (
     <>
-      <div className="command-bar-container">
-        <form onSubmit={handleSubmit} className="command-bar-form">
+      <div className={styles.container}>
+        <form onSubmit={handleSubmit} className={styles.form}>
           <input
             type="text"
-            className="command-bar-input"
+            className={styles.input}
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             placeholder='e.g., "Write a referral letter to a cardiologist for atrial fibrillation"'
             disabled={!notes || isLoading}
           />
-          <button type="submit" className="button command-bar-button" disabled={!notes || isLoading}>
+          <button
+            type="submit"
+            className={`button ${styles.submitButton}`}
+            disabled={!notes || isLoading}
+          >
             {isLoading ? "Working..." : "Execute"}
           </button>
         </form>
@@ -63,10 +69,17 @@ export const CommandBar = ({ notes, setNotes }) => {
 
       {modalContent && (
         <div className="modal-overlay" onClick={handleModalClose}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3 className="modal-title">{modalTitle}</h3>
-              <button className="modal-close-button" onClick={handleModalClose} aria-label="Close">
+              <button
+                className="modal-close-button"
+                onClick={handleModalClose}
+                aria-label="Close"
+              >
                 &times;
               </button>
             </div>

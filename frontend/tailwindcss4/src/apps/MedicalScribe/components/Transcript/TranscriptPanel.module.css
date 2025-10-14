@@ -1,0 +1,111 @@
+.inTranscriptControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+}
+
+.languageSelectorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.languageSelectorContainer label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.languageSelector {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+}
+
+.languageSelector:disabled {
+  background-color: #f1f1f1;
+  cursor: not-allowed;
+}
+
+.recordingControlsBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-panel);
+}
+
+.statusDisplay {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: var(--bg-panel);
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.transcriptBox {
+  flex-grow: 1;
+  overflow-y: auto;
+  font-size: 1rem;
+  line-height: 1.7;
+  padding: 1.25rem;
+}
+
+.interimTranscript {
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+  padding: 0;
+}
+
+/* Responsive tweaks carried over from App.css */
+
+@media (max-width: 1024px) {
+  .inTranscriptControls {
+    padding: 1.5rem 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .action-buttons .button {
+    width: 100%;
+  }
+
+  .recordingControlsBar {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .statusDisplay {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .transcriptBox {
+    padding: 1rem;
+    font-size: 0.95rem;
+  }
+}

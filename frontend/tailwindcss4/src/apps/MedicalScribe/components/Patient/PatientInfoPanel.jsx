@@ -1,4 +1,5 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from "react";
+import styles from "./PatientInfoPanel.module.css";
 
 export const PatientInfoPanel = ({
   activeConsultation,
@@ -9,7 +10,6 @@ export const PatientInfoPanel = ({
   const previousPatientInfoRef = useRef(null);
 
   useEffect(() => {
-    // Initialize the ref on first render
     if (previousPatientInfoRef.current === null) {
       previousPatientInfoRef.current = {
         ...activeConsultation.patientProfile,
@@ -18,9 +18,7 @@ export const PatientInfoPanel = ({
       return;
     }
 
-    // Check if note exists and if patient info has changed
     if (!activeConsultation.notes) {
-      // Update ref even if no note exists
       previousPatientInfoRef.current = {
         ...activeConsultation.patientProfile,
         additionalContext: activeConsultation.additionalContext,
@@ -33,11 +31,11 @@ export const PatientInfoPanel = ({
       additionalContext: activeConsultation.additionalContext,
     };
 
-    const hasChanged = JSON.stringify(currentPatientInfo) !== JSON.stringify(previousPatientInfoRef.current);
+    const hasChanged =
+      JSON.stringify(currentPatientInfo) !==
+      JSON.stringify(previousPatientInfoRef.current);
 
     if (hasChanged) {
-      // Patient info changed and note exists - regenerate
-      console.log('Patient info changed, regenerating note...');
       onRegenerateNote();
       previousPatientInfoRef.current = currentPatientInfo;
     }
@@ -49,11 +47,13 @@ export const PatientInfoPanel = ({
   ]);
 
   return (
-    <div className="patient-info-tab">
-      <h3>Patient Information</h3>
-      <div className="patient-info-grid">
-        <div className="profile-field">
-          <label htmlFor="patient-name">Full Name</label>
+    <div className={styles.container}>
+      <h3 className={styles.heading}>Patient Information</h3>
+      <div className={styles.grid}>
+        <div className={styles.field}>
+          <label htmlFor="patient-name" className={styles.label}>
+            Full Name
+          </label>
           <input
             id="patient-name"
             type="text"
@@ -67,10 +67,13 @@ export const PatientInfoPanel = ({
               })
             }
             placeholder="Patient's full name"
+            className={styles.input}
           />
         </div>
-        <div className="profile-field">
-          <label htmlFor="patient-dob">Date of Birth</label>
+        <div className={styles.field}>
+          <label htmlFor="patient-dob" className={styles.label}>
+            Date of Birth
+          </label>
           <input
             id="patient-dob"
             type="date"
@@ -83,10 +86,13 @@ export const PatientInfoPanel = ({
                 },
               })
             }
+            className={styles.input}
           />
         </div>
-        <div className="profile-field">
-          <label htmlFor="patient-sex">Sex</label>
+        <div className={styles.field}>
+          <label htmlFor="patient-sex" className={styles.label}>
+            Sex
+          </label>
           <select
             id="patient-sex"
             value={activeConsultation.patientProfile.sex}
@@ -98,6 +104,7 @@ export const PatientInfoPanel = ({
                 },
               })
             }
+            className={styles.select}
           >
             <option value="">Select</option>
             <option value="Male">Male</option>
@@ -105,8 +112,10 @@ export const PatientInfoPanel = ({
             <option value="Other">Other</option>
           </select>
         </div>
-        <div className="profile-field">
-          <label htmlFor="patient-mrn">HKID Number</label>
+        <div className={styles.field}>
+          <label htmlFor="patient-mrn" className={styles.label}>
+            HKID Number
+          </label>
           <input
             id="patient-mrn"
             type="text"
@@ -120,10 +129,13 @@ export const PatientInfoPanel = ({
               })
             }
             placeholder="HKID"
+            className={styles.input}
           />
         </div>
-        <div className="profile-field">
-          <label htmlFor="patient-email">Email</label>
+        <div className={styles.field}>
+          <label htmlFor="patient-email" className={styles.label}>
+            Email
+          </label>
           <input
             id="patient-email"
             type="email"
@@ -137,10 +149,13 @@ export const PatientInfoPanel = ({
               })
             }
             placeholder="patient@example.com"
+            className={styles.input}
           />
         </div>
-        <div className="profile-field">
-          <label htmlFor="patient-phone">Phone Number</label>
+        <div className={styles.field}>
+          <label htmlFor="patient-phone" className={styles.label}>
+            Phone Number
+          </label>
           <input
             id="patient-phone"
             type="tel"
@@ -154,10 +169,13 @@ export const PatientInfoPanel = ({
               })
             }
             placeholder="+852 XXXX XXXX"
+            className={styles.input}
           />
         </div>
-        <div className="profile-field full-width">
-          <label htmlFor="referring-physician">Referring Physician</label>
+        <div className={`${styles.field} ${styles.fullWidth}`}>
+          <label htmlFor="referring-physician" className={styles.label}>
+            Referring Physician
+          </label>
           <input
             id="referring-physician"
             type="text"
@@ -171,10 +189,13 @@ export const PatientInfoPanel = ({
               })
             }
             placeholder="Dr. Name"
+            className={styles.input}
           />
         </div>
-        <div className="profile-field full-width">
-          <label htmlFor="additional-context">Additional Context</label>
+        <div className={`${styles.field} ${styles.fullWidth}`}>
+          <label htmlFor="additional-context" className={styles.label}>
+            Additional Context
+          </label>
           <textarea
             id="additional-context"
             value={activeConsultation.additionalContext}
@@ -185,6 +206,7 @@ export const PatientInfoPanel = ({
             }
             placeholder="Paste any relevant patient history, medications, allergies, chronic conditions, or context here..."
             rows={4}
+            className={styles.textarea}
           />
         </div>
       </div>
