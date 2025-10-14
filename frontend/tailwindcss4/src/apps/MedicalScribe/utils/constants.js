@@ -21,6 +21,9 @@ export const DEFAULT_PATIENT_PROFILE = {
   phoneNumber: "",
 };
 
+export const ENABLE_BACKGROUND_SYNC =
+  import.meta?.env?.VITE_ENABLE_BACKGROUND_SYNC === "true";
+
 export const DEFAULT_CONSULTATION = {
   sessionState: "idle",
   connectionStatus: "disconnected",

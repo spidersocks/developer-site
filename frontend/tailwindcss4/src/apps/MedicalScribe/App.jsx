@@ -11,9 +11,11 @@ import { NewPatientModal } from "./components/Patient/NewPatientModal";
 import { NoteEditor } from "./components/Notes/NoteEditor";
 import { CommandBar } from "./components/Notes/CommandBar";
 import { Sidebar } from "./components/Sidebar/Sidebar";
+import { ENABLE_BACKGROUND_SYNC } from "./utils/constants";
+import { syncService } from "./utils/syncService";
 
 export default function MedicalScribeApp() {
-  const { signOut: handleSignOut } = useAuth();
+  const { signOut } = useAuth();
 
   const {
     consultations,
@@ -51,12 +53,65 @@ export default function MedicalScribeApp() {
     finalizeConsultationTimestamp
   );
 
+  const handleSignOut = async () => {
+    if (ENABLE_BACKGROUND_SYNC) {
+      try {
+        await syncService.flushAll();
+      } catch (error) {
+        console.error("[MedicalScribeApp] Final sync before sign-out failed:", error);
+      }
+    }
+
+    await signOut();
+  };
+
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [
     activeConsultation?.transcriptSegments,
     activeConsultation?.interimTranscript,
   ]);
+
+  useEffect(() => {
+    if (!ENABLE_BACKGROUND_SYNC) return undefined;
+
+    let isUnmounted = false;
+    const FLUSH_INTERVAL_MS = 4000;
+
+    const flush = async (reason) => {
+      if (isUnmounted) return;
+      try {
+        await syncService.flushAll();
+      } catch (error) {
+        console.error(`[MedicalScribeApp] Background sync flush failed (${reason}):`, error);
+      }
+    };
+
+    const intervalId = window.setInterval(() => flush("interval"), FLUSH_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        flush("visibilitychange");
+      }
+    };
+
+    const handleOnline = () => flush("online");
+    const handleFocus = () => flush("focus");
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", handleFocus);
+
+    flush("mount");
+
+    return () => {
+      isUnmounted = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   const handleRenameConsultation = (id, newName) => {
     updateConsultation(id, { name: newName, customNameSet: true });
