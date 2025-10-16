@@ -5,14 +5,6 @@ import { syncService } from '../utils/syncService';
 
 /**
  * Custom hook for audio recording and real-time transcription
- * 
- * @param {Object} activeConsultation - Current active consultation
- * @param {string} activeConsultationId - ID of the active consultation
- * @param {Function} updateConsultation - Function to update consultation state
- * @param {Function} resetConsultation - Function to reset consultation state
- * @param {Function} setConsultations - Function to update consultations array
- * @param {Function} finalizeConsultationTimestamp - Function to set final timestamp
- * @returns {Object} Audio recording control functions
  */
 export const useAudioRecording = (
   activeConsultation,
@@ -35,29 +27,43 @@ export const useAudioRecording = (
   }
 
   /**
-   * Prepares a segment for sync by ensuring it has all required fields
-   * 
-   * @param {Object} segment - Transcript segment
-   * @returns {Object} Processed segment ready for sync
+   * Prepares a segment for sync by handling complex nested structures
    */
   const prepareSegmentForSync = useCallback((segment) => {
     if (!segment) return null;
     
-    return {
+    // Create a clean copy with only the fields we need
+    const preparedSegment = {
       id: segment.id,
       speaker: segment.speaker || null,
       text: segment.text || "",
       displayText: segment.displayText || segment.text || "",
       translatedText: segment.translatedText || null,
-      entities: Array.isArray(segment.entities) ? segment.entities : []
+      // Create a simplified version of entities that's safe for DynamoDB
+      entities: Array.isArray(segment.entities) 
+        ? segment.entities.map(entity => ({
+            BeginOffset: entity.BeginOffset || 0,
+            EndOffset: entity.EndOffset || 0,
+            Category: entity.Category || "OTHER",
+            Type: entity.Type || "OTHER",
+            Text: entity.Text || "",
+            Score: typeof entity.Score === 'number' ? entity.Score : 0,
+            // Simplify or omit complex nested structures
+            Traits: Array.isArray(entity.Traits) 
+              ? entity.Traits.map(trait => ({
+                  Name: trait.Name || "",
+                  Score: typeof trait.Score === 'number' ? trait.Score : 0
+                }))
+              : []
+          }))
+        : []
     };
+    
+    return preparedSegment;
   }, []);
 
   /**
    * Synchronizes transcript segments to DynamoDB
-   * 
-   * @param {Array} segments - Array of transcript segments
-   * @param {number} baseIndex - Starting index for segments
    */
   const enqueueSegmentsForSync = useCallback((segments, baseIndex) => {
     if (
@@ -121,6 +127,7 @@ export const useAudioRecording = (
    * Finalizes an interim transcript segment and adds it to the permanent transcript
    */
   const finalizeInterimSegment = useCallback(() => {
+    // Same implementation as before...
     if (!activeConsultation) return;
     const text = (activeConsultation.interimTranscript || '').trim();
     if (!text) return;
@@ -519,7 +526,9 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
-  // New function to debug transcript segment storage
+  /**
+   * Creates a test segment for debugging purposes
+   */
   const debugTranscriptSegments = useCallback(() => {
     if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) return;
     
@@ -527,51 +536,8 @@ export const useAudioRecording = (
       count: activeConsultation.transcriptSegments.size,
       segments: Array.from(activeConsultation.transcriptSegments.entries())
     });
-
-    const syncAllTranscriptSegments = useCallback(() => {
-      if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) return;
-      
-      const segments = Array.from(activeConsultation.transcriptSegments.values());
-      const segmentCount = segments.length;
-      
-      console.info("[useAudioRecording] Syncing all transcript segments", {
-        consultationId: activeConsultationId,
-        segmentCount
-      });
-      
-      if (segmentCount === 0) {
-        console.warn("[useAudioRecording] No segments to sync");
-        return { synced: 0 };
-      }
-      
-      // Process segments to ensure proper structure
-      const processedSegments = segments
-        .map(prepareSegmentForSync)
-        .filter(Boolean);
-      
-      // Sync all segments starting at index 0
-      enqueueSegmentsForSync(processedSegments, 0);
-      
-      return { 
-        synced: processedSegments.length,
-        segments: processedSegments.map(s => s.id) 
-      };
-    }, [activeConsultation, activeConsultationId, enqueueSegmentsForSync, prepareSegmentForSync]);
-
-    // Update the return statement to include the new function
-    return {
-      startSession,
-      stopSession,
-      handlePause,
-      handleResume,
-      handleGenerateNote,
-      finalizeInterimSegment,
-      debugTranscriptSegments,
-      syncAllTranscriptSegments  // Add this line
-    };
     
     // Don't add test segments at index 0, use the actual size of the transcript
-    // This ensures test segments don't overwrite existing segments
     const currentSize = activeConsultation.transcriptSegments.size;
     
     // Create a test segment using the current timestamp so it's unique
@@ -601,6 +567,44 @@ export const useAudioRecording = (
       testSegment
     };
   }, [activeConsultation, activeConsultationId, updateConsultation, enqueueSegmentsForSync]);
+  
+  /**
+   * Syncs all transcript segments to DynamoDB
+   * This is crucial for ensuring all segments persist between sessions
+   */
+  const syncAllTranscriptSegments = useCallback(() => {
+    if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) {
+      console.warn("[useAudioRecording] Cannot sync - no active consultation or sync disabled");
+      return { synced: 0 };
+    }
+    
+    const segments = Array.from(activeConsultation.transcriptSegments.values());
+    const segmentCount = segments.length;
+    
+    console.info("[useAudioRecording] Syncing all transcript segments", {
+      consultationId: activeConsultationId,
+      segmentCount
+    });
+    
+    if (segmentCount === 0) {
+      console.warn("[useAudioRecording] No segments to sync");
+      return { synced: 0 };
+    }
+    
+    // Process segments with the improved prepareSegmentForSync function
+    // This ensures complex nested objects are properly handled
+    const processedSegments = segments
+      .map(prepareSegmentForSync)
+      .filter(Boolean);
+    
+    // Sync all segments starting at index 0
+    enqueueSegmentsForSync(processedSegments, 0);
+    
+    return { 
+      synced: processedSegments.length,
+      segments: processedSegments.map(s => s.id) 
+    };
+  }, [activeConsultation, activeConsultationId, enqueueSegmentsForSync, prepareSegmentForSync]);
 
   return {
     startSession,
@@ -609,6 +613,7 @@ export const useAudioRecording = (
     handleResume,
     handleGenerateNote,
     finalizeInterimSegment,
-    debugTranscriptSegments  // Export for testing
+    debugTranscriptSegments,
+    syncAllTranscriptSegments  // Now correctly exported
   };
 };

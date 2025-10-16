@@ -338,8 +338,9 @@ export default function MedicalScribeApp() {
     
     console.info(`Attempting to sync ALL segments for consultation: ${activeConsultationId}`);
     
-    // Use the new syncAllTranscriptSegments function instead of debugTranscriptSegments
+    // Use syncAllTranscriptSegments to sync ALL existing segments
     const result = syncAllTranscriptSegments();
+    
     console.info("Full transcript sync completed", result);
     
     // Force sync flush to check for any errors
