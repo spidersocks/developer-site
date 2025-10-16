@@ -15,7 +15,10 @@ import { ENABLE_BACKGROUND_SYNC } from "./utils/constants";
 import { syncService } from "./utils/syncService";
 
 export default function MedicalScribeApp() {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+
+  const ownerUserId =
+    user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
 
   const {
     consultations,
@@ -31,12 +34,14 @@ export default function MedicalScribeApp() {
     resetConsultation,
     finalizeConsultationTimestamp,
     setConsultations,
-  } = useConsultations();
+  } = useConsultations(ownerUserId);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
 
   const transcriptEndRef = useRef(null);
+  console.info("[App] ENABLE_BACKGROUND_SYNC =", ENABLE_BACKGROUND_SYNC);
+  console.info("[App] ownerUserId =", ownerUserId);
 
   const {
     startSession,
@@ -58,7 +63,10 @@ export default function MedicalScribeApp() {
       try {
         await syncService.flushAll();
       } catch (error) {
-        console.error("[MedicalScribeApp] Final sync before sign-out failed:", error);
+        console.error(
+          "[MedicalScribeApp] Final sync before sign-out failed:",
+          error
+        );
       }
     }
 
@@ -83,11 +91,17 @@ export default function MedicalScribeApp() {
       try {
         await syncService.flushAll();
       } catch (error) {
-        console.error(`[MedicalScribeApp] Background sync flush failed (${reason}):`, error);
+        console.error(
+          `[MedicalScribeApp] Background sync flush failed (${reason}):`,
+          error
+        );
       }
     };
 
-    const intervalId = window.setInterval(() => flush("interval"), FLUSH_INTERVAL_MS);
+    const intervalId = window.setInterval(
+      () => flush("interval"),
+      FLUSH_INTERVAL_MS
+    );
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -267,7 +281,10 @@ export default function MedicalScribeApp() {
       </button>
 
       <div className="app-main">
-        <button className="mobile-menu-button" onClick={() => setSidebarOpen(true)}>
+        <button
+          className="mobile-menu-button"
+          onClick={() => setSidebarOpen(true)}
+        >
           <MenuIcon />
         </button>
 
@@ -324,7 +341,9 @@ export default function MedicalScribeApp() {
 
                   <button
                     className={`tab-link ${
-                      activeConsultation.activeTab === "transcript" ? "active" : ""
+                      activeConsultation.activeTab === "transcript"
+                        ? "active"
+                        : ""
                     }`}
                     onClick={() => handleTabChange("transcript")}
                   >
@@ -366,20 +385,26 @@ export default function MedicalScribeApp() {
                       <NoteEditor
                         notes={activeConsultation.notes}
                         setNotes={(newNotes) =>
-                          updateConsultation(activeConsultationId, { notes: newNotes })
+                          updateConsultation(activeConsultationId, {
+                            notes: newNotes,
+                          })
                         }
                         loading={activeConsultation.loading}
                         error={activeConsultation.error}
                         noteType={activeConsultation.noteType}
                         onNoteTypeChange={handleNoteTypeChange}
                         onRegenerate={handleGenerateNote}
-                        transcriptSegments={activeConsultation.transcriptSegments}
+                        transcriptSegments={
+                          activeConsultation.transcriptSegments
+                        }
                       />
                     </div>
                     <CommandBar
                       notes={activeConsultation.notes}
                       setNotes={(newNotes) =>
-                        updateConsultation(activeConsultationId, { notes: newNotes })
+                        updateConsultation(activeConsultationId, {
+                          notes: newNotes,
+                        })
                       }
                     />
                   </>

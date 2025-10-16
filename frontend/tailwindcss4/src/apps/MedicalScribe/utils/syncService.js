@@ -1,95 +1,145 @@
-import { DynamoDBClient, BatchWriteItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { BatchWriteItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { ENABLE_BACKGROUND_SYNC } from "./constants";
+import {
+  AWS_REGION,
+  credentialsProvider,
+  getDynamoClient,
+  warmAwsCredentials,
+} from "./awsClients";
 
-const REGION = "us-east-1";
 const SEGMENT_BATCH_LIMIT = 25;
 
-const dynamoClient = ENABLE_BACKGROUND_SYNC
-  ? new DynamoDBClient({ region: REGION })
-  : null;
+if (ENABLE_BACKGROUND_SYNC) {
+  warmAwsCredentials().catch(() => {
+    /* warmAwsCredentials already logged the error */
+  });
+}
 
-/**
- * In-memory FIFO queue so we control when remote writes execute.
- */
+const dynamoClient = ENABLE_BACKGROUND_SYNC ? getDynamoClient() : null;
+
 class SyncQueue {
   constructor() {
     this.items = [];
     this.flushing = false;
   }
 
-  enqueue(task) {
+  enqueue(task, meta = {}) {
     if (!ENABLE_BACKGROUND_SYNC) return;
-    this.items.push(task);
+    this.items.push({ run: task, meta });
+    console.info(
+      "[sync][queue] enqueue",
+      meta.label ?? "task",
+      "pending =",
+      this.items.length
+    );
   }
 
-  async flushAll() {
-    if (!ENABLE_BACKGROUND_SYNC) return;
-    if (this.flushing) return;
-    if (this.items.length === 0) return;
+  async flushAll(reason = "unspecified") {
+    if (!ENABLE_BACKGROUND_SYNC) {
+      console.info(
+        "[sync][queue] flush skipped because background sync disabled"
+      );
+      return;
+    }
+
+    if (this.flushing) {
+      console.info("[sync][queue] flush skipped (already flushing)", { reason });
+      return;
+    }
+
+    if (this.items.length === 0) {
+      console.info("[sync][queue] flush skipped (empty queue)", { reason });
+      return;
+    }
 
     this.flushing = true;
+    console.info("[sync][queue] flush start", {
+      reason,
+      pending: this.items.length,
+    });
+
     try {
       while (this.items.length > 0) {
-        const next = this.items.shift();
-        // Each task returns a promise.
+        const { run, meta } = this.items.shift();
+        console.info(
+          "[sync][queue] executing task",
+          meta.label ?? "task",
+          "remaining =",
+          this.items.length
+        );
         // eslint-disable-next-line no-await-in-loop
-        await next();
+        await run();
+        console.info(
+          "[sync][queue] completed task",
+          meta.label ?? "task"
+        );
       }
+    } catch (error) {
+      console.error("[sync][queue] task failed", error);
+      throw error;
     } finally {
       this.flushing = false;
+      console.info("[sync][queue] flush complete", { reason });
     }
   }
 }
 
 const queue = new SyncQueue();
 
-/**
- * Helper to wrap PutItem calls.
- */
-function putItem(tableName, item) {
+function putItem(tableName, item, debugLabel) {
   return async () => {
     if (!dynamoClient) return;
-    const command = new PutItemCommand({ TableName: tableName, Item: item });
-    await dynamoClient.send(command);
+    console.info("[sync][dynamodb] PutItem", { tableName, debugLabel });
+    await dynamoClient.send(
+      new PutItemCommand({ TableName: tableName, Item: item })
+    );
   };
 }
 
-/**
- * Helper to wrap BatchWriteItem calls for transcripts.
- */
-function batchWriteSegments(requestItems) {
+function batchWriteSegments(requestItems, debugLabel) {
   return async () => {
     if (!dynamoClient) return;
-    const command = new BatchWriteItemCommand({ RequestItems: requestItems });
-    await dynamoClient.send(command);
+    console.info("[sync][dynamodb] BatchWriteItem", {
+      tableName: "medical-scribe-transcript-segments",
+      debugLabel,
+    });
+    await dynamoClient.send(
+      new BatchWriteItemCommand({ RequestItems: requestItems })
+    );
   };
 }
+
+console.info("[sync] ENABLE_BACKGROUND_SYNC", ENABLE_BACKGROUND_SYNC);
+console.info("[sync] AWS_REGION", AWS_REGION);
 
 export const syncService = {
   enqueuePatientUpsert(patient) {
+    console.info("[syncService] enqueuePatientUpsert invoked", patient);
     queue.enqueue(
       putItem("medical-scribe-patients", {
         id: { S: patient.id },
         ownerUserId: { S: patient.ownerUserId },
         displayName: { S: patient.displayName },
         profile: {
-          M: {
-            name: { S: patient.profile.name },
-            dateOfBirth: { S: patient.profile.dateOfBirth },
-            sex: { S: patient.profile.sex },
-            medicalRecordNumber: { S: patient.profile.medicalRecordNumber },
-            referringPhysician: { S: patient.profile.referringPhysician },
-            email: { S: patient.profile.email },
-            phoneNumber: { S: patient.profile.phoneNumber }
-          }
+          M: Object.fromEntries(
+            Object.entries(patient.profile ?? {}).flatMap(([key, value]) => {
+              if (value === undefined || value === null || value === "") return [];
+              return [[key, { S: value }]];
+            })
+          ),
         },
         createdAt: { S: patient.createdAt },
-        ...(patient.updatedAt ? { updatedAt: { S: patient.updatedAt } } : {})
-      })
+        ...(patient.updatedAt ? { updatedAt: { S: patient.updatedAt } } : {}),
+      }),
+      { label: `patient:${patient.id}` }
     );
   },
 
   enqueueConsultationUpsert(consultation) {
+    console.info(
+      "[syncService] enqueueConsultationUpsert invoked",
+      consultation
+    );
     queue.enqueue(
       putItem("medical-scribe-consultations", {
         id: { S: consultation.id },
@@ -99,12 +149,16 @@ export const syncService = {
         title: { S: consultation.title },
         noteType: { S: consultation.noteType },
         language: { S: consultation.language },
-        additionalContext: { S: consultation.additionalContext },
+        additionalContext: { S: consultation.additionalContext ?? "" },
         speakerRoles: {
-          M: Object.entries(consultation.speakerRoles || {}).reduce((acc, [speakerId, role]) => {
-            acc[speakerId] = { S: role };
-            return acc;
-          }, {})
+          M: Object.entries(consultation.speakerRoles || {}).reduce(
+            (acc, [speakerId, role]) => {
+              if (!role) return acc;
+              acc[speakerId] = { S: role };
+              return acc;
+            },
+            {}
+          ),
         },
         sessionState: { S: consultation.sessionState },
         connectionStatus: { S: consultation.connectionStatus },
@@ -112,36 +166,93 @@ export const syncService = {
         customNameSet: { BOOL: Boolean(consultation.customNameSet) },
         activeTab: { S: consultation.activeTab },
         createdAt: { S: consultation.createdAt },
-        updatedAt: { S: consultation.updatedAt }
-      })
+        updatedAt: { S: consultation.updatedAt },
+      }),
+      { label: `consultation:${consultation.id}` }
     );
   },
 
-  enqueueTranscriptSegments(consultationId, segments, startingIndex) {
-    if (!ENABLE_BACKGROUND_SYNC || !segments?.length) return;
+  enqueueClinicalNote(note) {
+    console.info("[syncService] enqueueClinicalNote invoked", note);
+    const item = {
+      id: { S: note.id },
+      ownerUserId: { S: note.ownerUserId },
+      consultationId: { S: note.consultationId },
+      noteType: { S: note.noteType },
+      content: { S: note.content },
+      createdAt: { S: note.createdAt },
+      updatedAt: { S: note.updatedAt },
+    };
 
-    // Chunk to respect Dynamo’s 25 item limit.
+    if (note.title) {
+      item.title = { S: note.title };
+    }
+
+    if (note.language) {
+      item.language = { S: note.language };
+    }
+
+    if (note.summary) {
+      item.summary = { S: note.summary };
+    }
+
+    if (note.status) {
+      item.status = { S: note.status };
+    }
+
+    queue.enqueue(
+      putItem("medical-scribe-clinical-notes", item, note.debugLabel),
+      { label: `clinical-note:${note.id}` }
+    );
+  },
+
+    enqueueTranscriptSegments(consultationId, segments, startingIndex, ownerUserId) {
+      console.info("[syncService] enqueueTranscriptSegments", {
+        consultationId,
+        segmentsLength: segments?.length,
+        startingIndex,
+        ownerUserId,
+      });
+    if (!ENABLE_BACKGROUND_SYNC || !segments?.length) return;
+    if (!ownerUserId) {
+      console.warn("[syncService] missing ownerUserId, skipping batch", {
+        consultationId,
+        startingIndex,
+      });
+      return;
+    }
+
     for (let i = 0; i < segments.length; i += SEGMENT_BATCH_LIMIT) {
       const batch = segments.slice(i, i + SEGMENT_BATCH_LIMIT);
       const batchItems = batch.map((segment, idx) => {
         const segmentIndex = startingIndex + i + idx;
+        if (!Number.isFinite(segmentIndex)) {
+          console.error("[syncService] invalid segmentIndex", {
+            consultationId,
+            startingIndex,
+            i,
+            idx,
+          });
+          return null;
+        }
 
         return {
           PutRequest: {
             Item: {
               consultationId: { S: consultationId },
               segmentIndex: { N: segmentIndex.toString() },
+              ...(ownerUserId ? { ownerUserId: { S: ownerUserId } } : {}),
               segmentId: { S: segment.id },
-              speaker: segment.speaker
-                ? { S: segment.speaker }
-                : { NULL: true },
+              ...(segment.speaker ? { speaker: { S: segment.speaker } } : {}),
               text: { S: segment.text },
-              displayText: { S: segment.displayText },
-              translatedText: segment.translatedText
-                ? { S: segment.translatedText }
-                : { NULL: true },
+              ...(segment.displayText
+                ? { displayText: { S: segment.displayText } }
+                : {}),
+              ...(segment.translatedText
+                ? { translatedText: { S: segment.translatedText } }
+                : {}),
               entities: {
-                L: (segment.entities || []).map(entity => ({
+                L: (segment.entities || []).map((entity) => ({
                   M: {
                     BeginOffset: { N: entity.BeginOffset.toString() },
                     EndOffset: { N: entity.EndOffset.toString() },
@@ -150,32 +261,46 @@ export const syncService = {
                     ...(entity.Traits?.length
                       ? {
                           Traits: {
-                            L: entity.Traits.map(trait => ({
+                            L: entity.Traits.map((trait) => ({
                               M: {
                                 Name: { S: trait.Name },
-                                Score: { N: trait.Score.toString() }
-                              }
-                            }))
-                          }
+                                Score: { N: trait.Score.toString() },
+                              },
+                            })),
+                          },
                         }
-                      : {})
-                  }
-                }))
-              }
-            }
-          }
+                      : {}),
+                  },
+                })),
+              },
+            },
+          },
         };
       });
 
       queue.enqueue(
-        batchWriteSegments({
-          "medical-scribe-transcript-segments": batchItems
-        })
+        batchWriteSegments(
+          {
+            "medical-scribe-transcript-segments": batchItems,
+          },
+          `segments:${consultationId}:${startingIndex + i}-${
+            startingIndex + i + batch.length - 1
+          }`
+        ),
+        { label: `segments:${consultationId}:${startingIndex + i}` }
       );
     }
   },
 
-  async flushAll() {
-    await queue.flushAll();
-  }
+  async flushAll(reason = "manual") {
+    await queue.flushAll(reason);
+  },
 };
+
+if (import.meta.env.DEV) {
+  // eslint-disable-next-line no-console
+  console.info(
+    "[sync] exposing syncService as window.__syncService for debugging"
+  );
+  window.__syncService = syncService;
+}

@@ -29,8 +29,27 @@ export const useAudioRecording = (
       return;
     }
 
-    syncService.enqueueTranscriptSegments(activeConsultationId, segments, baseIndex);
-  };
+  const ownerUserId = activeConsultation?.ownerUserId ?? null;
+    console.info("[useAudioRecording] enqueueSegmentsForSync payload", {
+      activeConsultationId,
+      ownerUserId,
+      segmentsLength: segments.length,
+      baseIndex,
+    });
+   if (!ownerUserId) {
+     console.warn(
+       "[useAudioRecording] enqueueSegmentsForSync skipped: missing ownerUserId",
+       { activeConsultationId, segmentsLength: segments.length, baseIndex }
+     );
+     return;
+   }
+   syncService.enqueueTranscriptSegments(
+     activeConsultationId,
+     segments,
+     baseIndex,
+     ownerUserId
+   );
+ };
 
   // Sync session state ref whenever consultation changes
   if (activeConsultation) {
@@ -119,75 +138,77 @@ export const useAudioRecording = (
         startMicrophone();
       };
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (!data.Transcript?.Results?.length || !data.Transcript.Results[0].Alternatives?.length) {
-            return;
-          }
-
-          const result = data.Transcript.Results[0];
-          const alt = result.Alternatives[0];
-          const transcriptText = alt.Transcript;
-          const firstWord = alt.Items?.find((i) => i.Type === 'pronunciation');
-          const currentSpeaker = firstWord ? firstWord.Speaker : null;
-
-          let pendingSegmentSync = null;
-
-          setConsultations((prevConsultations) => {
-            const consultation = prevConsultations.find((c) => c.id === activeConsultationId);
-            if (!consultation) return prevConsultations;
-
-            if (result.IsPartial) {
-              return prevConsultations.map((c) =>
-                c.id === activeConsultationId
-                  ? {
-                      ...c,
-                      interimTranscript: transcriptText,
-                      interimSpeaker: currentSpeaker
-                    }
-                  : c
-              );
-            }
-
-            const finalSegment = {
-              id: result.ResultId,
-              speaker: currentSpeaker,
-              text: transcriptText,
-              entities: Array.isArray(data.ComprehendEntities) ? data.ComprehendEntities : [],
-              translatedText: data.TranslatedText || null,
-              displayText: data.DisplayText || transcriptText
-            };
-
-            const newSegments = new Map(consultation.transcriptSegments || []);
-            const baseIndex = newSegments.size;
-            newSegments.set(result.ResultId, finalSegment);
-
-            pendingSegmentSync = {
-              segments: [finalSegment],
-              baseIndex
-            };
-
-            return prevConsultations.map((c) =>
-              c.id === activeConsultationId
-                ? {
-                    ...c,
-                    transcriptSegments: newSegments,
-                    interimTranscript: '',
-                    interimSpeaker: null,
-                    hasShownHint: currentSpeaker ? true : c.hasShownHint
-                  }
-                : c
-            );
-          });
-
-          if (pendingSegmentSync) {
-            enqueueSegmentsForSync(pendingSegmentSync.segments, pendingSegmentSync.baseIndex);
-          }
-        } catch (e) {
-          console.error('Error processing message:', e);
-        }
-      };
+             ws.onmessage = (event) => {
+         try {
+           const data = JSON.parse(event.data);
+           const results = data.Transcript?.Results ?? [];
+           if (!results.length) return;
+ 
+           const finalsToQueue = [];
+ 
+           setConsultations((prevConsultations) => {
+             const consultation = prevConsultations.find((c) => c.id === activeConsultationId);
+             if (!consultation) return prevConsultations;
+ 
+             let interimTranscript = consultation.interimTranscript || '';
+             let interimSpeaker = consultation.interimSpeaker || null;
+             let hasShownHint = consultation.hasShownHint;
+             const newSegments = new Map(consultation.transcriptSegments || []);
+ 
+             results.forEach((result) => {
+               const alt = result.Alternatives?.[0];
+               if (!alt) return;
+ 
+               const transcriptText = alt.Transcript;
+               const firstWord = alt.Items?.find((i) => i.Type === 'pronunciation');
+               const currentSpeaker = firstWord ? firstWord.Speaker : null;
+ 
+               if (result.IsPartial) {
+                 interimTranscript = transcriptText;
+                 interimSpeaker = currentSpeaker;
+                 return;
+               }
+ 
+               const finalSegment = {
+                 id: result.ResultId,
+                 speaker: currentSpeaker,
+                 text: transcriptText,
+                 entities: Array.isArray(data.ComprehendEntities)
+                   ? data.ComprehendEntities
+                   : [],
+                 translatedText: data.TranslatedText || null,
+                 displayText: data.DisplayText || transcriptText,
+               };
+ 
+               const baseIndex = newSegments.size;
+               newSegments.set(result.ResultId, finalSegment);
+               finalsToQueue.push({ segments: [finalSegment], baseIndex });
+ 
+               interimTranscript = '';
+               interimSpeaker = null;
+               if (currentSpeaker) hasShownHint = true;
+             });
+ 
+             return prevConsultations.map((c) =>
+               c.id === activeConsultationId
+                 ? {
+                     ...c,
+                     transcriptSegments: newSegments,
+                     interimTranscript,
+                     interimSpeaker,
+                     hasShownHint,
+                   }
+                 : c
+             );
+           });
+ 
+           finalsToQueue.forEach(({ segments, baseIndex }) => {
+             enqueueSegmentsForSync(segments, baseIndex);
+           });
+         } catch (e) {
+           console.error('Error processing message:', e);
+         }
+       };
 
       ws.onerror = (err) => {
         console.error('WebSocket error:', err);
@@ -282,7 +303,6 @@ export const useAudioRecording = (
     if (activeConsultation.additionalContext) {
       patientInfo.additional_context = activeConsultation.additionalContext;
     }
-
     updateConsultation(activeConsultationId, { loading: true, error: null, notes: null });
     try {
       const requestBody = {
@@ -302,6 +322,10 @@ export const useAudioRecording = (
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || 'An unknown server error occurred.');
 
+      console.info("[useAudioRecording] updating consultation with note payload", {
+        noteTypeToUse,
+        notes: data.notes,
+      });
       updateConsultation(activeConsultationId, { notes: data.notes, noteType: noteTypeToUse });
 
       // ✅ Set consultation timestamp on first note generation
