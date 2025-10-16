@@ -527,6 +527,48 @@ export const useAudioRecording = (
       count: activeConsultation.transcriptSegments.size,
       segments: Array.from(activeConsultation.transcriptSegments.entries())
     });
+
+    const syncAllTranscriptSegments = useCallback(() => {
+      if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) return;
+      
+      const segments = Array.from(activeConsultation.transcriptSegments.values());
+      const segmentCount = segments.length;
+      
+      console.info("[useAudioRecording] Syncing all transcript segments", {
+        consultationId: activeConsultationId,
+        segmentCount
+      });
+      
+      if (segmentCount === 0) {
+        console.warn("[useAudioRecording] No segments to sync");
+        return { synced: 0 };
+      }
+      
+      // Process segments to ensure proper structure
+      const processedSegments = segments
+        .map(prepareSegmentForSync)
+        .filter(Boolean);
+      
+      // Sync all segments starting at index 0
+      enqueueSegmentsForSync(processedSegments, 0);
+      
+      return { 
+        synced: processedSegments.length,
+        segments: processedSegments.map(s => s.id) 
+      };
+    }, [activeConsultation, activeConsultationId, enqueueSegmentsForSync, prepareSegmentForSync]);
+
+    // Update the return statement to include the new function
+    return {
+      startSession,
+      stopSession,
+      handlePause,
+      handleResume,
+      handleGenerateNote,
+      finalizeInterimSegment,
+      debugTranscriptSegments,
+      syncAllTranscriptSegments  // Add this line
+    };
     
     // Don't add test segments at index 0, use the actual size of the transcript
     // This ensures test segments don't overwrite existing segments

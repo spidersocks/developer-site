@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
 import { useAuth } from "./AuthGate";
-import { getAssetPath, hasPatientProfileContent } from "./utils/helpers";
+import { getAssetPath } from "./utils/helpers";
 import { MenuIcon } from "./components/shared/Icons";
 import { useConsultations } from "./hooks/useConsultations";
 import { useAudioRecording } from "./hooks/useAudioRecording";
@@ -16,7 +16,7 @@ import { syncService } from "./utils/syncService";
 import { LoadingAnimation } from "./components/shared/LoadingAnimation";
 import './utils/debugUtils';
 
-// Component for the empty state when no consultation is selected
+// Extracted components for better organization
 const EmptyStateView = ({ onAddNewPatient }) => (
   <div className="panel start-screen-panel">
     <img
@@ -24,9 +24,7 @@ const EmptyStateView = ({ onAddNewPatient }) => (
       alt="StethoscribeAI Icon"
       className="start-logo"
     />
-    <h2 className="start-screen-title">
-      Select a consultation
-    </h2>
+    <h2 className="start-screen-title">Select a consultation</h2>
     <p className="start-screen-subtitle">
       Choose a patient from the sidebar or add a new one
     </p>
@@ -39,7 +37,6 @@ const EmptyStateView = ({ onAddNewPatient }) => (
   </div>
 );
 
-// Component for the welcome screen when no patients exist
 const WelcomeScreen = ({ onAddNewPatient }) => (
   <div className="panel start-screen-panel">
     <img
@@ -47,9 +44,7 @@ const WelcomeScreen = ({ onAddNewPatient }) => (
       alt="StethoscribeAI Icon"
       className="start-logo"
     />
-    <h2 className="start-screen-title">
-      Welcome to StethoscribeAI
-    </h2>
+    <h2 className="start-screen-title">Welcome to StethoscribeAI</h2>
     <p className="start-screen-subtitle">
       Add your first patient to get started
     </p>
@@ -62,7 +57,6 @@ const WelcomeScreen = ({ onAddNewPatient }) => (
   </div>
 );
 
-// Component for hydration error state
 const HydrationErrorOverlay = ({ error, onRetry }) => (
   <div className="hydration-error-overlay">
     <div className="hydration-error-content">
@@ -75,7 +69,6 @@ const HydrationErrorOverlay = ({ error, onRetry }) => (
   </div>
 );
 
-// Sync status indicator component
 const SyncStatusIndicator = ({ status }) => {
   if (!ENABLE_BACKGROUND_SYNC) return null;
   
@@ -102,12 +95,12 @@ const SyncStatusIndicator = ({ status }) => {
   );
 };
 
-// Main application component
 export default function MedicalScribeApp() {
+  // Auth & user context
   const { user, signOut } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
 
-  // Consultations hook for managing consultation data
+  // Core application state
   const {
     consultations,
     patients,
@@ -135,9 +128,10 @@ export default function MedicalScribeApp() {
     error: null
   });
 
+  // Refs
   const transcriptEndRef = useRef(null);
   
-  // Audio recording hook
+  // Audio recording control
   const {
     startSession,
     stopSession,
@@ -145,6 +139,7 @@ export default function MedicalScribeApp() {
     handleResume,
     handleGenerateNote,
     debugTranscriptSegments,
+    syncAllTranscriptSegments, // Using the new function
   } = useAudioRecording(
     activeConsultation,
     activeConsultationId,
@@ -154,7 +149,7 @@ export default function MedicalScribeApp() {
     finalizeConsultationTimestamp
   );
 
-  // Function to ensure all transcript data is synced
+  // Force sync of all data
   const ensureSyncComplete = async () => {
     if (!ENABLE_BACKGROUND_SYNC) return;
     
@@ -191,10 +186,7 @@ export default function MedicalScribeApp() {
           error: null 
         });
       } catch (error) {
-        console.error(
-          "[MedicalScribeApp] Final sync before sign-out failed:",
-          error
-        );
+        console.error("[MedicalScribeApp] Final sync before sign-out failed:", error);
         setSyncStatus({ 
           isSyncing: false, 
           lastSynced: null,
@@ -202,11 +194,10 @@ export default function MedicalScribeApp() {
         });
       }
     }
-
     await signOut();
   };
 
-  // Auto-scroll transcript to bottom when new content arrives
+  // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [
@@ -214,18 +205,16 @@ export default function MedicalScribeApp() {
     activeConsultation?.interimTranscript,
   ]);
 
-  // Handle page unload and sync event listeners
+  // Handle page unload sync
   useEffect(() => {
     if (!ENABLE_BACKGROUND_SYNC) return;
   
     const handleBeforeUnload = () => {
-      // This is a synchronous operation that runs before page unload
       syncService.flushAll("page-unload");
-      return null; // No confirmation dialog
+      return null;
     };
     
     window.addEventListener("beforeunload", handleBeforeUnload);
-    
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
@@ -251,10 +240,7 @@ export default function MedicalScribeApp() {
           });
         }
       } catch (error) {
-        console.error(
-          `[MedicalScribeApp] Background sync flush failed (${reason}):`,
-          error
-        );
+        console.error(`[MedicalScribeApp] Background sync flush failed (${reason}):`, error);
         if (!isUnmounted) {
           setSyncStatus({ 
             isSyncing: false, 
@@ -265,17 +251,12 @@ export default function MedicalScribeApp() {
       }
     };
 
-    const intervalId = window.setInterval(
-      () => flush("interval"),
-      FLUSH_INTERVAL_MS
-    );
-
+    const intervalId = window.setInterval(() => flush("interval"), FLUSH_INTERVAL_MS);
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         flush("visibilitychange");
       }
     };
-
     const handleOnline = () => flush("online");
     const handleFocus = () => flush("focus");
     
@@ -294,7 +275,7 @@ export default function MedicalScribeApp() {
     };
   }, []);
 
-  // Handle consultation actions
+  // User interaction handlers
   const handleRenameConsultation = (id, newName) => {
     updateConsultation(id, { name: newName, customNameSet: true });
   };
@@ -346,7 +327,7 @@ export default function MedicalScribeApp() {
     setSidebarOpen(false);
   };
 
-  // Debug function for transcript segments
+  // Debugging function that now syncs ALL transcript segments
   const triggerTranscriptTest = () => {
     console.info("Triggering transcript segments sync test...");
     
@@ -355,11 +336,11 @@ export default function MedicalScribeApp() {
       return;
     }
     
-    console.info(`Attempting to sync a test segment for consultation: ${activeConsultationId}`);
+    console.info(`Attempting to sync ALL segments for consultation: ${activeConsultationId}`);
     
-    // Use the debug function from useAudioRecording
-    const result = debugTranscriptSegments();
-    console.info("Test sync completed", result);
+    // Use the new syncAllTranscriptSegments function instead of debugTranscriptSegments
+    const result = syncAllTranscriptSegments();
+    console.info("Full transcript sync completed", result);
     
     // Force sync flush to check for any errors
     console.info("Forcing sync flush to check for errors...");
@@ -370,11 +351,12 @@ export default function MedicalScribeApp() {
     });
   };
 
-  // Function to display current recording status
+  // Status display helper
   const getStatusDisplay = () => {
     if (!activeConsultation) return null;
     if (activeConsultation.connectionStatus === "error")
       return <span className="status-text status-error">Connection Error</span>;
+    
     switch (activeConsultation.sessionState) {
       case "recording":
         return (
@@ -399,10 +381,12 @@ export default function MedicalScribeApp() {
     }
   };
 
-  // Function to render action buttons based on current state
+  // Action buttons generator
   const renderActionButtons = () => {
     if (!activeConsultation) return null;
-    const primary = () => {
+    
+    // Primary action button based on state
+    const renderPrimaryButton = () => {
       switch (activeConsultation.sessionState) {
         case "idle":
         case "stopped":
@@ -435,9 +419,12 @@ export default function MedicalScribeApp() {
           return null;
       }
     };
+    
     return (
       <div className="action-buttons">
-        {primary()}
+        {renderPrimaryButton()}
+        
+        {/* Stop session button */}
         {(activeConsultation.sessionState === "recording" ||
           activeConsultation.sessionState === "paused") && (
           <button
@@ -463,7 +450,7 @@ export default function MedicalScribeApp() {
     );
   };
 
-  // Render main workspace content based on active tab
+  // Tab content renderer
   const renderTabContent = () => {
     if (!activeConsultation) return null;
 
@@ -505,9 +492,7 @@ export default function MedicalScribeApp() {
                 noteType={activeConsultation.noteType}
                 onNoteTypeChange={handleNoteTypeChange}
                 onRegenerate={handleGenerateNote}
-                transcriptSegments={
-                  activeConsultation.transcriptSegments
-                }
+                transcriptSegments={activeConsultation.transcriptSegments}
               />
             </div>
             <CommandBar
@@ -525,6 +510,7 @@ export default function MedicalScribeApp() {
     }
   };
 
+  // Main render
   return (
     <div className="app-shell">
       <Sidebar
@@ -550,7 +536,6 @@ export default function MedicalScribeApp() {
         Sign out
       </button>
       
-      {/* Sync status indicator */}
       <SyncStatusIndicator status={syncStatus} />
 
       <div className="app-main">
@@ -561,7 +546,6 @@ export default function MedicalScribeApp() {
           <MenuIcon />
         </button>
 
-        {/* Hydration error state */}
         {hydrationState?.status === "error" && (
           <HydrationErrorOverlay 
             error={hydrationState.error}
@@ -569,7 +553,6 @@ export default function MedicalScribeApp() {
           />
         )}
 
-        {/* Main content rendering */}
         <main className="workspace">
           {consultations.length === 0 && patients.length === 0 ? (
             <WelcomeScreen onAddNewPatient={() => setShowNewPatientModal(true)} />
@@ -588,9 +571,7 @@ export default function MedicalScribeApp() {
 
                   <button
                     className={`tab-link ${
-                      activeConsultation.activeTab === "transcript"
-                        ? "active"
-                        : ""
+                      activeConsultation.activeTab === "transcript" ? "active" : ""
                     }`}
                     onClick={() => handleTabChange("transcript")}
                   >
@@ -607,7 +588,6 @@ export default function MedicalScribeApp() {
                   </button>
                 </div>
                 
-                {/* Loading indicator during hydration */}
                 {hydrationState?.status === "loading" && (
                   <div className="hydration-loading-indicator">
                     <div className="loading-spinner"></div>
