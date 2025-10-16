@@ -29,27 +29,39 @@ export const useAudioRecording = (
       return;
     }
 
-  const ownerUserId = activeConsultation?.ownerUserId ?? null;
+    const ownerUserId = activeConsultation?.ownerUserId ?? null;
     console.info("[useAudioRecording] enqueueSegmentsForSync payload", {
       activeConsultationId,
       ownerUserId,
       segmentsLength: segments.length,
       baseIndex,
     });
-   if (!ownerUserId) {
-     console.warn(
-       "[useAudioRecording] enqueueSegmentsForSync skipped: missing ownerUserId",
-       { activeConsultationId, segmentsLength: segments.length, baseIndex }
-     );
-     return;
-   }
-   syncService.enqueueTranscriptSegments(
-     activeConsultationId,
-     segments,
-     baseIndex,
-     ownerUserId
-   );
- };
+    
+    if (!ownerUserId) {
+      console.warn(
+        "[useAudioRecording] enqueueSegmentsForSync skipped: missing ownerUserId",
+        { activeConsultationId, segmentsLength: segments.length, baseIndex }
+      );
+      return;
+    }
+    
+    // Make sure we're passing properly structured segments
+    const processedSegments = segments.map(segment => ({
+      id: segment.id,
+      speaker: segment.speaker,
+      text: segment.text || "",
+      displayText: segment.displayText || segment.text || "",
+      translatedText: segment.translatedText,
+      entities: Array.isArray(segment.entities) ? segment.entities : []
+    }));
+    
+    syncService.enqueueTranscriptSegments(
+      activeConsultationId,
+      processedSegments,
+      baseIndex,
+      ownerUserId
+    );
+  };
 
   // Sync session state ref whenever consultation changes
   if (activeConsultation) {

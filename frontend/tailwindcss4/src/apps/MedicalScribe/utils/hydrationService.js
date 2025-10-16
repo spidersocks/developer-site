@@ -147,46 +147,52 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
   console.info(`[hydrationService] Fetching transcript segments for ${consultations.length} consultations`);
   console.time('fetch-transcript-segments');
   
-  while (queue.length > 0) {
-    const batch = queue.splice(0, MAX_CONCURRENT);
-    await Promise.all(
-      batch.map(async (consultation) => {
-        const consultationId =
-          consultation?.id ?? consultation?.consultationId ?? null;
-        if (!consultationId) return;
+  try {
+    while (queue.length > 0) {
+      const batch = queue.splice(0, MAX_CONCURRENT);
+      await Promise.all(
+        batch.map(async (consultation) => {
+          const consultationId =
+            consultation?.id ?? consultation?.consultationId ?? null;
+          if (!consultationId) return;
 
-        try {
-          let exclusiveStartKey;
-          const segments = [];
+          try {
+            let exclusiveStartKey;
+            const segments = [];
 
-          do {
-            const command = new QueryCommand({
-              TableName: TRANSCRIPT_SEGMENTS_TABLE,
-              KeyConditionExpression: "consultationId = :cid",
-              ExpressionAttributeValues: { ":cid": consultationId },
-              ExclusiveStartKey: exclusiveStartKey,
-              ScanIndexForward: true, // Sort by primary key in ascending order
-            });
+            do {
+              const command = new QueryCommand({
+                TableName: TRANSCRIPT_SEGMENTS_TABLE,
+                KeyConditionExpression: "consultationId = :cid",
+                ExpressionAttributeValues: { ":cid": consultationId },
+                ExclusiveStartKey: exclusiveStartKey,
+                ScanIndexForward: true, // Sort by primary key in ascending order
+              });
 
-            const response = await client.send(command);
-            segments.push(...(response.Items ?? []));
-            exclusiveStartKey = response.LastEvaluatedKey;
-          } while (exclusiveStartKey);
+              const response = await client.send(command);
+              segments.push(...(response.Items ?? []));
+              exclusiveStartKey = response.LastEvaluatedKey;
+            } while (exclusiveStartKey);
 
-          if (segments.length > 0) {
-            byConsultation.set(consultationId, segments);
-            console.info(
-              `[hydrationService] Found ${segments.length} transcript segments for consultation ${consultationId}`
+            if (segments.length > 0) {
+              byConsultation.set(consultationId, segments);
+              console.info(
+                `[hydrationService] Found ${segments.length} transcript segments for consultation ${consultationId}`
+              );
+            } else {
+              console.warn(`[hydrationService] No transcript segments found for consultation ${consultationId}`);
+            }
+          } catch (error) {
+            console.error(
+              `[hydrationService] Error fetching segments for consultation ${consultationId}:`,
+              error
             );
           }
-        } catch (error) {
-          console.error(
-            `[hydrationService] Error fetching segments for consultation ${consultationId}:`,
-            error
-          );
-        }
-      })
-    );
+        })
+      );
+    }
+  } catch (error) {
+    console.error("[hydrationService] Error in transcript segments batch processing:", error);
   }
   
   console.timeEnd('fetch-transcript-segments');

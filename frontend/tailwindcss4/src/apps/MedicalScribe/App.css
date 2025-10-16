@@ -426,6 +426,117 @@ body {
   font-size: 0.95rem;
 }
 
+/* Sync Status Indicator Styles */
+.sync-status-indicator {
+  position: fixed;
+  top: 10px;
+  right: 120px; /* Position to the left of sign out button */
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  z-index: 100;
+}
+
+.sync-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.sync-status-neutral .sync-status-dot {
+  background-color: var(--text-tertiary);
+}
+
+.sync-status-syncing .sync-status-dot {
+  background-color: var(--accent-primary);
+  animation: pulse 1.5s infinite;
+}
+
+.sync-status-success .sync-status-dot {
+  background-color: var(--accent-secondary);
+}
+
+.sync-status-error .sync-status-dot {
+  background-color: var(--accent-danger);
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Hydration Loading Indicator */
+.hydration-loading-indicator {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.loading-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent-primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hydration Error Overlay */
+.hydration-error-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.hydration-error-content {
+  background: var(--bg-panel);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.hydration-error-content h3 {
+  margin-top: 0;
+  color: var(--accent-danger);
+}
+
+.hydration-error-content button {
+  margin-top: 16px;
+}
+
 /* Patient info tab */
 .patient-info-tab {
   padding: 2rem;

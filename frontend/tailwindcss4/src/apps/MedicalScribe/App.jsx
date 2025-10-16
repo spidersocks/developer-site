@@ -13,6 +13,8 @@ import { CommandBar } from "./components/Notes/CommandBar";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ENABLE_BACKGROUND_SYNC } from "./utils/constants";
 import { syncService } from "./utils/syncService";
+// Import debug utility
+import './utils/debugUtils';
 
 export default function MedicalScribeApp() {
   const { user, signOut } = useAuth();
@@ -34,14 +36,46 @@ export default function MedicalScribeApp() {
     resetConsultation,
     finalizeConsultationTimestamp,
     setConsultations,
+    hydrationState,
+    forceHydrate,
   } = useConsultations(ownerUserId);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
+  const [syncStatus, setSyncStatus] = useState({
+    isSyncing: false,
+    lastSynced: null,
+    error: null
+  });
 
   const transcriptEndRef = useRef(null);
   console.info("[App] ENABLE_BACKGROUND_SYNC =", ENABLE_BACKGROUND_SYNC);
   console.info("[App] ownerUserId =", ownerUserId);
+
+  // Function to ensure all transcript data is synced
+  const ensureSyncComplete = async () => {
+    if (!ENABLE_BACKGROUND_SYNC) return;
+    
+    setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+    console.info("[App] Forcing sync flush to ensure data persistence");
+    
+    try {
+      await syncService.flushAll("manual-trigger");
+      setSyncStatus({ 
+        isSyncing: false, 
+        lastSynced: new Date().toISOString(),
+        error: null 
+      });
+      console.info("[App] Sync flush completed successfully");
+    } catch (error) {
+      setSyncStatus({ 
+        isSyncing: false, 
+        lastSynced: null,
+        error: error.message
+      });
+      console.error("[App] Error during manual sync flush:", error);
+    }
+  };
 
   const {
     startSession,
@@ -60,19 +94,31 @@ export default function MedicalScribeApp() {
 
   const handleSignOut = async () => {
     if (ENABLE_BACKGROUND_SYNC) {
+      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
       try {
-        await syncService.flushAll();
+        await syncService.flushAll("sign-out");
+        setSyncStatus({ 
+          isSyncing: false, 
+          lastSynced: new Date().toISOString(),
+          error: null 
+        });
       } catch (error) {
         console.error(
           "[MedicalScribeApp] Final sync before sign-out failed:",
           error
         );
+        setSyncStatus({ 
+          isSyncing: false, 
+          lastSynced: null,
+          error: error.message 
+        });
       }
     }
 
     await signOut();
   };
 
+  // Auto-scroll transcript to bottom when new content arrives
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [
@@ -81,6 +127,23 @@ export default function MedicalScribeApp() {
   ]);
 
   useEffect(() => {
+  if (!ENABLE_BACKGROUND_SYNC) return;
+  
+  const handleBeforeUnload = () => {
+    // This is a synchronous operation that runs before page unload
+    syncService.flushAll("page-unload");
+    return null; // No confirmation dialog
+  };
+  
+  window.addEventListener("beforeunload", handleBeforeUnload);
+  
+  return () => {
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+  };
+}, []);
+
+  // Handle page unload and sync event listeners
+  useEffect(() => {
     if (!ENABLE_BACKGROUND_SYNC) return undefined;
 
     let isUnmounted = false;
@@ -88,13 +151,28 @@ export default function MedicalScribeApp() {
 
     const flush = async (reason) => {
       if (isUnmounted) return;
+      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
       try {
-        await syncService.flushAll();
+        await syncService.flushAll(reason);
+        if (!isUnmounted) {
+          setSyncStatus({ 
+            isSyncing: false, 
+            lastSynced: new Date().toISOString(),
+            error: null 
+          });
+        }
       } catch (error) {
         console.error(
           `[MedicalScribeApp] Background sync flush failed (${reason}):`,
           error
         );
+        if (!isUnmounted) {
+          setSyncStatus({ 
+            isSyncing: false, 
+            lastSynced: null,
+            error: error.message 
+          });
+        }
       }
     };
 
@@ -111,10 +189,18 @@ export default function MedicalScribeApp() {
 
     const handleOnline = () => flush("online");
     const handleFocus = () => flush("focus");
+    
+    // Critical - handle page unload to ensure data is preserved
+    const handleBeforeUnload = () => {
+      // This is synchronous and runs before the page unloads
+      syncService.flushAll("page-unload");
+      return null; // No confirmation dialog
+    };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("online", handleOnline);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     flush("mount");
 
@@ -124,6 +210,7 @@ export default function MedicalScribeApp() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
@@ -159,8 +246,14 @@ export default function MedicalScribeApp() {
     updateConsultation(activeConsultationId, { noteType: newNoteType });
   };
 
-  const handleStopAndGenerate = async () => {
+const handleStopAndGenerate = async () => {
     await stopSession();
+    
+    // Force sync transcript data before generating note
+    if (ENABLE_BACKGROUND_SYNC) {
+      await ensureSyncComplete();
+    }
+    
     if (activeConsultation && activeConsultation.transcriptSegments.size > 0) {
       handleGenerateNote();
     }
@@ -247,13 +340,59 @@ export default function MedicalScribeApp() {
             Stop Session
           </button>
         )}
+        
+        {/* Force sync button */}
+        {ENABLE_BACKGROUND_SYNC && activeConsultation.sessionState === "recording" && (
+          <button 
+            onClick={ensureSyncComplete}
+            className="button button-secondary" 
+            disabled={syncStatus.isSyncing}
+            title="Force sync transcript to database"
+          >
+            {syncStatus.isSyncing ? "Syncing..." : "Force Sync"}
+          </button>
+        )}
       </div>
     );
   };
 
+  // Render sync status indicator
+  const renderSyncStatus = () => {
+    if (!ENABLE_BACKGROUND_SYNC) return null;
+    
+    let statusText = "Not synced";
+    let statusClass = "sync-status-neutral";
+    
+    if (syncStatus.isSyncing) {
+      statusText = "Syncing...";
+      statusClass = "sync-status-syncing";
+    } else if (syncStatus.error) {
+      statusText = `Sync error: ${syncStatus.error}`;
+      statusClass = "sync-status-error";
+    } else if (syncStatus.lastSynced) {
+      const date = new Date(syncStatus.lastSynced);
+      statusText = `Last synced: ${date.toLocaleTimeString()}`;
+      statusClass = "sync-status-success";
+    }
+    
+    return (
+      <div className={`sync-status-indicator ${statusClass}`}>
+        <span className="sync-status-dot"></span>
+        <span className="sync-status-text">{statusText}</span>
+      </div>
+    );
+  };
+  
   const hasPatientInfo = activeConsultation
     ? hasPatientProfileContent(activeConsultation.patientProfile)
     : false;
+
+  // Handle hydration error state
+  const handleRetryHydration = () => {
+    if (forceHydrate) {
+      forceHydrate();
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -279,6 +418,9 @@ export default function MedicalScribeApp() {
       >
         Sign out
       </button>
+      
+      {/* Sync status indicator */}
+      {ENABLE_BACKGROUND_SYNC && renderSyncStatus()}
 
       <div className="app-main">
         <button
@@ -288,6 +430,20 @@ export default function MedicalScribeApp() {
           <MenuIcon />
         </button>
 
+        {/* Hydration error state */}
+        {hydrationState?.status === "error" && (
+          <div className="hydration-error-overlay">
+            <div className="hydration-error-content">
+              <h3>Data Sync Error</h3>
+              <p>There was a problem syncing your data: {hydrationState.error}</p>
+              <button onClick={handleRetryHydration} className="button button-primary">
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Main content rendering logic */}
         {consultations.length === 0 && patients.length === 0 ? (
           <main className="workspace">
             <div className="panel start-screen-panel">
@@ -359,6 +515,14 @@ export default function MedicalScribeApp() {
                     Clinical Note
                   </button>
                 </div>
+                
+                {/* Loading indicator during hydration */}
+                {hydrationState?.status === "loading" && (
+                  <div className="hydration-loading-indicator">
+                    <div className="loading-spinner"></div>
+                    <span>{hydrationState.message || "Loading data..."}</span>
+                  </div>
+                )}
               </div>
 
               <div className="tab-content">

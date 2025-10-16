@@ -371,22 +371,18 @@ export const syncService = {
           return null;
         }
 
-        // Create the PutRequest for this segment
+        // Create the PutRequest for this segment with all required fields
         return {
           PutRequest: {
             Item: {
               consultationId: { S: consultationId },
               segmentIndex: { N: segmentIndex.toString() },
-              ...(ownerUserId ? { ownerUserId: { S: ownerUserId } } : {}),
+              ownerUserId: { S: ownerUserId }, // CRITICAL: Always include ownerUserId
               segmentId: { S: segment.id },
-              ...(segment.speaker ? { speaker: { S: segment.speaker } } : {}),
+              speaker: segment.speaker ? { S: segment.speaker } : { NULL: true },
               text: { S: segment.text || "" },
-              ...(segment.displayText
-                ? { displayText: { S: segment.displayText } }
-                : {}),
-              ...(segment.translatedText
-                ? { translatedText: { S: segment.translatedText } }
-                : {}),
+              displayText: segment.displayText ? { S: segment.displayText } : { S: segment.text || "" },
+              translatedText: segment.translatedText ? { S: segment.translatedText } : { NULL: true },
               entities: {
                 L: (segment.entities || []).map((entity) => ({
                   M: {
