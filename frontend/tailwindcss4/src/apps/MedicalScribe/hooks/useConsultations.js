@@ -430,27 +430,33 @@ export const useConsultations = (ownerUserId = null) => {
           // Process transcript segments
           if (consultationKey && segmentsLookup.has(consultationKey)) {
             const segments = segmentsLookup.get(consultationKey);
-            console.info(`[useConsultations] Converting ${segments.length} transcript segments to Map for consultation ${consultationKey}`);
+            console.info(`[useConsultations] Processing ${segments.length} transcript segments for consultation ${consultationKey}`);
             
             // Create a Map from the transcript segments
             const segmentMap = new Map();
             
             segments.forEach(segment => {
-              const segmentKey = segment.segmentId ?? `${consultationKey}-${segment.segmentIndex ?? 0}`;
+              // Use segmentId as the primary key for the Map
+              const segmentKey = segment.segmentId || segment.id || `segment-${segment.segmentIndex}`;
+              
+              // Log some debugging info for the first segment
+              if (segmentMap.size === 0) {
+                console.info(`[useConsultations] First segment: id=${segmentKey}, text="${segment.text?.substring(0, 30)}..."`);
+              }
+              
               segmentMap.set(segmentKey, {
                 id: segmentKey,
-                speaker: segment.speaker ?? null,
-                text: segment.text ?? "",
-                displayText: segment.displayText ?? segment.text ?? "",
-                translatedText: segment.translatedText ?? null,
+                speaker: segment.speaker || null,
+                text: segment.text || "",
+                displayText: segment.displayText || segment.text || "",
+                translatedText: segment.translatedText || null,
                 entities: Array.isArray(segment.entities) ? segment.entities : []
               });
             });
             
             normalized.transcriptSegments = segmentMap;
             
-            // Log the size to verify it worked
-            console.info(`[useConsultations] Created transcript map with ${segmentMap.size} segments`);
+            console.info(`[useConsultations] Processed ${segmentMap.size} segments for consultation ${consultationKey}`);
           } else if (!(normalized.transcriptSegments instanceof Map)) {
             normalized.transcriptSegments = toTranscriptMap(normalized.transcriptSegments);
           }

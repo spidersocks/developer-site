@@ -162,12 +162,13 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
             console.info(`[hydrationService] Querying segments for consultation ${consultationId}`);
 
             do {
-              const command = new QueryCommand({
+              // Changed from consultationId KeyConditionExpression to use Scan with FilterExpression
+              // This is necessary because the primary key schema might be different
+              const command = new ScanCommand({
                 TableName: TRANSCRIPT_SEGMENTS_TABLE,
-                KeyConditionExpression: "consultationId = :cid",
+                FilterExpression: "consultationId = :cid",
                 ExpressionAttributeValues: { ":cid": consultationId },
                 ExclusiveStartKey: exclusiveStartKey,
-                ScanIndexForward: true, // Sort by primary key in ascending order
               });
 
               const response = await client.send(command);
@@ -187,9 +188,25 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
             } while (exclusiveStartKey);
 
             if (segments.length > 0) {
-              byConsultation.set(consultationId, segments);
+              // Transform the segments to ensure they have all required fields
+              const processedSegments = segments.map(segment => ({
+                consultationId: segment.consultationId,
+                segmentIndex: segment.segmentIndex,
+                segmentId: segment.segmentId,
+                speaker: segment.speaker,
+                text: segment.text || "",
+                displayText: segment.displayText || segment.text || "",
+                translatedText: segment.translatedText || null,
+                entities: Array.isArray(segment.entities) ? segment.entities : [],
+                createdAt: segment.createdAt || new Date().toISOString()
+              }));
+              
+              // Sort by segmentIndex to ensure proper order
+              processedSegments.sort((a, b) => Number(a.segmentIndex) - Number(b.segmentIndex));
+              
+              byConsultation.set(consultationId, processedSegments);
               console.info(
-                `[hydrationService] Found ${segments.length} transcript segments for consultation ${consultationId}`
+                `[hydrationService] Found ${processedSegments.length} transcript segments for consultation ${consultationId}`
               );
             } else {
               console.warn(`[hydrationService] No transcript segments found for consultation ${consultationId}`);
