@@ -156,58 +156,43 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
           if (!consultationId) return;
 
           try {
-            let exclusiveStartKey;
-            const segments = [];
-
-            console.info(`[hydrationService] Querying segments for consultation ${consultationId}`);
-
-            do {
-              // Changed from consultationId KeyConditionExpression to use Scan with FilterExpression
-              // This is necessary because the primary key schema might be different
-              const command = new ScanCommand({
-                TableName: TRANSCRIPT_SEGMENTS_TABLE,
-                FilterExpression: "consultationId = :cid",
-                ExpressionAttributeValues: { ":cid": consultationId },
-                ExclusiveStartKey: exclusiveStartKey,
-              });
-
-              const response = await client.send(command);
-              
-              if (response.Items?.length > 0) {
-                console.info(
-                  `[hydrationService] Found ${response.Items.length} transcript segments in batch for ${consultationId}`
-                );
-                // Log first segment for debugging
-                if (response.Items.length > 0) {
-                  console.info("[hydrationService] First segment sample:", JSON.stringify(response.Items[0]).substring(0, 200) + "...");
-                }
-              }
-              
-              segments.push(...(response.Items ?? []));
-              exclusiveStartKey = response.LastEvaluatedKey;
-            } while (exclusiveStartKey);
-
+            // Try multiple approaches to find segments for this consultation
+            const segments = await fetchSegmentsWithMultipleApproaches(client, consultationId);
+            
             if (segments.length > 0) {
               // Transform the segments to ensure they have all required fields
-              const processedSegments = segments.map(segment => ({
-                consultationId: segment.consultationId,
-                segmentIndex: segment.segmentIndex,
-                segmentId: segment.segmentId,
-                speaker: segment.speaker,
-                text: segment.text || "",
-                displayText: segment.displayText || segment.text || "",
-                translatedText: segment.translatedText || null,
-                entities: Array.isArray(segment.entities) ? segment.entities : [],
-                createdAt: segment.createdAt || new Date().toISOString()
-              }));
+              const processedSegments = segments.map(segment => {
+                // Handle different field naming conventions that might appear in DynamoDB
+                const id = segment.segmentId || segment.id || `segment-${segment.segmentIndex}`;
+                
+                // Create a normalized segment with consistent field names
+                return {
+                  id: id, // Primary key for UI components
+                  segmentId: id, // Ensure we always have segmentId 
+                  consultationId: segment.consultationId || consultationId,
+                  segmentIndex: segment.segmentIndex || 0,
+                  speaker: segment.speaker || null,
+                  text: segment.text || "",
+                  displayText: segment.displayText || segment.text || "",
+                  translatedText: segment.translatedText || null,
+                  entities: Array.isArray(segment.entities) ? segment.entities : [],
+                  createdAt: segment.createdAt || new Date().toISOString()
+                };
+              });
               
               // Sort by segmentIndex to ensure proper order
               processedSegments.sort((a, b) => Number(a.segmentIndex) - Number(b.segmentIndex));
               
-              byConsultation.set(consultationId, processedSegments);
+              // Log some detailed information about what we found
               console.info(
                 `[hydrationService] Found ${processedSegments.length} transcript segments for consultation ${consultationId}`
               );
+              
+              if (processedSegments.length > 0) {
+                console.info("[hydrationService] Sample segment:", JSON.stringify(processedSegments[0]));
+              }
+              
+              byConsultation.set(consultationId, processedSegments);
             } else {
               console.warn(`[hydrationService] No transcript segments found for consultation ${consultationId}`);
             }
@@ -228,6 +213,89 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
   console.info(`[hydrationService] Fetched segments for ${byConsultation.size}/${consultations.length} consultations`);
   return byConsultation;
 };
+
+// Try multiple approaches to find transcript segments for a consultation
+async function fetchSegmentsWithMultipleApproaches(client, consultationId) {
+  const allSegments = [];
+  
+  // Try multiple query approaches to handle different schema possibilities
+  try {
+    // Approach 1: Try Query on consultationId if it's the primary key
+    try {
+      const queryResults = await client.send(new QueryCommand({
+        TableName: TRANSCRIPT_SEGMENTS_TABLE,
+        KeyConditionExpression: "consultationId = :cid",
+        ExpressionAttributeValues: { ":cid": consultationId },
+      }));
+      
+      if (queryResults.Items?.length > 0) {
+        console.info(`[hydrationService] Found ${queryResults.Items.length} segments via direct query`);
+        allSegments.push(...queryResults.Items);
+      }
+    } catch (e) {
+      // If this fails, likely consultationId is not the table's partition key
+      console.info(`[hydrationService] Direct query failed, trying scan: ${e.message}`);
+    }
+    
+    // Approach 2: Scan with FilterExpression on consultationId
+    if (allSegments.length === 0) {
+      let exclusiveStartKey;
+      do {
+        const scanCommand = new ScanCommand({
+          TableName: TRANSCRIPT_SEGMENTS_TABLE,
+          FilterExpression: "consultationId = :cid",
+          ExpressionAttributeValues: { ":cid": consultationId },
+          ExclusiveStartKey: exclusiveStartKey,
+          Limit: 100
+        });
+        
+        const response = await client.send(scanCommand);
+        if (response.Items?.length > 0) {
+          console.info(`[hydrationService] Found ${response.Items.length} segments via scan`);
+          allSegments.push(...response.Items);
+        }
+        
+        exclusiveStartKey = response.LastEvaluatedKey;
+      } while (exclusiveStartKey);
+    }
+    
+    // Approach 3: Try finding by any attribute that might be consultationId
+    if (allSegments.length === 0) {
+      let exclusiveStartKey;
+      do {
+        const scanCommand = new ScanCommand({
+          TableName: TRANSCRIPT_SEGMENTS_TABLE,
+          Limit: 1000,
+          ExclusiveStartKey: exclusiveStartKey
+        });
+        
+        const response = await client.send(scanCommand);
+        if (response.Items?.length > 0) {
+          const filteredItems = response.Items.filter(item => {
+            // Look for consultationId in any field
+            return (
+              item.consultationId === consultationId || 
+              item.consultation_id === consultationId ||
+              item.ConsultationId === consultationId
+            );
+          });
+          
+          if (filteredItems.length > 0) {
+            console.info(`[hydrationService] Found ${filteredItems.length} segments via full table scan`);
+            allSegments.push(...filteredItems);
+          }
+        }
+        
+        exclusiveStartKey = response.LastEvaluatedKey;
+      } while (exclusiveStartKey && allSegments.length === 0); // Stop scanning if we found segments
+    }
+    
+    return allSegments;
+  } catch (error) {
+    console.error(`[hydrationService] All segment fetch approaches failed: ${error}`);
+    return [];
+  }
+}
 
 export const hydrateAll = async (ownerUserId) => {
   if (!ENABLE_BACKGROUND_SYNC) {

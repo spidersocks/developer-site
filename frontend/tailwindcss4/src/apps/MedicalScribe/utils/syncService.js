@@ -384,14 +384,21 @@ export const syncService = {
       return {
         PutRequest: {
           Item: {
+            // Primary DynamoDB keys
             consultationId: { S: consultationId },
             segmentIndex: { N: segmentIndex.toString() },
-            ownerUserId: { S: ownerUserId }, // CRITICAL: Always include ownerUserId
+            
+            // Essential metadata
+            ownerUserId: { S: ownerUserId }, 
             segmentId: { S: segment.id },
+            
+            // Content fields
             speaker: segment.speaker ? { S: segment.speaker } : { NULL: true },
             text: { S: segment.text || "" },
             displayText: segment.displayText ? { S: segment.displayText } : { S: segment.text || "" },
             translatedText: segment.translatedText ? { S: segment.translatedText } : { NULL: true },
+            
+            // Entities as a structured list
             entities: {
               L: (segment.entities || []).map((entity) => ({
                 M: {
@@ -414,6 +421,8 @@ export const syncService = {
                 },
               })),
             },
+            
+            // Timestamps
             createdAt: { S: new Date().toISOString() },
           },
         },
