@@ -3,6 +3,7 @@ import { DEFAULT_CONSULTATION, ENABLE_BACKGROUND_SYNC } from "../utils/constants
 import { generatePatientId, generatePatientName } from "../utils/helpers";
 import { syncService } from "../utils/syncService";
 import { hydrateAll } from "../utils/hydrationService";
+import { syncDeleteConsultation, syncDeletePatient } from "../utils/syncOperations";
 
 /**
  * LocalStorage keys used by the consultations hook.
@@ -89,43 +90,61 @@ export const useConsultations = (ownerUserId = null) => {
   const safeOwnerUserId = ownerUserId ?? null;
   console.info("[useConsultations] safeOwnerUserId =", safeOwnerUserId);
 
-  const [consultations, setConsultations] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.consultations);
-    if (!saved) return [];
+  // Create a single state object to reduce multiple renders
+  const [appState, setAppState] = useState(() => {
+    // Initialize state values from localStorage
     try {
-      const parsed = JSON.parse(saved);
-      return parsed.map((consultation) =>
-        deserializeConsultationFromStorage(consultation, safeOwnerUserId)
-      );
-    } catch {
-      return [];
+      const savedConsultations = localStorage.getItem(STORAGE_KEYS.consultations);
+      const savedActiveId = localStorage.getItem(STORAGE_KEYS.activeConsultationId);
+      const savedPatients = localStorage.getItem(STORAGE_KEYS.patients);
+      
+      // Parse consultations
+      const consultations = savedConsultations 
+        ? JSON.parse(savedConsultations).map(c => 
+            deserializeConsultationFromStorage(c, safeOwnerUserId)
+          ) 
+        : [];
+      
+      // Parse patients
+      const patients = savedPatients 
+        ? JSON.parse(savedPatients).map(p => 
+            deserializePatientFromStorage(p, safeOwnerUserId)
+          ) 
+        : [];
+      
+      return {
+        consultations,
+        patients,
+        activeConsultationId: savedActiveId || null,
+        hydrationState: {
+          status: "idle",
+          error: null,
+          lastSynced: null,
+          progress: 0,
+          message: "",
+          syncVersion: parseInt(localStorage.getItem(STORAGE_KEYS.syncVersion) || "0", 10)
+        }
+      };
+    } catch (error) {
+      console.error("[useConsultations] Error initializing from localStorage:", error);
+      return {
+        consultations: [],
+        patients: [],
+        activeConsultationId: null,
+        hydrationState: {
+          status: "idle",
+          error: null,
+          lastSynced: null,
+          progress: 0,
+          message: "",
+          syncVersion: 0
+        }
+      };
     }
   });
 
-  const [activeConsultationId, setActiveConsultationId] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.activeConsultationId);
-    return saved || null;
-  });
-
-  const [patients, setPatients] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.patients);
-    if (!saved) return [];
-    try {
-      const parsed = JSON.parse(saved);
-      return parsed.map((patient) => deserializePatientFromStorage(patient, safeOwnerUserId));
-    } catch {
-      return [];
-    }
-  });
-
-  const [hydrationState, setHydrationState] = useState({
-    status: "idle", // idle, loading, success, error
-    error: null,
-    lastSynced: null,
-    progress: 0,
-    message: "",
-    syncVersion: parseInt(localStorage.getItem(STORAGE_KEYS.syncVersion) || "0", 10)
-  });
+  // Destructure for easier access
+  const { consultations, patients, activeConsultationId, hydrationState } = appState;
 
   // Force a re-hydration (useful after adding/removing data)
   const forceHydrate = useCallback(async () => {
@@ -133,51 +152,68 @@ export const useConsultations = (ownerUserId = null) => {
       return;
     }
     
-    setHydrationState(prev => ({
+    setAppState(prev => ({
       ...prev,
-      status: "loading",
-      message: "Syncing with database...",
-      progress: 0
+      hydrationState: {
+        ...prev.hydrationState,
+        status: "loading",
+        message: "Syncing with database...",
+        progress: 0
+      }
     }));
     
     try {
       await runHydration();
       
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        status: "success",
-        error: null,
-        lastSynced: new Date().toISOString(),
-        progress: 100,
-        message: "Sync complete"
+        hydrationState: {
+          ...prev.hydrationState,
+          status: "success",
+          error: null,
+          lastSynced: new Date().toISOString(),
+          progress: 100,
+          message: "Sync complete"
+        }
       }));
     } catch (error) {
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        status: "error",
-        error: error.message,
-        progress: 0,
-        message: "Sync failed"
+        hydrationState: {
+          ...prev.hydrationState,
+          status: "error",
+          error: error.message,
+          progress: 0,
+          message: "Sync failed"
+        }
       }));
     }
   }, [safeOwnerUserId]);
 
+  // Persist to localStorage whenever state changes
   useEffect(() => {
-    const toPersist = consultations.map(serializeConsultationForStorage);
-    localStorage.setItem(STORAGE_KEYS.consultations, JSON.stringify(toPersist));
-  }, [consultations]);
-
-  useEffect(() => {
-    if (activeConsultationId) {
-      localStorage.setItem(STORAGE_KEYS.activeConsultationId, activeConsultationId);
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.activeConsultationId);
+    try {
+      // Persist consultations
+      if (consultations?.length >= 0) {
+        const toPersist = consultations.map(serializeConsultationForStorage);
+        localStorage.setItem(STORAGE_KEYS.consultations, JSON.stringify(toPersist));
+      }
+      
+      // Persist patients
+      if (patients?.length >= 0) {
+        localStorage.setItem(STORAGE_KEYS.patients, JSON.stringify(patients));
+      }
+      
+      // Persist active consultation ID
+      if (activeConsultationId) {
+        localStorage.setItem(STORAGE_KEYS.activeConsultationId, activeConsultationId);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.activeConsultationId);
+      }
+    } catch (error) {
+      console.error("[useConsultations] Error persisting state to localStorage:", error);
     }
-  }, [activeConsultationId]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.patients, JSON.stringify(patients));
-  }, [patients]);
+  }, [consultations, patients, activeConsultationId]);
 
   const runHydration = useCallback(async () => {
     if (!ENABLE_BACKGROUND_SYNC || !safeOwnerUserId) {
@@ -186,17 +222,21 @@ export const useConsultations = (ownerUserId = null) => {
     }
 
     try {
-      setHydrationState(prev => ({
-        ...prev, 
-        status: "loading", 
-        message: "Fetching data...",
-        progress: 10
+      setAppState(prev => ({
+        ...prev,
+        hydrationState: {
+          ...prev.hydrationState,
+          status: "loading", 
+          message: "Fetching data...",
+          progress: 10
+        }
       }));
       
       console.info("[useConsultations] remote hydration start", {
         safeOwnerUserId,
       });
 
+      // Fetch remote data
       const {
         patients: remotePatients,
         consultations: remoteConsultations,
@@ -204,26 +244,27 @@ export const useConsultations = (ownerUserId = null) => {
         transcriptSegmentsByConsultation,
       } = await hydrateAll(safeOwnerUserId);
 
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        progress: 50,
-        message: "Processing data..."
+        hydrationState: {
+          ...prev.hydrationState,
+          progress: 50,
+          message: "Processing data..."
+        }
       }));
 
-      if (
-        (remotePatients?.length ?? 0) === 0 &&
-        (remoteConsultations?.length ?? 0) === 0
-      ) {
-        console.info("[useConsultations] no remote data to hydrate", {
-          safeOwnerUserId,
-        });
+      if ((remotePatients?.length ?? 0) === 0 && (remoteConsultations?.length ?? 0) === 0) {
+        console.info("[useConsultations] no remote data to hydrate", { safeOwnerUserId });
         
-        setHydrationState(prev => ({
+        setAppState(prev => ({
           ...prev,
-          status: "success", 
-          progress: 100,
-          message: "No remote data found",
-          lastSynced: new Date().toISOString()
+          hydrationState: {
+            ...prev.hydrationState,
+            status: "success", 
+            progress: 100,
+            message: "No remote data found",
+            lastSynced: new Date().toISOString()
+          }
         }));
         
         return;
@@ -232,8 +273,7 @@ export const useConsultations = (ownerUserId = null) => {
       const notesByConsultation = new Map();
       for (const note of clinicalNotes ?? []) {
         if (!note || !note.consultationId) continue;
-        const current =
-          notesByConsultation.get(note.consultationId) ?? null;
+        const current = notesByConsultation.get(note.consultationId) ?? null;
 
         const currentTimestamp = current
           ? new Date(current.updatedAt ?? current.createdAt ?? 0).getTime()
@@ -257,10 +297,13 @@ export const useConsultations = (ownerUserId = null) => {
         })
       );
 
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        progress: 70,
-        message: "Processing patients and consultations..."
+        hydrationState: {
+          ...prev.hydrationState,
+          progress: 70,
+          message: "Processing patients and consultations..."
+        }
       }));
 
       const normalizedPatients = (remotePatients ?? []).map((patient) =>
@@ -356,10 +399,13 @@ export const useConsultations = (ownerUserId = null) => {
         }
       );
 
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        progress: 90,
-        message: "Finalizing data..."
+        hydrationState: {
+          ...prev.hydrationState,
+          progress: 90,
+          message: "Finalizing data..."
+        }
       }));
 
       // Merge remote and local data, giving preference to remote when in conflict
@@ -415,28 +461,21 @@ export const useConsultations = (ownerUserId = null) => {
         }
       }
 
-      // Set the new merged state
-      setPatients(mergedPatients);
-      setConsultations(mergedConsultations);
-
-      // Update active consultation if none is selected
+      // Find the most recent consultation if needed
+      let nextActiveId = activeConsultationId;
       if (!activeConsultationId && mergedConsultations.length > 0) {
         const mostRecent = mergedConsultations.reduce(
           (acc, curr) => {
             if (!acc) return curr;
-            const accTime = new Date(
-              acc.updatedAt ?? acc.createdAt ?? 0
-            ).getTime();
-            const currTime = new Date(
-              curr.updatedAt ?? curr.createdAt ?? 0
-            ).getTime();
+            const accTime = new Date(acc.updatedAt ?? acc.createdAt ?? 0).getTime();
+            const currTime = new Date(curr.updatedAt ?? curr.createdAt ?? 0).getTime();
             return currTime > accTime ? curr : acc;
           },
           null
         );
-
+        
         if (mostRecent?.id) {
-          setActiveConsultationId(mostRecent.id);
+          nextActiveId = mostRecent.id;
         }
       }
 
@@ -444,15 +483,22 @@ export const useConsultations = (ownerUserId = null) => {
       const newVersion = hydrationState.syncVersion + 1;
       localStorage.setItem(STORAGE_KEYS.syncVersion, newVersion.toString());
       localStorage.setItem(STORAGE_KEYS.lastSyncTimestamp, new Date().toISOString());
-      
-      setHydrationState(prev => ({
+
+      // Apply all updates in a single state update - this is the key optimization!
+      setAppState(prev => ({
         ...prev,
-        status: "success",
-        progress: 100,
-        message: "Sync complete",
-        syncVersion: newVersion,
-        lastSynced: new Date().toISOString(),
-        error: null
+        patients: mergedPatients,
+        consultations: mergedConsultations,
+        activeConsultationId: nextActiveId,
+        hydrationState: {
+          ...prev.hydrationState,
+          status: "success",
+          progress: 100,
+          message: "Sync complete",
+          syncVersion: newVersion,
+          lastSynced: new Date().toISOString(),
+          error: null
+        }
       }));
 
       console.info("[useConsultations] remote hydration complete", {
@@ -462,14 +508,17 @@ export const useConsultations = (ownerUserId = null) => {
       });
     } catch (error) {
       console.error("[useConsultations] remote hydration failed", error);
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        status: "error",
-        message: `Sync failed: ${error.message}`,
-        error: error.message
+        hydrationState: {
+          ...prev.hydrationState,
+          status: "error",
+          message: `Sync failed: ${error.message}`,
+          error: error.message
+        }
       }));
     }
-  }, [safeOwnerUserId, patients, consultations, activeConsultationId]);
+  }, [safeOwnerUserId, patients, consultations, activeConsultationId, hydrationState.syncVersion]);
 
   // Initial hydration effect
   useEffect(() => {
@@ -494,11 +543,14 @@ export const useConsultations = (ownerUserId = null) => {
         threshold: syncThreshold / 1000,
       });
       
-      setHydrationState(prev => ({
+      setAppState(prev => ({
         ...prev,
-        status: "success",
-        message: "Using cached data",
-        lastSynced: lastSyncTimestamp
+        hydrationState: {
+          ...prev.hydrationState,
+          status: "success",
+          message: "Using cached data",
+          lastSynced: lastSyncTimestamp
+        }
       }));
       
       return;
@@ -642,9 +694,11 @@ export const useConsultations = (ownerUserId = null) => {
 
     let patientForSync = null;
 
-    setPatients((prev) => {
-      const existing = prev.find((p) => p.id === patientId);
+    setAppState(prevState => {
+      const prevPatients = prevState.patients;
+      const existing = prevPatients.find((p) => p.id === patientId);
 
+      let updatedPatients;
       if (existing) {
         const updatedPatient = {
           ...existing,
@@ -655,23 +709,27 @@ export const useConsultations = (ownerUserId = null) => {
           ownerUserId: existing.ownerUserId ?? safeOwnerUserId,
         };
         patientForSync = updatedPatient;
-        return prev.map((p) => (p.id === patientId ? updatedPatient : p));
+        updatedPatients = prevPatients.map((p) => (p.id === patientId ? updatedPatient : p));
+      } else {
+        const newPatient = {
+          id: patientId,
+          name: patientName,
+          displayName: patientName,
+          profile: { ...patientProfile },
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          ownerUserId: safeOwnerUserId,
+        };
+        patientForSync = newPatient;
+        updatedPatients = [...prevPatients, newPatient];
       }
 
-      const newPatient = {
-        id: patientId,
-        name: patientName,
-        displayName: patientName,
-        profile: { ...patientProfile },
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        ownerUserId: safeOwnerUserId,
+      return {
+        ...prevState,
+        patients: updatedPatients,
+        activeConsultationId: null
       };
-      patientForSync = newPatient;
-      return [...prev, newPatient];
     });
-
-    setActiveConsultationId(null);
 
     if (patientForSync) {
       queuePatientSync(patientForSync);
@@ -704,18 +762,13 @@ export const useConsultations = (ownerUserId = null) => {
       ownerUserId: patient.ownerUserId ?? safeOwnerUserId,
     };
 
-    let consultationForSync = null;
+    setAppState(prevState => ({
+      ...prevState,
+      consultations: [...prevState.consultations, newConsultation],
+      activeConsultationId: newId
+    }));
 
-    setConsultations((prev) => {
-      consultationForSync = newConsultation;
-      return [...prev, newConsultation];
-    });
-
-    setActiveConsultationId(newId);
-
-    if (consultationForSync) {
-      queueConsultationSync(consultationForSync);
-    }
+    queueConsultationSync(newConsultation);
   };
 
   /**
@@ -725,8 +778,10 @@ export const useConsultations = (ownerUserId = null) => {
     let consultationForSync = null;
     let patientForSync = null;
 
-    setConsultations((prev) =>
-      prev.map((consultation) => {
+    setAppState(prevState => {
+      const prevConsultations = prevState.consultations;
+      
+      const updatedConsultations = prevConsultations.map((consultation) => {
         if (consultation.id !== id) return consultation;
 
         const now = new Date().toISOString();
@@ -755,39 +810,8 @@ export const useConsultations = (ownerUserId = null) => {
           updatedConsultation.patientId = derivedPatientId;
           updatedConsultation.patientName = derivedPatientName;
 
-          setPatients((prevPatients) => {
-            const patientNow = new Date().toISOString();
-            const existingPatient = prevPatients.find(
-              (patient) => patient.id === derivedPatientId
-            );
-
-            if (existingPatient) {
-              const revisedPatient = {
-                ...existingPatient,
-                name: derivedPatientName,
-                displayName: derivedPatientName,
-                profile,
-                updatedAt: patientNow,
-                ownerUserId: existingPatient.ownerUserId ?? safeOwnerUserId,
-              };
-              patientForSync = revisedPatient;
-              return prevPatients.map((patient) =>
-                patient.id === derivedPatientId ? revisedPatient : patient
-              );
-            }
-
-            const createdPatient = {
-              id: derivedPatientId,
-              name: derivedPatientName,
-              displayName: derivedPatientName,
-              profile,
-              createdAt: patientNow,
-              updatedAt: patientNow,
-              ownerUserId: safeOwnerUserId,
-            };
-            patientForSync = createdPatient;
-            return [...prevPatients, createdPatient];
-          });
+          // Handle patient updates in a separate function to avoid nesting setStates
+          handlePatientUpdate(derivedPatientId, derivedPatientName, profile);
         }
 
         if (updates.notes !== undefined) {
@@ -851,14 +875,67 @@ export const useConsultations = (ownerUserId = null) => {
 
         consultationForSync = updatedConsultation;
         return updatedConsultation;
-      })
-    );
+      });
+
+      return {
+        ...prevState,
+        consultations: updatedConsultations
+      };
+    });
+
+    // Function to handle patient updates without nesting setStates
+    function handlePatientUpdate(derivedPatientId, derivedPatientName, profile) {
+      setAppState(prevState => {
+        const prevPatients = prevState.patients;
+        const patientNow = new Date().toISOString();
+        const existingPatient = prevPatients.find(
+          (patient) => patient.id === derivedPatientId
+        );
+
+        let updatedPatients;
+        if (existingPatient) {
+          const revisedPatient = {
+            ...existingPatient,
+            name: derivedPatientName,
+            displayName: derivedPatientName,
+            profile,
+            updatedAt: patientNow,
+            ownerUserId: existingPatient.ownerUserId ?? safeOwnerUserId,
+          };
+          patientForSync = revisedPatient;
+          updatedPatients = prevPatients.map((patient) =>
+            patient.id === derivedPatientId ? revisedPatient : patient
+          );
+        } else {
+          const createdPatient = {
+            id: derivedPatientId,
+            name: derivedPatientName,
+            displayName: derivedPatientName,
+            profile,
+            createdAt: patientNow,
+            updatedAt: patientNow,
+            ownerUserId: safeOwnerUserId,
+          };
+          patientForSync = createdPatient;
+          updatedPatients = [...prevPatients, createdPatient];
+        }
+
+        // Sync the patient in the next tick to avoid overwriting the patientForSync
+        setTimeout(() => {
+          if (patientForSync) {
+            queuePatientSync(patientForSync);
+          }
+        }, 0);
+
+        return {
+          ...prevState,
+          patients: updatedPatients
+        };
+      });
+    }
 
     if (consultationForSync) {
       queueConsultationSync(consultationForSync);
-    }
-    if (patientForSync) {
-      queuePatientSync(patientForSync);
     }
   };
 
@@ -869,18 +946,20 @@ export const useConsultations = (ownerUserId = null) => {
     // Find the consultation to get its owner ID for deletion
     const consultationToDelete = consultations.find(c => c.id === id);
     
-    setConsultations((prev) => {
-      const filtered = prev.filter((consultation) => consultation.id !== id);
-
-      if (activeConsultationId === id) {
-        if (filtered.length > 0) {
-          setActiveConsultationId(filtered[0].id);
-        } else {
-          setActiveConsultationId(null);
-        }
+    setAppState(prevState => {
+      const filteredConsultations = prevState.consultations.filter(c => c.id !== id);
+      let nextActiveId = prevState.activeConsultationId;
+      
+      // If we're deleting the active consultation, select another one
+      if (prevState.activeConsultationId === id) {
+        nextActiveId = filteredConsultations.length > 0 ? filteredConsultations[0].id : null;
       }
-
-      return filtered;
+      
+      return {
+        ...prevState,
+        consultations: filteredConsultations,
+        activeConsultationId: nextActiveId
+      };
     });
 
     if (ENABLE_BACKGROUND_SYNC && safeOwnerUserId && consultationToDelete) {
@@ -889,16 +968,10 @@ export const useConsultations = (ownerUserId = null) => {
         ownerUserId: safeOwnerUserId
       });
       
-      // Delete consultation
-      syncService.enqueueConsultationDeletion(id, safeOwnerUserId);
-      
-      // Delete related clinical note if exists
-      if (consultationToDelete.noteId) {
-        syncService.enqueueClinicalNoteDeletion(consultationToDelete.noteId, safeOwnerUserId);
-      }
-      
-      // We don't need to explicitly delete transcript segments as they'll be orphaned
-      // The backend API cascades deletion automatically
+      // Use the utility function to handle deletion properly
+      syncDeleteConsultation(id, safeOwnerUserId, {
+        noteId: consultationToDelete.noteId
+      });
     }
   };
 
@@ -909,26 +982,28 @@ export const useConsultations = (ownerUserId = null) => {
     // Find consultations that belong to this patient
     const patientConsultations = consultations.filter(c => c.patientId === patientId);
     
-    setConsultations((prev) => {
-      const filtered = prev.filter((consultation) => consultation.patientId !== patientId);
-
-      const activeWasDeleted = prev.find(
-        (consultation) =>
-          consultation.id === activeConsultationId && consultation.patientId === patientId
+    setAppState(prevState => {
+      const filteredConsultations = prevState.consultations.filter(c => c.patientId !== patientId);
+      const filteredPatients = prevState.patients.filter(p => p.id !== patientId);
+      
+      let nextActiveId = prevState.activeConsultationId;
+      
+      // If active consultation belonged to this patient, select another one
+      const activeWasDeleted = prevState.consultations.find(
+        c => c.id === prevState.activeConsultationId && c.patientId === patientId
       );
-
+      
       if (activeWasDeleted) {
-        if (filtered.length > 0) {
-          setActiveConsultationId(filtered[0].id);
-        } else {
-          setActiveConsultationId(null);
-        }
+        nextActiveId = filteredConsultations.length > 0 ? filteredConsultations[0].id : null;
       }
-
-      return filtered;
+      
+      return {
+        ...prevState,
+        consultations: filteredConsultations,
+        patients: filteredPatients,
+        activeConsultationId: nextActiveId
+      };
     });
-
-    setPatients((prev) => prev.filter((patient) => patient.id !== patientId));
 
     if (ENABLE_BACKGROUND_SYNC && safeOwnerUserId) {
       console.info("[useConsultations] Syncing patient deletion to DynamoDB", {
@@ -936,18 +1011,10 @@ export const useConsultations = (ownerUserId = null) => {
         ownerUserId: safeOwnerUserId
       });
       
-      // Delete patient
-      syncService.enqueuePatientDeletion(patientId, safeOwnerUserId);
-      
-      // Delete all related consultations
-      for (const consultation of patientConsultations) {
-        syncService.enqueueConsultationDeletion(consultation.id, safeOwnerUserId);
-        
-        // Delete related clinical notes if they exist
-        if (consultation.noteId) {
-          syncService.enqueueClinicalNoteDeletion(consultation.noteId, safeOwnerUserId);
-        }
-      }
+      // Use the utility function to handle cascading deletion
+      syncDeletePatient(patientId, safeOwnerUserId, {
+        patientConsultations
+      });
     }
   };
 
@@ -970,10 +1037,8 @@ export const useConsultations = (ownerUserId = null) => {
    * Finalize the createdAt timestamp once the note is generated.
    */
   const finalizeConsultationTimestamp = (id) => {
-    let consultationForSync = null;
-
-    setConsultations((prev) =>
-      prev.map((consultation) => {
+    setAppState(prevState => {
+      const updatedConsultations = prevState.consultations.map(consultation => {
         if (consultation.id !== id) return consultation;
         if (consultation.createdAt !== null && consultation.createdAt !== undefined) {
           return consultation;
@@ -986,19 +1051,44 @@ export const useConsultations = (ownerUserId = null) => {
           updatedAt: now,
         };
 
-        consultationForSync = updatedConsultation;
+        // Queue the sync in the next tick to avoid race conditions
+        setTimeout(() => queueConsultationSync(updatedConsultation), 0);
+        
         return updatedConsultation;
-      })
-    );
+      });
 
-    if (consultationForSync) {
-      queueConsultationSync(consultationForSync);
-    }
+      return {
+        ...prevState,
+        consultations: updatedConsultations
+      };
+    });
   };
 
   const activeConsultation = consultations.find(
     (consultation) => consultation.id === activeConsultationId
   );
+  
+  // Define a function to update activeConsultationId
+  const setActiveConsultationId = (id) => {
+    setAppState(prevState => ({
+      ...prevState,
+      activeConsultationId: id
+    }));
+  };
+
+  // Define a function to set consultations (rarely used, but needed for compatibility)
+  const setConsultations = (updaterOrValue) => {
+    setAppState(prevState => {
+      const newConsultations = typeof updaterOrValue === 'function'
+        ? updaterOrValue(prevState.consultations)
+        : updaterOrValue;
+        
+      return {
+        ...prevState,
+        consultations: newConsultations
+      };
+    });
+  };
 
   return {
     consultations,
