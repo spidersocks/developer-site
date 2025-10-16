@@ -152,13 +152,14 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
       const batch = queue.splice(0, MAX_CONCURRENT);
       await Promise.all(
         batch.map(async (consultation) => {
-          const consultationId =
-            consultation?.id ?? consultation?.consultationId ?? null;
+          const consultationId = consultation?.id ?? consultation?.consultationId ?? null;
           if (!consultationId) return;
 
           try {
             let exclusiveStartKey;
             const segments = [];
+
+            console.info(`[hydrationService] Querying segments for consultation ${consultationId}`);
 
             do {
               const command = new QueryCommand({
@@ -170,6 +171,17 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
               });
 
               const response = await client.send(command);
+              
+              if (response.Items?.length > 0) {
+                console.info(
+                  `[hydrationService] Found ${response.Items.length} transcript segments in batch for ${consultationId}`
+                );
+                // Log first segment for debugging
+                if (response.Items.length > 0) {
+                  console.info("[hydrationService] First segment sample:", JSON.stringify(response.Items[0]).substring(0, 200) + "...");
+                }
+              }
+              
               segments.push(...(response.Items ?? []));
               exclusiveStartKey = response.LastEvaluatedKey;
             } while (exclusiveStartKey);
@@ -224,8 +236,14 @@ export const hydrateAll = async (ownerUserId) => {
     fetchItemsByOwner(CLINICAL_NOTES_TABLE, ownerUserId),
   ]);
 
+  console.info("[hydrationService] Patients, consultations, and notes fetched", {
+    patientsCount: patients.length,
+    consultationsCount: consultations.length,
+    notesCount: clinicalNotes.length,
+  });
+
   // Then fetch transcript segments
-  const transcriptSegmentsByConsultation =
+  const transcriptSegmentsByConsultation = 
     await fetchTranscriptSegmentsForConsultations(consultations);
 
   console.info("[hydrationService] hydrateAll complete", {
@@ -236,9 +254,28 @@ export const hydrateAll = async (ownerUserId) => {
     transcriptSegmentsByConsultation: transcriptSegmentsByConsultation.size,
   });
 
+  // Map patients by ID for quick lookup
+  const patientsById = patients.reduce((acc, patient) => {
+    if (patient.id) {
+      acc[patient.id] = patient;
+    }
+    return acc;
+  }, {});
+
+  // Explicitly adding patientProfile to consultations to fix persistence issue
+  const processedConsultations = consultations.map(consultation => {
+    // Check if patient exists and attach their profile
+    if (consultation.patientId && patientsById[consultation.patientId]) {
+      const patient = patientsById[consultation.patientId];
+      consultation.patientProfile = patient.profile || {};
+      consultation.patientName = patient.displayName || patient.name;
+    }
+    return consultation;
+  });
+
   return {
     patients,
-    consultations,
+    consultations: processedConsultations,
     clinicalNotes,
     transcriptSegmentsByConsultation: Array.from(
       transcriptSegmentsByConsultation.entries()

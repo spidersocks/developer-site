@@ -320,123 +320,138 @@ export const syncService = {
   },
 
   enqueueTranscriptSegments(consultationId, segments, startingIndex, ownerUserId) {
-    console.info("[syncService] enqueueTranscriptSegments", {
+  console.info("[syncService] enqueueTranscriptSegments", {
+    consultationId,
+    segmentsLength: segments?.length,
+    startingIndex,
+    ownerUserId,
+  });
+  
+  if (!ENABLE_BACKGROUND_SYNC || !segments?.length) return;
+  if (!ownerUserId) {
+    console.warn("[syncService] missing ownerUserId, skipping batch", {
       consultationId,
-      segmentsLength: segments?.length,
       startingIndex,
-      ownerUserId,
     });
-    
-    if (!ENABLE_BACKGROUND_SYNC || !segments?.length) return;
-    if (!ownerUserId) {
-      console.warn("[syncService] missing ownerUserId, skipping batch", {
-        consultationId,
-        startingIndex,
-      });
-      return;
-    }
+    return;
+  }
 
-    // Input validation
-    if (!consultationId) {
-      console.error("[syncService] Missing consultationId, cannot sync segments");
-      return;
-    }
-    
-    if (startingIndex === null || startingIndex === undefined || !Number.isFinite(startingIndex)) {
-      console.error("[syncService] Invalid startingIndex", { startingIndex });
-      return;
-    }
+  // Input validation
+  if (!consultationId) {
+    console.error("[syncService] Missing consultationId, cannot sync segments");
+    return;
+  }
+  
+  if (startingIndex === null || startingIndex === undefined || !Number.isFinite(startingIndex)) {
+    console.error("[syncService] Invalid startingIndex", { startingIndex });
+    return;
+  }
 
-    // Safely process segments in batches
-    for (let i = 0; i < segments.length; i += SEGMENT_BATCH_LIMIT) {
-      const batch = segments.slice(i, i + SEGMENT_BATCH_LIMIT);
+  // Log segment details for debugging
+  if (segments.length > 0) {
+    console.info("[syncService] First segment details:", {
+      id: segments[0].id,
+      text: segments[0].text?.substring(0, 30) + (segments[0].text?.length > 30 ? "..." : ""),
+      speaker: segments[0].speaker
+    });
+  }
+
+  // Safely process segments in batches
+  for (let i = 0; i < segments.length; i += SEGMENT_BATCH_LIMIT) {
+    const batch = segments.slice(i, i + SEGMENT_BATCH_LIMIT);
+    
+    // Map segments to DynamoDB items
+    const batchItems = batch.map((segment, idx) => {
+      const segmentIndex = startingIndex + i + idx;
       
-      // Map segments to DynamoDB items
-      const batchItems = batch.map((segment, idx) => {
-        const segmentIndex = startingIndex + i + idx;
-        
-        // Skip segments with invalid indexes
-        if (!Number.isFinite(segmentIndex)) {
-          console.error("[syncService] invalid segmentIndex", {
-            consultationId,
-            startingIndex,
-            i,
-            idx,
-          });
-          return null;
-        }
-        
-        if (!segment || !segment.id) {
-          console.error("[syncService] invalid segment, missing id", { segment });
-          return null;
-        }
-
-        // Create the PutRequest for this segment with all required fields
-        return {
-          PutRequest: {
-            Item: {
-              consultationId: { S: consultationId },
-              segmentIndex: { N: segmentIndex.toString() },
-              ownerUserId: { S: ownerUserId }, // CRITICAL: Always include ownerUserId
-              segmentId: { S: segment.id },
-              speaker: segment.speaker ? { S: segment.speaker } : { NULL: true },
-              text: { S: segment.text || "" },
-              displayText: segment.displayText ? { S: segment.displayText } : { S: segment.text || "" },
-              translatedText: segment.translatedText ? { S: segment.translatedText } : { NULL: true },
-              entities: {
-                L: (segment.entities || []).map((entity) => ({
-                  M: {
-                    BeginOffset: { N: entity.BeginOffset.toString() },
-                    EndOffset: { N: entity.EndOffset.toString() },
-                    Category: { S: entity.Category },
-                    Type: { S: entity.Type },
-                    ...(entity.Traits?.length
-                      ? {
-                          Traits: {
-                            L: entity.Traits.map((trait) => ({
-                              M: {
-                                Name: { S: trait.Name },
-                                Score: { N: trait.Score.toString() },
-                              },
-                            })),
-                          },
-                        }
-                      : {}),
-                  },
-                })),
-              },
-              createdAt: { S: new Date().toISOString() },
-            },
-          },
-        };
-      }).filter(Boolean); // Remove null items
-
-      if (batchItems.length === 0) {
-        console.warn("[syncService] No valid segments to sync in batch");
-        continue;
+      // Skip segments with invalid indexes
+      if (!Number.isFinite(segmentIndex)) {
+        console.error("[syncService] invalid segmentIndex", {
+          consultationId,
+          startingIndex,
+          i,
+          idx,
+        });
+        return null;
+      }
+      
+      if (!segment || !segment.id) {
+        console.error("[syncService] invalid segment, missing id", { segment });
+        return null;
       }
 
-      // Create the batch write operation with unique debug label
-      const debugLabel = `segments:${consultationId}:${startingIndex + i}-${
-        startingIndex + i + batch.length - 1
-      }`;
-      
-      // Enqueue the batch write operation
-      queue.enqueue(
-        batchWriteSegments(
-          {
-            "medical-scribe-transcript-segments": batchItems,
+      // Create the PutRequest for this segment with all required fields
+      return {
+        PutRequest: {
+          Item: {
+            consultationId: { S: consultationId },
+            segmentIndex: { N: segmentIndex.toString() },
+            ownerUserId: { S: ownerUserId }, // CRITICAL: Always include ownerUserId
+            segmentId: { S: segment.id },
+            speaker: segment.speaker ? { S: segment.speaker } : { NULL: true },
+            text: { S: segment.text || "" },
+            displayText: segment.displayText ? { S: segment.displayText } : { S: segment.text || "" },
+            translatedText: segment.translatedText ? { S: segment.translatedText } : { NULL: true },
+            entities: {
+              L: (segment.entities || []).map((entity) => ({
+                M: {
+                  BeginOffset: { N: (entity.BeginOffset || 0).toString() },
+                  EndOffset: { N: (entity.EndOffset || 0).toString() },
+                  Category: { S: entity.Category || "OTHER" },
+                  Type: { S: entity.Type || "OTHER" },
+                  ...(entity.Traits?.length
+                    ? {
+                        Traits: {
+                          L: entity.Traits.map((trait) => ({
+                            M: {
+                              Name: { S: trait.Name || "" },
+                              Score: { N: (trait.Score || 0).toString() },
+                            },
+                          })),
+                        },
+                      }
+                    : {}),
+                },
+              })),
+            },
+            createdAt: { S: new Date().toISOString() },
           },
-          debugLabel
-        ),
-        { 
-          label: `segments:${consultationId}:${startingIndex + i}`,
-          segmentIds: batch.map(s => s.id),
-          batchSize: batchItems.length
-        }
-      );
+        },
+      };
+    }).filter(Boolean); // Remove null items
+
+    if (batchItems.length === 0) {
+      console.warn("[syncService] No valid segments to sync in batch");
+      continue;
     }
-  },
+
+    // Create the batch write operation with unique debug label
+    const debugLabel = `segments:${consultationId}:${startingIndex + i}-${
+      startingIndex + i + batch.length - 1
+    }`;
+    
+    console.info("[syncService] Enqueuing batch write for segments", {
+      consultationId,
+      batchSize: batchItems.length,
+      debugLabel
+    });
+    
+    // Enqueue the batch write operation
+    queue.enqueue(
+      batchWriteSegments(
+        {
+          "medical-scribe-transcript-segments": batchItems,
+        },
+        debugLabel
+      ),
+      { 
+        label: `segments:${consultationId}:${startingIndex + i}`,
+        segmentIds: batch.map(s => s.id),
+        batchSize: batchItems.length
+      }
+    );
+  }
+},
   
   enqueueSegmentDeletion(segmentId, consultationId, ownerUserId) {
     console.info("[syncService] enqueueSegmentDeletion invoked", {
