@@ -1,4 +1,4 @@
-import { BatchWriteItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { BatchWriteItemCommand, DeleteItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { ENABLE_BACKGROUND_SYNC } from "./constants";
 import {
   AWS_REGION,
@@ -8,6 +8,8 @@ import {
 } from "./awsClients";
 
 const SEGMENT_BATCH_LIMIT = 25;
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
 
 if (ENABLE_BACKGROUND_SYNC) {
   warmAwsCredentials().catch(() => {
@@ -21,11 +23,23 @@ class SyncQueue {
   constructor() {
     this.items = [];
     this.flushing = false;
+    this.stats = {
+      total: 0,
+      success: 0,
+      failed: 0,
+      retried: 0,
+    };
   }
 
   enqueue(task, meta = {}) {
     if (!ENABLE_BACKGROUND_SYNC) return;
-    this.items.push({ run: task, meta });
+    this.items.push({ 
+      run: task, 
+      meta, 
+      retryCount: 0,
+      createdAt: new Date().toISOString()
+    });
+    this.stats.total++;
     console.info(
       "[sync][queue] enqueue",
       meta.label ?? "task",
@@ -56,30 +70,71 @@ class SyncQueue {
     console.info("[sync][queue] flush start", {
       reason,
       pending: this.items.length,
+      stats: this.stats,
     });
 
     try {
+      const failedItems = [];
+      
       while (this.items.length > 0) {
-        const { run, meta } = this.items.shift();
+        const item = this.items.shift();
         console.info(
           "[sync][queue] executing task",
-          meta.label ?? "task",
+          item.meta.label ?? "task",
           "remaining =",
-          this.items.length
+          this.items.length,
+          "retryCount =", 
+          item.retryCount
         );
-        // eslint-disable-next-line no-await-in-loop
-        await run();
-        console.info(
-          "[sync][queue] completed task",
-          meta.label ?? "task"
-        );
+        
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await item.run();
+          this.stats.success++;
+          console.info(
+            "[sync][queue] completed task",
+            item.meta.label ?? "task"
+          );
+        } catch (error) {
+          console.error("[sync][queue] task failed", {
+            error,
+            label: item.meta.label,
+            retryCount: item.retryCount
+          });
+          
+          // If we haven't exceeded max retries, add it back to queue
+          if (item.retryCount < MAX_RETRIES) {
+            item.retryCount++;
+            this.stats.retried++;
+            failedItems.push(item);
+            // Add exponential backoff delay
+            await new Promise(resolve => 
+              setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, item.retryCount - 1))
+            );
+          } else {
+            this.stats.failed++;
+            console.error("[sync][queue] max retries exceeded, abandoning task", {
+              label: item.meta.label,
+              error
+            });
+          }
+        }
       }
-    } catch (error) {
-      console.error("[sync][queue] task failed", error);
-      throw error;
+      
+      // Re-add failed items that haven't exceeded retry count
+      if (failedItems.length > 0) {
+        this.items.push(...failedItems);
+        console.info("[sync][queue] re-queued failed items", {
+          count: failedItems.length
+        });
+      }
     } finally {
       this.flushing = false;
-      console.info("[sync][queue] flush complete", { reason });
+      console.info("[sync][queue] flush complete", { 
+        reason,
+        stats: this.stats,
+        pendingItems: this.items.length
+      });
     }
   }
 }
@@ -92,6 +147,19 @@ function putItem(tableName, item, debugLabel) {
     console.info("[sync][dynamodb] PutItem", { tableName, debugLabel });
     await dynamoClient.send(
       new PutItemCommand({ TableName: tableName, Item: item })
+    );
+  };
+}
+
+function deleteItem(tableName, key, debugLabel) {
+  return async () => {
+    if (!dynamoClient) return;
+    console.info("[sync][dynamodb] DeleteItem", { tableName, key, debugLabel });
+    await dynamoClient.send(
+      new DeleteItemCommand({ 
+        TableName: tableName, 
+        Key: key 
+      })
     );
   };
 }
@@ -134,6 +202,21 @@ export const syncService = {
       { label: `patient:${patient.id}` }
     );
   },
+  
+  enqueuePatientDeletion(patientId, ownerUserId) {
+    console.info("[syncService] enqueuePatientDeletion invoked", {
+      patientId,
+      ownerUserId
+    });
+    
+    queue.enqueue(
+      deleteItem("medical-scribe-patients", 
+        { id: { S: patientId } },
+        `delete-patient:${patientId}`
+      ),
+      { label: `delete-patient:${patientId}` }
+    );
+  },
 
   enqueueConsultationUpsert(consultation) {
     console.info(
@@ -171,6 +254,21 @@ export const syncService = {
       { label: `consultation:${consultation.id}` }
     );
   },
+  
+  enqueueConsultationDeletion(consultationId, ownerUserId) {
+    console.info("[syncService] enqueueConsultationDeletion invoked", {
+      consultationId,
+      ownerUserId
+    });
+    
+    queue.enqueue(
+      deleteItem("medical-scribe-consultations", 
+        { id: { S: consultationId } },
+        `delete-consultation:${consultationId}`
+      ),
+      { label: `delete-consultation:${consultationId}` }
+    );
+  },
 
   enqueueClinicalNote(note) {
     console.info("[syncService] enqueueClinicalNote invoked", note);
@@ -205,14 +303,30 @@ export const syncService = {
       { label: `clinical-note:${note.id}` }
     );
   },
+  
+  enqueueClinicalNoteDeletion(noteId, ownerUserId) {
+    console.info("[syncService] enqueueClinicalNoteDeletion invoked", {
+      noteId,
+      ownerUserId
+    });
+    
+    queue.enqueue(
+      deleteItem("medical-scribe-clinical-notes", 
+        { id: { S: noteId } },
+        `delete-clinical-note:${noteId}`
+      ),
+      { label: `delete-clinical-note:${noteId}` }
+    );
+  },
 
-    enqueueTranscriptSegments(consultationId, segments, startingIndex, ownerUserId) {
-      console.info("[syncService] enqueueTranscriptSegments", {
-        consultationId,
-        segmentsLength: segments?.length,
-        startingIndex,
-        ownerUserId,
-      });
+  enqueueTranscriptSegments(consultationId, segments, startingIndex, ownerUserId) {
+    console.info("[syncService] enqueueTranscriptSegments", {
+      consultationId,
+      segmentsLength: segments?.length,
+      startingIndex,
+      ownerUserId,
+    });
+    
     if (!ENABLE_BACKGROUND_SYNC || !segments?.length) return;
     if (!ownerUserId) {
       console.warn("[syncService] missing ownerUserId, skipping batch", {
@@ -222,10 +336,26 @@ export const syncService = {
       return;
     }
 
+    // Input validation
+    if (!consultationId) {
+      console.error("[syncService] Missing consultationId, cannot sync segments");
+      return;
+    }
+    
+    if (startingIndex === null || startingIndex === undefined || !Number.isFinite(startingIndex)) {
+      console.error("[syncService] Invalid startingIndex", { startingIndex });
+      return;
+    }
+
+    // Safely process segments in batches
     for (let i = 0; i < segments.length; i += SEGMENT_BATCH_LIMIT) {
       const batch = segments.slice(i, i + SEGMENT_BATCH_LIMIT);
+      
+      // Map segments to DynamoDB items
       const batchItems = batch.map((segment, idx) => {
         const segmentIndex = startingIndex + i + idx;
+        
+        // Skip segments with invalid indexes
         if (!Number.isFinite(segmentIndex)) {
           console.error("[syncService] invalid segmentIndex", {
             consultationId,
@@ -235,7 +365,13 @@ export const syncService = {
           });
           return null;
         }
+        
+        if (!segment || !segment.id) {
+          console.error("[syncService] invalid segment, missing id", { segment });
+          return null;
+        }
 
+        // Create the PutRequest for this segment
         return {
           PutRequest: {
             Item: {
@@ -244,7 +380,7 @@ export const syncService = {
               ...(ownerUserId ? { ownerUserId: { S: ownerUserId } } : {}),
               segmentId: { S: segment.id },
               ...(segment.speaker ? { speaker: { S: segment.speaker } } : {}),
-              text: { S: segment.text },
+              text: { S: segment.text || "" },
               ...(segment.displayText
                 ? { displayText: { S: segment.displayText } }
                 : {}),
@@ -273,28 +409,76 @@ export const syncService = {
                   },
                 })),
               },
+              createdAt: { S: new Date().toISOString() },
             },
           },
         };
-      });
+      }).filter(Boolean); // Remove null items
 
+      if (batchItems.length === 0) {
+        console.warn("[syncService] No valid segments to sync in batch");
+        continue;
+      }
+
+      // Create the batch write operation with unique debug label
+      const debugLabel = `segments:${consultationId}:${startingIndex + i}-${
+        startingIndex + i + batch.length - 1
+      }`;
+      
+      // Enqueue the batch write operation
       queue.enqueue(
         batchWriteSegments(
           {
             "medical-scribe-transcript-segments": batchItems,
           },
-          `segments:${consultationId}:${startingIndex + i}-${
-            startingIndex + i + batch.length - 1
-          }`
+          debugLabel
         ),
-        { label: `segments:${consultationId}:${startingIndex + i}` }
+        { 
+          label: `segments:${consultationId}:${startingIndex + i}`,
+          segmentIds: batch.map(s => s.id),
+          batchSize: batchItems.length
+        }
       );
     }
+  },
+  
+  enqueueSegmentDeletion(segmentId, consultationId, ownerUserId) {
+    console.info("[syncService] enqueueSegmentDeletion invoked", {
+      segmentId,
+      consultationId,
+      ownerUserId
+    });
+    
+    queue.enqueue(
+      deleteItem("medical-scribe-transcript-segments", 
+        { segmentId: { S: segmentId } },
+        `delete-segment:${segmentId}`
+      ),
+      { label: `delete-segment:${segmentId}` }
+    );
   },
 
   async flushAll(reason = "manual") {
     await queue.flushAll(reason);
   },
+  
+  // Get stats about the sync queue
+  getStats() {
+    return {
+      pendingItems: queue.items.length,
+      ...queue.stats
+    };
+  },
+  
+  // Reset stats counter
+  resetStats() {
+    queue.stats = {
+      total: 0,
+      success: 0,
+      failed: 0,
+      retried: 0
+    };
+  }
 };
 
 if (import.meta.env.DEV) {

@@ -67,6 +67,7 @@ const fetchItemsByOwner = async (tableName, ownerUserId) => {
       ExpressionAttributeNames: { "#owner": "ownerUserId" },
       ExpressionAttributeValues: { ":owner": ownerUserId },
       ExclusiveStartKey: exclusiveStartKey,
+      Limit: 100, // Process in smaller batches to avoid timeouts
     });
 
   const makeScanCommand = (exclusiveStartKey) =>
@@ -76,32 +77,59 @@ const fetchItemsByOwner = async (tableName, ownerUserId) => {
       ExpressionAttributeNames: { "#owner": "ownerUserId" },
       ExpressionAttributeValues: { ":owner": ownerUserId },
       ExclusiveStartKey: exclusiveStartKey,
+      Limit: 50, // Process in smaller batches for scans which are slower
     });
 
   const runPaginated = async (commandFactory) => {
     let exclusiveStartKey;
+    let iteration = 0;
+    let totalItems = 0;
+    
     do {
-      const command = commandFactory(exclusiveStartKey);
-      const response = await client.send(command);
-      items.push(...(response.Items ?? []));
-      exclusiveStartKey = response.LastEvaluatedKey;
+      iteration++;
+      console.info(`[hydrationService] Fetching page ${iteration} from ${tableName}`);
+      
+      try {
+        const command = commandFactory(exclusiveStartKey);
+        const response = await client.send(command);
+        const pageItems = response.Items ?? [];
+        items.push(...pageItems);
+        totalItems += pageItems.length;
+        exclusiveStartKey = response.LastEvaluatedKey;
+        
+        console.info(`[hydrationService] Retrieved ${pageItems.length} items from ${tableName}, total: ${totalItems}`);
+      } catch (error) {
+        console.error(`[hydrationService] Error fetching page ${iteration} from ${tableName}:`, error);
+        throw error;
+      }
     } while (exclusiveStartKey);
   };
 
-  if (OWNER_GSI_NAME) {
-    try {
-      await runPaginated(makeQueryCommand);
-      return items;
-    } catch (error) {
-      console.warn(
-        "[hydrationService] Query via GSI failed, falling back to scan",
-        { tableName, error }
-      );
+  console.info(`[hydrationService] Starting fetch from ${tableName} for owner ${ownerUserId}`);
+  console.time(`fetch-${tableName}`);
+  
+  try {
+    if (OWNER_GSI_NAME) {
+      try {
+        await runPaginated(makeQueryCommand);
+        console.timeEnd(`fetch-${tableName}`);
+        return items;
+      } catch (error) {
+        console.warn(
+          "[hydrationService] Query via GSI failed, falling back to scan",
+          { tableName, error }
+        );
+      }
     }
-  }
 
-  await runPaginated(makeScanCommand);
-  return items;
+    await runPaginated(makeScanCommand);
+    console.timeEnd(`fetch-${tableName}`);
+    return items;
+  } catch (error) {
+    console.error(`[hydrationService] Failed to fetch from ${tableName}:`, error);
+    console.timeEnd(`fetch-${tableName}`);
+    throw error;
+  }
 };
 
 const fetchTranscriptSegmentsForConsultations = async (consultations) => {
@@ -113,9 +141,12 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
   if (!client) return new Map();
 
   const byConsultation = new Map();
-  const MAX_CONCURRENT = 5;
+  const MAX_CONCURRENT = 3; // Reduce concurrent requests to prevent rate limiting
   const queue = [...consultations];
 
+  console.info(`[hydrationService] Fetching transcript segments for ${consultations.length} consultations`);
+  console.time('fetch-transcript-segments');
+  
   while (queue.length > 0) {
     const batch = queue.splice(0, MAX_CONCURRENT);
     await Promise.all(
@@ -124,31 +155,42 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
           consultation?.id ?? consultation?.consultationId ?? null;
         if (!consultationId) return;
 
-        let exclusiveStartKey;
-        const segments = [];
+        try {
+          let exclusiveStartKey;
+          const segments = [];
 
-        do {
-          const command = new QueryCommand({
-            TableName: TRANSCRIPT_SEGMENTS_TABLE,
-            KeyConditionExpression: "#cid = :cid",
-            ExpressionAttributeNames: { "#cid": "consultationId" },
-            ExpressionAttributeValues: { ":cid": consultationId },
-            ExclusiveStartKey: exclusiveStartKey,
-            ScanIndexForward: true,
-          });
+          do {
+            const command = new QueryCommand({
+              TableName: TRANSCRIPT_SEGMENTS_TABLE,
+              KeyConditionExpression: "consultationId = :cid",
+              ExpressionAttributeValues: { ":cid": consultationId },
+              ExclusiveStartKey: exclusiveStartKey,
+              ScanIndexForward: true, // Sort by primary key in ascending order
+            });
 
-          const response = await client.send(command);
-          segments.push(...(response.Items ?? []));
-          exclusiveStartKey = response.LastEvaluatedKey;
-        } while (exclusiveStartKey);
+            const response = await client.send(command);
+            segments.push(...(response.Items ?? []));
+            exclusiveStartKey = response.LastEvaluatedKey;
+          } while (exclusiveStartKey);
 
-        if (segments.length > 0) {
-          byConsultation.set(consultationId, segments);
+          if (segments.length > 0) {
+            byConsultation.set(consultationId, segments);
+            console.info(
+              `[hydrationService] Found ${segments.length} transcript segments for consultation ${consultationId}`
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[hydrationService] Error fetching segments for consultation ${consultationId}:`,
+            error
+          );
         }
       })
     );
   }
-
+  
+  console.timeEnd('fetch-transcript-segments');
+  console.info(`[hydrationService] Fetched segments for ${byConsultation.size}/${consultations.length} consultations`);
   return byConsultation;
 };
 
@@ -169,12 +211,14 @@ export const hydrateAll = async (ownerUserId) => {
     indexName: OWNER_GSI_NAME,
   });
 
+  // Fetch patients, consultations, and notes in parallel
   const [patients, consultations, clinicalNotes] = await Promise.all([
     fetchItemsByOwner(PATIENTS_TABLE, ownerUserId),
     fetchItemsByOwner(CONSULTATIONS_TABLE, ownerUserId),
     fetchItemsByOwner(CLINICAL_NOTES_TABLE, ownerUserId),
   ]);
 
+  // Then fetch transcript segments
   const transcriptSegmentsByConsultation =
     await fetchTranscriptSegmentsForConsultations(consultations);
 
@@ -186,7 +230,7 @@ export const hydrateAll = async (ownerUserId) => {
     transcriptSegmentsByConsultation: transcriptSegmentsByConsultation.size,
   });
 
-    return {
+  return {
     patients,
     consultations,
     clinicalNotes,
