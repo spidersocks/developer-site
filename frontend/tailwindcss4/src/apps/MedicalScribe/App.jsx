@@ -13,15 +13,101 @@ import { CommandBar } from "./components/Notes/CommandBar";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ENABLE_BACKGROUND_SYNC } from "./utils/constants";
 import { syncService } from "./utils/syncService";
-// Import debug utility
+import { LoadingAnimation } from "./components/shared/LoadingAnimation";
 import './utils/debugUtils';
 
+// Component for the empty state when no consultation is selected
+const EmptyStateView = ({ onAddNewPatient }) => (
+  <div className="panel start-screen-panel">
+    <img
+      src={getAssetPath("/stethoscribe_icon.png")}
+      alt="StethoscribeAI Icon"
+      className="start-logo"
+    />
+    <h2 className="start-screen-title">
+      Select a consultation
+    </h2>
+    <p className="start-screen-subtitle">
+      Choose a patient from the sidebar or add a new one
+    </p>
+    <button
+      className="button button-primary start-button"
+      onClick={onAddNewPatient}
+    >
+      + Add New Patient
+    </button>
+  </div>
+);
+
+// Component for the welcome screen when no patients exist
+const WelcomeScreen = ({ onAddNewPatient }) => (
+  <div className="panel start-screen-panel">
+    <img
+      src={getAssetPath("/stethoscribe_icon.png")}
+      alt="StethoscribeAI Icon"
+      className="start-logo"
+    />
+    <h2 className="start-screen-title">
+      Welcome to StethoscribeAI
+    </h2>
+    <p className="start-screen-subtitle">
+      Add your first patient to get started
+    </p>
+    <button
+      className="button button-primary start-button"
+      onClick={onAddNewPatient}
+    >
+      + Add New Patient
+    </button>
+  </div>
+);
+
+// Component for hydration error state
+const HydrationErrorOverlay = ({ error, onRetry }) => (
+  <div className="hydration-error-overlay">
+    <div className="hydration-error-content">
+      <h3>Data Sync Error</h3>
+      <p>There was a problem syncing your data: {error}</p>
+      <button onClick={onRetry} className="button button-primary">
+        Retry
+      </button>
+    </div>
+  </div>
+);
+
+// Sync status indicator component
+const SyncStatusIndicator = ({ status }) => {
+  if (!ENABLE_BACKGROUND_SYNC) return null;
+  
+  let statusText = "Not synced";
+  let statusClass = "sync-status-neutral";
+  
+  if (status.isSyncing) {
+    statusText = "Syncing...";
+    statusClass = "sync-status-syncing";
+  } else if (status.error) {
+    statusText = `Sync error: ${status.error}`;
+    statusClass = "sync-status-error";
+  } else if (status.lastSynced) {
+    const date = new Date(status.lastSynced);
+    statusText = `Last synced: ${date.toLocaleTimeString()}`;
+    statusClass = "sync-status-success";
+  }
+  
+  return (
+    <div className={`sync-status-indicator ${statusClass}`}>
+      <span className="sync-status-dot"></span>
+      <span className="sync-status-text">{statusText}</span>
+    </div>
+  );
+};
+
+// Main application component
 export default function MedicalScribeApp() {
   const { user, signOut } = useAuth();
+  const ownerUserId = user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
 
-  const ownerUserId =
-    user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
-
+  // Consultations hook for managing consultation data
   const {
     consultations,
     patients,
@@ -40,6 +126,7 @@ export default function MedicalScribeApp() {
     forceHydrate,
   } = useConsultations(ownerUserId);
 
+  // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
   const [syncStatus, setSyncStatus] = useState({
@@ -49,8 +136,23 @@ export default function MedicalScribeApp() {
   });
 
   const transcriptEndRef = useRef(null);
-  console.info("[App] ENABLE_BACKGROUND_SYNC =", ENABLE_BACKGROUND_SYNC);
-  console.info("[App] ownerUserId =", ownerUserId);
+  
+  // Audio recording hook
+  const {
+    startSession,
+    stopSession,
+    handlePause,
+    handleResume,
+    handleGenerateNote,
+    debugTranscriptSegments,
+  } = useAudioRecording(
+    activeConsultation,
+    activeConsultationId,
+    updateConsultation,
+    resetConsultation,
+    setConsultations,
+    finalizeConsultationTimestamp
+  );
 
   // Function to ensure all transcript data is synced
   const ensureSyncComplete = async () => {
@@ -77,21 +179,7 @@ export default function MedicalScribeApp() {
     }
   };
 
-  const {
-    startSession,
-    stopSession,
-    handlePause,
-    handleResume,
-    handleGenerateNote,
-  } = useAudioRecording(
-    activeConsultation,
-    activeConsultationId,
-    updateConsultation,
-    resetConsultation,
-    setConsultations,
-    finalizeConsultationTimestamp
-  );
-
+  // Handle sign out with sync
   const handleSignOut = async () => {
     if (ENABLE_BACKGROUND_SYNC) {
       setSyncStatus(prev => ({ ...prev, isSyncing: true }));
@@ -126,23 +214,24 @@ export default function MedicalScribeApp() {
     activeConsultation?.interimTranscript,
   ]);
 
-  useEffect(() => {
-  if (!ENABLE_BACKGROUND_SYNC) return;
-  
-  const handleBeforeUnload = () => {
-    // This is a synchronous operation that runs before page unload
-    syncService.flushAll("page-unload");
-    return null; // No confirmation dialog
-  };
-  
-  window.addEventListener("beforeunload", handleBeforeUnload);
-  
-  return () => {
-    window.removeEventListener("beforeunload", handleBeforeUnload);
-  };
-}, []);
-
   // Handle page unload and sync event listeners
+  useEffect(() => {
+    if (!ENABLE_BACKGROUND_SYNC) return;
+  
+    const handleBeforeUnload = () => {
+      // This is a synchronous operation that runs before page unload
+      syncService.flushAll("page-unload");
+      return null; // No confirmation dialog
+    };
+    
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+
+  // Set up regular background sync
   useEffect(() => {
     if (!ENABLE_BACKGROUND_SYNC) return undefined;
 
@@ -190,17 +279,9 @@ export default function MedicalScribeApp() {
     const handleOnline = () => flush("online");
     const handleFocus = () => flush("focus");
     
-    // Critical - handle page unload to ensure data is preserved
-    const handleBeforeUnload = () => {
-      // This is synchronous and runs before the page unloads
-      syncService.flushAll("page-unload");
-      return null; // No confirmation dialog
-    };
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("online", handleOnline);
     window.addEventListener("focus", handleFocus);
-    window.addEventListener("beforeunload", handleBeforeUnload);
 
     flush("mount");
 
@@ -210,10 +291,10 @@ export default function MedicalScribeApp() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
 
+  // Handle consultation actions
   const handleRenameConsultation = (id, newName) => {
     updateConsultation(id, { name: newName, customNameSet: true });
   };
@@ -246,7 +327,7 @@ export default function MedicalScribeApp() {
     updateConsultation(activeConsultationId, { noteType: newNoteType });
   };
 
-const handleStopAndGenerate = async () => {
+  const handleStopAndGenerate = async () => {
     await stopSession();
     
     // Force sync transcript data before generating note
@@ -265,6 +346,31 @@ const handleStopAndGenerate = async () => {
     setSidebarOpen(false);
   };
 
+  // Debug function for transcript segments
+  const triggerTranscriptTest = () => {
+    console.info("Triggering transcript segments sync test...");
+    
+    if (!activeConsultation) {
+      console.warn("No active consultation to test!");
+      return;
+    }
+    
+    console.info(`Attempting to sync a test segment for consultation: ${activeConsultationId}`);
+    
+    // Use the debug function from useAudioRecording
+    const result = debugTranscriptSegments();
+    console.info("Test sync completed", result);
+    
+    // Force sync flush to check for any errors
+    console.info("Forcing sync flush to check for errors...");
+    syncService.flushAll("debug").then(() => {
+      console.info("Sync flush completed successfully");
+    }).catch(err => {
+      console.error("Sync flush failed:", err);
+    });
+  };
+
+  // Function to display current recording status
   const getStatusDisplay = () => {
     if (!activeConsultation) return null;
     if (activeConsultation.connectionStatus === "error")
@@ -293,6 +399,7 @@ const handleStopAndGenerate = async () => {
     }
   };
 
+  // Function to render action buttons based on current state
   const renderActionButtons = () => {
     if (!activeConsultation) return null;
     const primary = () => {
@@ -356,41 +463,65 @@ const handleStopAndGenerate = async () => {
     );
   };
 
-  // Render sync status indicator
-  const renderSyncStatus = () => {
-    if (!ENABLE_BACKGROUND_SYNC) return null;
-    
-    let statusText = "Not synced";
-    let statusClass = "sync-status-neutral";
-    
-    if (syncStatus.isSyncing) {
-      statusText = "Syncing...";
-      statusClass = "sync-status-syncing";
-    } else if (syncStatus.error) {
-      statusText = `Sync error: ${syncStatus.error}`;
-      statusClass = "sync-status-error";
-    } else if (syncStatus.lastSynced) {
-      const date = new Date(syncStatus.lastSynced);
-      statusText = `Last synced: ${date.toLocaleTimeString()}`;
-      statusClass = "sync-status-success";
-    }
-    
-    return (
-      <div className={`sync-status-indicator ${statusClass}`}>
-        <span className="sync-status-dot"></span>
-        <span className="sync-status-text">{statusText}</span>
-      </div>
-    );
-  };
-  
-  const hasPatientInfo = activeConsultation
-    ? hasPatientProfileContent(activeConsultation.patientProfile)
-    : false;
+  // Render main workspace content based on active tab
+  const renderTabContent = () => {
+    if (!activeConsultation) return null;
 
-  // Handle hydration error state
-  const handleRetryHydration = () => {
-    if (forceHydrate) {
-      forceHydrate();
+    switch (activeConsultation.activeTab) {
+      case "transcript":
+        return (
+          <TranscriptPanel
+            activeConsultation={activeConsultation}
+            transcriptEndRef={transcriptEndRef}
+            onSpeakerRoleToggle={handleSpeakerRoleToggle}
+            renderActionButtons={renderActionButtons}
+            getStatusDisplay={getStatusDisplay}
+            updateConsultation={updateConsultation}
+            activeConsultationId={activeConsultationId}
+          />
+        );
+      case "patient":
+        return (
+          <PatientInfoPanel
+            activeConsultation={activeConsultation}
+            updateConsultation={updateConsultation}
+            activeConsultationId={activeConsultationId}
+            onRegenerateNote={handleGenerateNote}
+          />
+        );
+      case "note":
+        return (
+          <>
+            <div className="notes-content">
+              <NoteEditor
+                notes={activeConsultation.notes}
+                setNotes={(newNotes) =>
+                  updateConsultation(activeConsultationId, {
+                    notes: newNotes,
+                  })
+                }
+                loading={activeConsultation.loading}
+                error={activeConsultation.error}
+                noteType={activeConsultation.noteType}
+                onNoteTypeChange={handleNoteTypeChange}
+                onRegenerate={handleGenerateNote}
+                transcriptSegments={
+                  activeConsultation.transcriptSegments
+                }
+              />
+            </div>
+            <CommandBar
+              notes={activeConsultation.notes}
+              setNotes={(newNotes) =>
+                updateConsultation(activeConsultationId, {
+                  notes: newNotes,
+                })
+              }
+            />
+          </>
+        );
+      default:
+        return null;
     }
   };
 
@@ -420,7 +551,7 @@ const handleStopAndGenerate = async () => {
       </button>
       
       {/* Sync status indicator */}
-      {ENABLE_BACKGROUND_SYNC && renderSyncStatus()}
+      <SyncStatusIndicator status={syncStatus} />
 
       <div className="app-main">
         <button
@@ -432,57 +563,17 @@ const handleStopAndGenerate = async () => {
 
         {/* Hydration error state */}
         {hydrationState?.status === "error" && (
-          <div className="hydration-error-overlay">
-            <div className="hydration-error-content">
-              <h3>Data Sync Error</h3>
-              <p>There was a problem syncing your data: {hydrationState.error}</p>
-              <button onClick={handleRetryHydration} className="button button-primary">
-                Retry
-              </button>
-            </div>
-          </div>
+          <HydrationErrorOverlay 
+            error={hydrationState.error}
+            onRetry={forceHydrate}
+          />
         )}
 
-        {/* Main content rendering logic */}
-        {consultations.length === 0 && patients.length === 0 ? (
-          <main className="workspace">
-            <div className="panel start-screen-panel">
-              <img
-                src={getAssetPath("/stethoscribe_icon.png")}
-                alt="StethoscribeAI Icon"
-                className="start-logo"
-              />
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "600",
-                  marginBottom: "0.5rem",
-                  color: "var(--text-primary)",
-                }}
-              >
-                Welcome to StethoscribeAI
-              </h2>
-              <p
-                style={{
-                  fontSize: "1rem",
-                  color: "var(--text-secondary)",
-                  marginBottom: "2rem",
-                  textAlign: "center",
-                  maxWidth: "400px",
-                }}
-              >
-                Add your first patient to get started
-              </p>
-              <button
-                className="button button-primary start-button"
-                onClick={() => setShowNewPatientModal(true)}
-              >
-                + Add New Patient
-              </button>
-            </div>
-          </main>
-        ) : activeConsultation ? (
-          <main className="workspace">
+        {/* Main content rendering */}
+        <main className="workspace">
+          {consultations.length === 0 && patients.length === 0 ? (
+            <WelcomeScreen onAddNewPatient={() => setShowNewPatientModal(true)} />
+          ) : activeConsultation ? (
             <div className="panel">
               <div className="panel-header-sticky">
                 <div className="tabs-container">
@@ -526,94 +617,13 @@ const handleStopAndGenerate = async () => {
               </div>
 
               <div className="tab-content">
-                {activeConsultation.activeTab === "transcript" ? (
-                  <TranscriptPanel
-                    activeConsultation={activeConsultation}
-                    transcriptEndRef={transcriptEndRef}
-                    onSpeakerRoleToggle={handleSpeakerRoleToggle}
-                    renderActionButtons={renderActionButtons}
-                    getStatusDisplay={getStatusDisplay}
-                    updateConsultation={updateConsultation}
-                    activeConsultationId={activeConsultationId}
-                  />
-                ) : activeConsultation.activeTab === "patient" ? (
-                  <PatientInfoPanel
-                    activeConsultation={activeConsultation}
-                    updateConsultation={updateConsultation}
-                    activeConsultationId={activeConsultationId}
-                    onRegenerateNote={handleGenerateNote}
-                  />
-                ) : (
-                  <>
-                    <div className="notes-content">
-                      <NoteEditor
-                        notes={activeConsultation.notes}
-                        setNotes={(newNotes) =>
-                          updateConsultation(activeConsultationId, {
-                            notes: newNotes,
-                          })
-                        }
-                        loading={activeConsultation.loading}
-                        error={activeConsultation.error}
-                        noteType={activeConsultation.noteType}
-                        onNoteTypeChange={handleNoteTypeChange}
-                        onRegenerate={handleGenerateNote}
-                        transcriptSegments={
-                          activeConsultation.transcriptSegments
-                        }
-                      />
-                    </div>
-                    <CommandBar
-                      notes={activeConsultation.notes}
-                      setNotes={(newNotes) =>
-                        updateConsultation(activeConsultationId, {
-                          notes: newNotes,
-                        })
-                      }
-                    />
-                  </>
-                )}
+                {renderTabContent()}
               </div>
             </div>
-          </main>
-        ) : (
-          <main className="workspace">
-            <div className="panel start-screen-panel">
-              <img
-                src={getAssetPath("/stethoscribe_icon.png")}
-                alt="StethoscribeAI Icon"
-                className="start-logo"
-              />
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "600",
-                  marginBottom: "0.5rem",
-                  color: "var(--text-primary)",
-                }}
-              >
-                Select a consultation
-              </h2>
-              <p
-                style={{
-                  fontSize: "1rem",
-                  color: "var(--text-secondary)",
-                  marginBottom: "2rem",
-                  textAlign: "center",
-                  maxWidth: "400px",
-                }}
-              >
-                Choose a patient from the sidebar or add a new one
-              </p>
-              <button
-                className="button button-primary start-button"
-                onClick={() => setShowNewPatientModal(true)}
-              >
-                + Add New Patient
-              </button>
-            </div>
-          </main>
-        )}
+          ) : (
+            <EmptyStateView onAddNewPatient={() => setShowNewPatientModal(true)} />
+          )}
+        </main>
       </div>
 
       {showNewPatientModal && (

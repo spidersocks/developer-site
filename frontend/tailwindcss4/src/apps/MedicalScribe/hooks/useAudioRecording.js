@@ -519,12 +519,54 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
+  // New function to debug transcript segment storage
+  const debugTranscriptSegments = useCallback(() => {
+    if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) return;
+    
+    console.log("[useAudioRecording] Current transcript segments:", {
+      count: activeConsultation.transcriptSegments.size,
+      segments: Array.from(activeConsultation.transcriptSegments.entries())
+    });
+    
+    // Don't add test segments at index 0, use the actual size of the transcript
+    // This ensures test segments don't overwrite existing segments
+    const currentSize = activeConsultation.transcriptSegments.size;
+    
+    // Create a test segment using the current timestamp so it's unique
+    const testSegment = {
+      id: `test-segment-${Date.now()}`,
+      speaker: "spk_0",
+      text: "Test segment",
+      displayText: "Test segment",
+      translatedText: null,
+      entities: []
+    };
+    
+    // Add to local state first
+    const newSegments = new Map(activeConsultation.transcriptSegments);
+    newSegments.set(testSegment.id, testSegment);
+    
+    updateConsultation(activeConsultationId, {
+      transcriptSegments: newSegments
+    });
+    
+    // Then sync to DynamoDB at the correct index
+    enqueueSegmentsForSync([testSegment], currentSize);
+    
+    return {
+      beforeCount: currentSize,
+      afterCount: currentSize + 1,
+      testSegment
+    };
+  }, [activeConsultation, activeConsultationId, updateConsultation, enqueueSegmentsForSync]);
+
   return {
     startSession,
     stopSession,
     handlePause,
     handleResume,
     handleGenerateNote,
-    finalizeInterimSegment // Export this for potential direct use
+    finalizeInterimSegment,
+    debugTranscriptSegments  // Export for testing
   };
 };
