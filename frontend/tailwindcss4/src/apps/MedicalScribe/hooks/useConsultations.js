@@ -331,7 +331,10 @@ export const useConsultations = (ownerUserId = null) => {
         const items = res?.ok ? res.data ?? [] : [];
         // Map backend schema -> UI segment shape
         const mapped = items.map(seg => {
-          const id = String(seg.segment_id);
+          // Accept both segment_id or id to be robust during migration
+          const wireId = seg.segment_id ?? seg.id;
+          const id = wireId ? String(wireId) : `${consultationId}-seq-${seg.sequence_number ?? 0}`;
+
           const speaker = seg.speaker_label ?? null;
           const original = seg.original_text ?? "";
           const translated = seg.translated_text ?? null;
@@ -341,10 +344,17 @@ export const useConsultations = (ownerUserId = null) => {
             text: original,
             displayText: original,
             translatedText: translated,
-            entities: [], // not persisted; can be enriched later
+            entities: [],
             _sequence: typeof seg.sequence_number === "number" ? seg.sequence_number : 0
           };
         }).sort((a, b) => a._sequence - b._sequence);
+
+        console.info("[useConsultations] Segments fetched", {
+          consultationId,
+          count: mapped.length,
+          first: mapped[0]?.id
+        });
+
         segmentsLookup.set(consultationId, mapped);
       }
 

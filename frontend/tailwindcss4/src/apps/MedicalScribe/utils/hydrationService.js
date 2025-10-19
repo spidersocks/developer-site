@@ -327,18 +327,6 @@ export const hydrateAll = async (ownerUserId) => {
     notesCount: clinicalNotes.length,
   });
 
-  // Then fetch transcript segments
-  const transcriptSegmentsByConsultation = 
-    await fetchTranscriptSegmentsForConsultations(consultations);
-
-  console.info("[hydrationService] hydrateAll complete", {
-    ownerUserId,
-    patients: patients.length,
-    consultations: consultations.length,
-    clinicalNotes: clinicalNotes.length,
-    transcriptSegmentsByConsultation: transcriptSegmentsByConsultation.size,
-  });
-
   // Map patients by ID for quick lookup
   const patientsById = patients.reduce((acc, patient) => {
     if (patient.id) {
@@ -347,9 +335,8 @@ export const hydrateAll = async (ownerUserId) => {
     return acc;
   }, {});
 
-  // Explicitly adding patientProfile to consultations to fix persistence issue
-  const processedConsultations = consultations.map(consultation => {
-    // Check if patient exists and attach their profile
+  // Attach patient profile/name to consultations
+  const processedConsultations = consultations.map((consultation) => {
     if (consultation.patientId && patientsById[consultation.patientId]) {
       const patient = patientsById[consultation.patientId];
       consultation.patientProfile = patient.profile || {};
@@ -362,11 +349,7 @@ export const hydrateAll = async (ownerUserId) => {
     patients,
     consultations: processedConsultations,
     clinicalNotes,
-    transcriptSegmentsByConsultation: Array.from(
-      transcriptSegmentsByConsultation.entries()
-    ).map(([consultationId, segments]) => ({
-      consultationId,
-      segments,
-    })),
+    // Legacy field removed to avoid noisy logs and confusion
+    transcriptSegmentsByConsultation: [],
   };
 };
