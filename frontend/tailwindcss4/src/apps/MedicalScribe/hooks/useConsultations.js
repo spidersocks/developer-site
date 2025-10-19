@@ -325,7 +325,8 @@ export const useConsultations = (ownerUserId = null) => {
         const res = await apiClient.listTranscriptSegments({
           token: undefined,
           consultationId,
-          signal: undefined
+          signal: undefined,
+          includeEntities: true, // <— request server-side enrichment on demand
         });
 
         if (!res.ok) {
@@ -351,13 +352,16 @@ export const useConsultations = (ownerUserId = null) => {
           const speaker = seg.speaker_label ?? null;
           const original = seg.original_text ?? "";
           const translated = seg.translated_text ?? null;
+          // NEW: use entities from API when present
+          const entities = Array.isArray(seg.entities) ? seg.entities : [];
+
           return {
             id,
             speaker,
             text: original,
             displayText: original,
             translatedText: translated,
-            entities: [],
+            entities,
             _sequence: typeof seg.sequence_number === "number" ? seg.sequence_number : 0
           };
         }).sort((a, b) => a._sequence - b._sequence);
