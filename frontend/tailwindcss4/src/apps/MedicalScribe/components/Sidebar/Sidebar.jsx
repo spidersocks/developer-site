@@ -28,6 +28,8 @@ export const Sidebar = ({
   onCloseSidebar,
   // NEW: show loading state instead of "No patients yet" while hydrating
   isHydrating = false,
+  // NEW: allow sign-out from the sidebar (mobile-friendly)
+  onSignOut,
 }) => {
   const { displayName, email } = useAuth();
 
@@ -360,6 +362,7 @@ export const Sidebar = ({
         <button
           className={styles.mobileSidebarClose}
           onClick={onCloseSidebar}
+          aria-label="Close menu"
         >
           <CloseIcon />
         </button>
@@ -445,6 +448,8 @@ export const Sidebar = ({
                             className={styles.patientMenuButton}
                             onClick={(e) => togglePatientMenu(e, patient.id)}
                             title="Patient options"
+                            aria-haspopup="menu"
+                            aria-expanded={isMenuOpen}
                           >
                             <MoreVerticalIcon />
                           </button>
@@ -453,12 +458,14 @@ export const Sidebar = ({
                             <div
                               className={styles.patientMenuDropdown}
                               onClick={(e) => e.stopPropagation()}
+                              role="menu"
                             >
                               <button
                                 className={styles.patientMenuItem}
                                 onClick={(e) =>
                                   toggleStarPatient(e, patient.id)
                                 }
+                                role="menuitem"
                               >
                                 <StarIcon filled={isStarred} />
                                 <span>
@@ -471,6 +478,7 @@ export const Sidebar = ({
                                 onClick={(e) =>
                                   handleExportPatientNotes(e, patient.id)
                                 }
+                                role="menuitem"
                               >
                                 <DownloadIcon />
                                 <span>Export All Notes</span>
@@ -481,6 +489,7 @@ export const Sidebar = ({
                               <button
                                 className={`${styles.patientMenuItem} ${styles.patientMenuItemDanger}`}
                                 onClick={(e) => handleDeletePatient(e, patient.id)}
+                                role="menuitem"
                               >
                                 <TrashIcon />
                                 <span>Delete Patient</span>
@@ -567,6 +576,16 @@ export const Sidebar = ({
                 </div>
                 {email && <div className={styles.userEmail}>{email}</div>}
               </div>
+              {onSignOut && (
+                <button
+                  className={styles.signOutButton}
+                  onClick={onSignOut}
+                  type="button"
+                  aria-label="Sign out"
+                >
+                  Sign out
+                </button>
+              )}
             </div>
           </div>
         </div>

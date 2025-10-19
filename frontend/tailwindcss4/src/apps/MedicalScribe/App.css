@@ -603,7 +603,7 @@ body {
   background-color: var(--bg-primary);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 .icon-button:active {
@@ -1337,30 +1337,50 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .mobile-menu-button {
-    display: block;
+  /* Hide fixed sign-out on smaller screens to avoid blocking tabs */
+  .global-signout-button {
+    display: none;
   }
 
+  /* Make panel/content use page scroll; remove nested scroll containers */
   .panel {
-    max-height: calc(100vh - 2rem);
+    max-height: none;
+    overflow: visible;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  .tab-content {
+    overflow: visible;
+  }
+
+  .notes-content {
+    overflow: visible;
+  }
+
+  .rich-editor-content {
+    overflow: visible;
   }
 
   .tabs-container {
-    padding-left: 4rem;
+    padding-left: 3.5rem; /* keep room for mobile menu button */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .action-buttons {
     width: 100%;
     justify-content: center;
+    flex-wrap: wrap;
   }
 
   .profile-fields {
     grid-template-columns: 1fr;
   }
 
-  .global-signout-button {
-    top: 0.75rem;
-    right: 0.75rem;
+  .mobile-menu-button {
+    display: block;
   }
 }
 
@@ -1368,41 +1388,35 @@ body {
    RESPONSIVE DESIGN - MOBILE (768px)
    ============================================ */
 @media (max-width: 768px) {
+  .workspace {
+    gap: 0.75rem;
+    padding: 0.75rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
   .button {
-    padding: 0.65rem 1.25rem;
-    font-size: 0.9rem;
+    padding: 0.65rem 1.1rem;
+    font-size: 0.95rem;
   }
 
   .icon-button {
-    padding: 0.65rem 1.25rem;
+    padding: 0.65rem 1.1rem;
   }
 
   .action-buttons {
-    flex-direction: column;
-    width: 100%;
-    gap: 0.75rem;
+    flex-direction: row;
+    gap: 0.6rem;
   }
 
-  .action-buttons .button {
-    width: 100%;
+  .patient-info-tab {
+    padding: 1.25rem 1rem;
   }
 
   .patient-info-grid {
     grid-template-columns: 1fr;
   }
 
-  .patient-info-tab {
-    padding: 1.5rem 1rem;
-  }
-
-  .profile-field input,
-  .profile-field select,
-  .profile-field textarea {
-    font-size: 16px;
-  }
-
   .tabs-container {
-    padding: 0.5rem 0.75rem 0 4rem;
+    padding: 0.5rem 0.75rem 0 3.25rem;
     gap: 1px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -1420,22 +1434,14 @@ body {
 
   .notes-header-controls {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-
-  .note-type-selector-container {
-    width: 100%;
-  }
-
-  .note-type-selector {
-    flex: 1;
-    min-width: 0;
+    align-items: stretch;
+    gap: 0.5rem;
   }
 
   .notes-actions {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .notes-display {
@@ -1510,11 +1516,5 @@ body {
 
   .modal-footer-buttons .button {
     width: 100%;
-  }
-
-  .global-signout-button {
-    top: 0.6rem;
-    right: 0.6rem;
-    padding: 0.4rem 0.9rem;
   }
 }

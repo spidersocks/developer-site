@@ -133,6 +133,11 @@
   .inTranscriptControls {
     padding: 1.5rem 1rem;
   }
+
+  /* Remove nested scrolling on mobile/tablet; let page scroll instead */
+  .transcriptBox {
+    overflow: visible;
+  }
 }
 
 @media (max-width: 768px) {
@@ -145,14 +150,18 @@
     width: 100%;
   }
 
+  /* Keep controls accessible at the bottom while scrolling */
   .recordingControlsBar {
-    padding: 1rem;
-    flex-direction: column;
-    gap: 0.75rem;
+    position: sticky;
+    bottom: 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: none;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+    z-index: 3;
   }
 
   .statusDisplay {
-    width: 100%;
+    width: auto;
     justify-content: center;
   }
 

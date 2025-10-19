@@ -351,3 +351,10 @@
   font-size: 0.95rem;
   max-width: 400px;
 }
+
+/* NEW: Mobile-friendly - remove nested scrolling in editor */
+@media (max-width: 1024px) {
+  .richEditorContent {
+    overflow: visible;
+  }
+}

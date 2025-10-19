@@ -387,6 +387,8 @@ export default function MedicalScribeApp() {
         sidebarOpen={sidebarOpen}
         onCloseSidebar={() => setSidebarOpen(false)}
         isHydrating={hydrationState?.status === "loading"}
+        // NEW: allow sign-out from sidebar on mobile
+        onSignOut={handleSignOut}
       />
 
       <button
@@ -402,6 +404,7 @@ export default function MedicalScribeApp() {
         <button
           className="mobile-menu-button"
           onClick={() => setSidebarOpen(true)}
+          aria-label="Open menu"
         >
           <MenuIcon />
         </button>
