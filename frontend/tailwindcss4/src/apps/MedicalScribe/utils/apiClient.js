@@ -150,10 +150,13 @@ export const apiClient = {
       accessToken: token,
     }),
 
-  listTranscriptSegments: ({ token, consultationId, signal }) =>
+  listTranscriptSegments: ({ token, consultationId, signal, includeEntities } = {}) =>
     apiRequest(`/transcript-segments/consultations/${consultationId}/segments`, {
       accessToken: token,
       signal,
+      query: {
+        include_entities: includeEntities ? "true" : undefined,
+      },
     }),
 
   createTranscriptSegment: ({ token, consultationId, payload }) =>
