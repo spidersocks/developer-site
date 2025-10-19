@@ -79,6 +79,9 @@ async function apiRequest(
   }
 }
 
+// Module-scoped cache for note types (fetched once per app session)
+let _noteTypesPromise = null;
+
 export const apiClient = {
   listPatients: ({ token, userId, signal } = {}) =>
     apiRequest("/patients", {
@@ -199,6 +202,23 @@ export const apiClient = {
       accessToken: token,
       body: payload,
     }),
+
+  // Fetch once, cache for entire session
+  getNoteTypesCached: () => {
+    if (_noteTypesPromise) return _noteTypesPromise;
+    _noteTypesPromise = apiRequest("/note-types").then((res) => {
+      if (res.ok && res.data && Array.isArray(res.data.note_types)) {
+        return res.data.note_types;
+      }
+      // If failed or malformed, let the caller handle fallback
+      throw new Error(res.error?.message || "Failed to load note types");
+    }).catch((err) => {
+      // Ensure subsequent calls still resolve (with empty list) to avoid repeated fetches
+      console.warn("[apiClient] getNoteTypesCached fallback due to error:", err?.message);
+      return [];
+    });
+    return _noteTypesPromise;
+  },
 };
 
 export { apiRequest };

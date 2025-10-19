@@ -1,6 +1,7 @@
 import React from "react";
 import { TranscriptSegment } from "./TranscriptSegment";
 import { getFriendlySpeakerLabel } from "../../utils/helpers";
+import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./TranscriptPanel.module.css";
 
 export const TranscriptPanel = ({
@@ -13,6 +14,9 @@ export const TranscriptPanel = ({
   activeConsultationId,
   showLanguageSelector = true,
 }) => {
+  const noSegmentsYet = activeConsultation.transcriptSegments.size === 0;
+  const isIdleOrStopped = ["idle", "stopped"].includes(activeConsultation.sessionState);
+
   return (
     <>
       {activeConsultation.sessionState === "idle" && (
@@ -46,8 +50,10 @@ export const TranscriptPanel = ({
         </div>
       )}
       <div className={styles.transcriptBox}>
-        {activeConsultation.transcriptSegments.size > 0 ||
-        ["recording", "paused"].includes(activeConsultation.sessionState) ? (
+        {noSegmentsYet && isIdleOrStopped ? (
+          <LoadingAnimation message="Loading transcript..." />
+        ) : activeConsultation.transcriptSegments.size > 0 ||
+          ["recording", "paused"].includes(activeConsultation.sessionState) ? (
           <>
             {Array.from(activeConsultation.transcriptSegments.values()).map(
               (seg) => (

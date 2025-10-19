@@ -324,16 +324,16 @@ export default function MedicalScribeApp() {
     updateConsultation(activeConsultationId, { noteType: newNoteType });
   };
 
+  // Prioritize note generation as soon as session stops
   const handleStopAndGenerate = async () => {
     await stopSession();
-    
-    // Force sync transcript data before generating note
-    if (ENABLE_BACKGROUND_SYNC) {
-      await ensureSyncComplete();
-    }
-    
+    // Immediately kick off note generation (do NOT wait for background sync)
     if (activeConsultation && activeConsultation.transcriptSegments.size > 0) {
-      handleGenerateNote();
+      await handleGenerateNote();
+    }
+    // Flush background sync after we've started/finished generating (lower priority)
+    if (ENABLE_BACKGROUND_SYNC) {
+      ensureSyncComplete();
     }
   };
 
@@ -571,7 +571,9 @@ export default function MedicalScribeApp() {
         )}
 
         <main className="workspace">
-          {consultations.length === 0 && patients.length === 0 ? (
+          {hydrationState?.status === "loading" ? (
+            <LoadingAnimation message={hydrationState.message || "Fetching patients..."} />
+          ) : consultations.length === 0 && patients.length === 0 ? (
             <WelcomeScreen onAddNewPatient={() => setShowNewPatientModal(true)} />
           ) : activeConsultation ? (
             <div className="panel">

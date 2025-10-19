@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { BACKEND_API_URL } from "../../utils/constants";
+import { DEFAULT_NOTE_TYPES } from "../../utils/constants";
+import { apiClient } from "../../utils/apiClient";
 import { formatNotesAsHTML, parseHTMLToNotes } from "../../utils/noteFormatters";
 import {
   UndoIcon,
@@ -29,7 +30,7 @@ export const NoteEditor = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
   const [copied, setCopied] = useState(false);
-  const [availableNoteTypes, setAvailableNoteTypes] = useState([]);
+  const [availableNoteTypes, setAvailableNoteTypes] = useState(DEFAULT_NOTE_TYPES);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingNoteType, setPendingNoteType] = useState(null);
   const editorRef = useRef(null);
@@ -39,23 +40,20 @@ export const NoteEditor = ({
   const lastContentRef = useRef("");
   const isUpdatingRef = useRef(false);
 
+  // Fetch once per application session (cached in apiClient)
   useEffect(() => {
-    const fetchNoteTypes = async () => {
-      try {
-        const resp = await fetch(`${BACKEND_API_URL}/note-types`);
-        const data = await resp.json();
-        setAvailableNoteTypes(data.note_types || []);
-      } catch (err) {
-        console.error("Failed to fetch note types:", err);
-        setAvailableNoteTypes([
-          { id: "standard", name: "Standard Clinical Note" },
-          { id: "soap", name: "SOAP Note" },
-          { id: "hp", name: "History & Physical (H&P)" },
-          { id: "consultation", name: "Consultation Note" },
-        ]);
-      }
-    };
-    fetchNoteTypes();
+    let mounted = true;
+    apiClient.getNoteTypesCached()
+      .then((types) => {
+        if (!mounted) return;
+        if (Array.isArray(types) && types.length > 0) {
+          setAvailableNoteTypes(types);
+        } else {
+          setAvailableNoteTypes(DEFAULT_NOTE_TYPES);
+        }
+      })
+      .catch(() => setAvailableNoteTypes(DEFAULT_NOTE_TYPES));
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -714,19 +712,6 @@ export const NoteEditor = ({
           </button>
         </div>
       </div>
-
-      {warning && (
-        <div
-          className={`${styles.noteTypeHint} ${
-            warning.severity === "warning"
-              ? styles.noteTypeHintWarning
-              : styles.noteTypeHintInfo
-          }`}
-        >
-          <span className={styles.hintIcon}>ℹ️</span>
-          <span>{warning.message}</span>
-        </div>
-      )}
 
       <div ref={notesDisplayRef} className={styles.notesDisplay}>
         {Object.entries(notes).map(([section, items]) => {
