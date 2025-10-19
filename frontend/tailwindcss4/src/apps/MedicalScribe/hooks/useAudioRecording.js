@@ -37,20 +37,15 @@ export const useAudioRecording = (
       const payload = {
         sequence_number: sequenceNumber,
         speaker_label: segment.speaker ?? null,
-        speaker_role: undefined,
         original_text: segment.text ?? "",
         translated_text: segment.translatedText ?? null,
         detected_language: detectedLanguage ?? null,
-        start_time_ms: undefined,
-        end_time_ms: undefined,
-        entities: undefined,
+        // Omit time fields and entities during debug to simplify
       };
 
-      console.info("[useAudioRecording] Persisting segment", {
+      console.info("[useAudioRecording] Persisting segment payload", {
         consultationId: activeConsultationId,
-        sequenceNumber,
-        id: segment.id,
-        preview: (segment.text || "").slice(0, 60)
+        payload
       });
 
       const res = await apiClient.createTranscriptSegment({
@@ -62,14 +57,12 @@ export const useAudioRecording = (
       if (!res.ok) {
         console.error("[useAudioRecording] Persist segment FAILED", {
           consultationId: activeConsultationId,
-          sequenceNumber,
-          id: segment.id,
           status: res.status,
-          error: res.error?.message
+          errorMessage: res.error?.message,
+          responseData: res.data // <- backend 422 detail should be visible now
         });
         return false;
       }
-
       console.info("[useAudioRecording] Persist segment OK", {
         consultationId: activeConsultationId,
         sequenceNumber,

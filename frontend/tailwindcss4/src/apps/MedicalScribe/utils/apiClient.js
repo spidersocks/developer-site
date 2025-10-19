@@ -43,11 +43,8 @@ async function apiRequest(
       signal,
     });
 
-    const isJson =
-      response.headers
-        .get("content-type")
-        ?.toLowerCase()
-        .includes("application/json") ?? false;
+    const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+    const isJson = contentType.includes("application/json");
 
     const payload =
       response.status === 204
@@ -57,11 +54,16 @@ async function apiRequest(
         : await response.text().catch(() => null);
 
     if (!response.ok) {
-      const message =
-        (payload && payload.detail) ||
-        (typeof payload === "string" && payload) ||
-        `Request failed with status ${response.status}`;
-
+      // Build a helpful message for 4xx/5xx
+      let message = `Request failed with status ${response.status}`;
+      if (payload && typeof payload === "object" && payload.detail) {
+        // pydantic/fastapi-style error payloads
+        message = Array.isArray(payload.detail)
+          ? `Validation: ${JSON.stringify(payload.detail)}`
+          : String(payload.detail);
+      } else if (typeof payload === "string" && payload.trim()) {
+        message = payload;
+      }
       return {
         ok: false,
         status: response.status,
@@ -72,8 +74,7 @@ async function apiRequest(
 
     return { ok: true, status: response.status, data: payload };
   } catch (error) {
-    const normalized =
-      error instanceof Error ? error : new Error(String(error));
+    const normalized = error instanceof Error ? error : new Error(String(error));
     return { ok: false, status: 0, data: null, error: normalized };
   }
 }
