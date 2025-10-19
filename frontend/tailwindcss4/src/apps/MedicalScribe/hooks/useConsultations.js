@@ -457,23 +457,23 @@ export const useConsultations = (ownerUserId = null) => {
 
           // Process transcript segments
           if (consultationKey && segmentsLookup.has(consultationKey)) {
-          const segments = segmentsLookup.get(consultationKey);
-          const segmentMap = new Map();
-          segments.forEach(segment => {
-            segmentMap.set(segment.id, {
-              id: segment.id,
-              speaker: segment.speaker || null,
-              text: segment.text || "",
-              displayText: segment.displayText || segment.text || "",
-              translatedText: segment.translatedText || null,
-              // IMPORTANT: keep entities from API so HighlightedText can render
-              entities: Array.isArray(segment.entities) ? segment.entities : [],
+            const segments = segmentsLookup.get(consultationKey);
+            const segmentMap = new Map();
+            segments.forEach(segment => {
+              segmentMap.set(segment.id, {
+                id: segment.id,
+                speaker: segment.speaker || null,
+                text: segment.text || "",
+                displayText: segment.displayText || segment.text || "",
+                translatedText: segment.translatedText || null,
+                // IMPORTANT: keep enriched entities returned by the API
+                entities: Array.isArray(segment.entities) ? segment.entities : [],
+              });
             });
-          });
-          normalized.transcriptSegments = segmentMap;
-        } else {
-          normalized.transcriptSegments = toTranscriptMap(normalized.transcriptSegments);
-        }
+            normalized.transcriptSegments = segmentMap;
+          } else {
+            normalized.transcriptSegments = toTranscriptMap(normalized.transcriptSegments);
+          }
 
         return normalized;
       });
