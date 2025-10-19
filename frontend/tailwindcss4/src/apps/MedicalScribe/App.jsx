@@ -130,13 +130,8 @@ export default function MedicalScribeApp() {
     await signOut();
   };
 
-  // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [
-    activeConsultation?.transcriptSegments,
-    activeConsultation?.interimTranscript,
-  ]);
+  // NOTE: Removed automatic scroll-to-bottom on transcript tab to prevent page jumping.
+  // If needed later, we can restore a scoped auto-scroll inside the transcript box only.
 
   // Flush queue regularly (silent) to keep background sync moving
   useEffect(() => {

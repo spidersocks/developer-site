@@ -6,7 +6,8 @@
   flex-direction: column;
   gap: 0;
   position: relative;
-  overflow: hidden;
+  height: 100vh;            /* Ensure sidebar fills viewport height */
+  overflow: hidden;         /* Prevent page scroll; inner wrapper will scroll */
 }
 
 .mobileSidebarClose {
@@ -31,6 +32,7 @@
   align-items: center;
   justify-content: center;
   padding: 0.5rem 0 1rem 0;
+  flex: 0 0 auto; /* Non-scrolling */
 }
 
 .sidebarLogo {
@@ -42,6 +44,7 @@
 
 .sidebarSearch {
   padding: 0 0 0.75rem 0;
+  flex: 0 0 auto; /* Non-scrolling */
 }
 
 .sidebarSearchInput {
@@ -65,13 +68,15 @@
 }
 
 .sidebarNavWrapper {
-  flex: 1;
-  overflow-y: auto;
+  flex: 1 1 auto;           /* Take remaining space */
+  min-height: 0;            /* Allow flex child to shrink and enable scrolling */
+  overflow-y: auto;         /* Scroll only this area */
   overflow-x: hidden;
   margin: 0 -1rem;
   padding: 0 1rem;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .sidebarNavWrapper::-webkit-scrollbar {
@@ -453,7 +458,7 @@
   background: linear-gradient(to top, var(--bg-panel) 85%, transparent);
   border-top: 1px solid var(--border-color);
   margin-top: auto;
-  flex-shrink: 0;
+  flex-shrink: 0; /* Keep footer visible; do not shrink */
 }
 
 .addPatientButtonFooter {
@@ -493,7 +498,8 @@
 .sidebarFooter {
   padding: 0.9rem 0;
   border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
+  flex-shrink: 0; /* Keep user block visible; non-scrolling */
+  background: var(--bg-panel);
 }
 
 .userBlock {
@@ -583,6 +589,7 @@
     z-index: 1000;
     transition: left 0.3s ease;
     box-shadow: var(--shadow-lg);
+    height: 100vh; /* Explicit for mobile as well */
   }
 
   .sidebarOpen {
