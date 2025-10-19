@@ -408,7 +408,7 @@ export const useConsultations = (ownerUserId = null) => {
       );
 
       // Process consultations
-      const normalizedConsultations = (remoteConsultations ?? []).map((consultation) => {
+            const normalizedConsultations = (remoteConsultations ?? []).map((consultation) => {
         const normalized = deserializeConsultationFromStorage(consultation, safeOwnerUserId);
         const consultationKey = normalized.id ?? normalized.consultationId ?? null;
 
@@ -466,7 +466,8 @@ export const useConsultations = (ownerUserId = null) => {
               text: segment.text || "",
               displayText: segment.displayText || segment.text || "",
               translatedText: segment.translatedText || null,
-              entities: []
+              // IMPORTANT: keep entities from API so HighlightedText can render
+              entities: Array.isArray(segment.entities) ? segment.entities : [],
             });
           });
           normalized.transcriptSegments = segmentMap;
