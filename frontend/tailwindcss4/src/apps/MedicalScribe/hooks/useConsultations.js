@@ -270,7 +270,6 @@ export const useConsultations = (ownerUserId = null) => {
         hydrationState: { ...prev.hydrationState, status: "loading", message: "Fetching data...", progress: 10 }
       }));
 
-      // Patients, consultations, notes via Dynamo (unchanged)
       const {
         patients: remotePatients,
         consultations: remoteConsultations,
@@ -328,13 +327,27 @@ export const useConsultations = (ownerUserId = null) => {
           consultationId,
           signal: undefined
         });
-        const items = res?.ok ? res.data ?? [] : [];
-        // Map backend schema -> UI segment shape
+
+        if (!res.ok) {
+          console.error("[useConsultations] listTranscriptSegments FAILED", {
+            consultationId,
+            status: res.status,
+            error: res.error?.message
+          });
+        }
+
+        const items = res?.ok ? (Array.isArray(res.data) ? res.data : []) : [];
+        console.info("[useConsultations] Raw segments response", {
+          consultationId,
+          ok: res.ok,
+          status: res.status,
+          itemCount: items.length,
+          sample: items[0]
+        });
+
         const mapped = items.map(seg => {
-          // Accept both segment_id or id to be robust during migration
           const wireId = seg.segment_id ?? seg.id;
           const id = wireId ? String(wireId) : `${consultationId}-seq-${seg.sequence_number ?? 0}`;
-
           const speaker = seg.speaker_label ?? null;
           const original = seg.original_text ?? "";
           const translated = seg.translated_text ?? null;

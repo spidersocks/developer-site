@@ -1,7 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { BACKEND_WS_URL, BACKEND_API_URL, ENABLE_BACKGROUND_SYNC } from '../utils/constants';
 import { getAssetPath, getFriendlySpeakerLabel, calculateAge, to16BitPCM } from '../utils/helpers';
-// REMOVE: import { syncService } from "../utils/syncService";
 import { apiClient } from "../utils/apiClient";
 
 /**
@@ -22,34 +21,97 @@ export const useAudioRecording = (
   const sessionStateRef = useRef('idle');
   const ownerUserIdRef = useRef(null);
 
+  // Track how many segments we believe are persisted server-side (best effort)
+  const persistedCountRef = useRef(0);
+
   if (activeConsultation?.ownerUserId) {
     ownerUserIdRef.current = activeConsultation.ownerUserId;
+  }
+  if (activeConsultation) {
+    sessionStateRef.current = activeConsultation.sessionState;
   }
 
   // Persist a finalized segment to the backend (no entities)
   const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
     try {
-      await apiClient.createTranscriptSegment({
-        // If your API enforces auth, pass access token here from useAuth; otherwise this can be omitted
+      const payload = {
+        sequence_number: sequenceNumber,
+        speaker_label: segment.speaker ?? null,
+        speaker_role: undefined,
+        original_text: segment.text ?? "",
+        translated_text: segment.translatedText ?? null,
+        detected_language: detectedLanguage ?? null,
+        start_time_ms: undefined,
+        end_time_ms: undefined,
+        entities: undefined,
+      };
+
+      console.info("[useAudioRecording] Persisting segment", {
+        consultationId: activeConsultationId,
+        sequenceNumber,
+        id: segment.id,
+        preview: (segment.text || "").slice(0, 60)
+      });
+
+      const res = await apiClient.createTranscriptSegment({
         token: undefined,
         consultationId: activeConsultationId,
-        payload: {
-          sequence_number: sequenceNumber,
-          speaker_label: segment.speaker ?? null,
-          speaker_role: undefined, // optional: derive from speakerRoles if desired
-          original_text: segment.text ?? "",
-          translated_text: segment.translatedText ?? null,
-          detected_language: detectedLanguage ?? null,
-          start_time_ms: undefined,
-          end_time_ms: undefined,
-          // IMPORTANT: do not send entities; they will be re-computed on demand
-          entities: undefined,
-        },
+        payload
       });
+
+      if (!res.ok) {
+        console.error("[useAudioRecording] Persist segment FAILED", {
+          consultationId: activeConsultationId,
+          sequenceNumber,
+          id: segment.id,
+          status: res.status,
+          error: res.error?.message
+        });
+        return false;
+      }
+
+      console.info("[useAudioRecording] Persist segment OK", {
+        consultationId: activeConsultationId,
+        sequenceNumber,
+        id: segment.id,
+        segment_id: res.data?.segment_id
+      });
+      persistedCountRef.current += 1;
+      return true;
     } catch (e) {
       console.error("[useAudioRecording] Failed to persist transcript segment:", e);
+      return false;
     }
   }, [activeConsultationId]);
+
+  // Persist a full set of segments (backfill), ordered by sequence
+  const persistAllSegments = useCallback(async () => {
+    if (!activeConsultation) return { attempted: 0, succeeded: 0 };
+    const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
+      seg,
+      seq: idx
+    }));
+
+    console.info("[useAudioRecording] Backfill persist: starting", {
+      consultationId: activeConsultationId,
+      count: ordered.length
+    });
+
+    let success = 0;
+    for (const { seg, seq } of ordered) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await persistFinalSegment(seg, seq, activeConsultation.language || "en-US");
+      if (ok) success += 1;
+    }
+
+    console.info("[useAudioRecording] Backfill persist: completed", {
+      consultationId: activeConsultationId,
+      attempted: ordered.length,
+      succeeded: success
+    });
+
+    return { attempted: ordered.length, succeeded: success };
+  }, [activeConsultation, activeConsultationId, persistFinalSegment]);
 
   const prepareSegmentForUi = useCallback((raw) => {
     if (!raw) return null;
@@ -59,20 +121,11 @@ export const useAudioRecording = (
       text: raw.text || "",
       displayText: raw.displayText || raw.text || "",
       translatedText: raw.translatedText || null,
-      entities: Array.isArray(raw.entities) ? raw.entities : [], // live entities (from websocket) only
+      entities: Array.isArray(raw.entities) ? raw.entities : [],
     };
   }, []);
 
-  // DO NOT enqueue segments to DynamoDB directly anymore
-  const enqueueSegmentsForSync = useCallback((_segments, _baseIndex) => {
-    // No-op: we now persist via backend API
-  }, []);
-
-  if (activeConsultation) {
-    sessionStateRef.current = activeConsultation.sessionState;
-  }
-
-  const finalizeInterimSegment = useCallback(() => {
+  const finalizeInterimSegment = useCallback(async () => {
     if (!activeConsultation) return;
     const text = (activeConsultation.interimTranscript || '').trim();
     if (!text) return;
@@ -99,7 +152,7 @@ export const useAudioRecording = (
     });
 
     // Persist via backend API (no entities)
-    persistFinalSegment(finalSegment, baseIndex, activeConsultation.language || "en-US");
+    await persistFinalSegment(finalSegment, baseIndex, activeConsultation.language || "en-US");
   }, [activeConsultation, activeConsultationId, updateConsultation, persistFinalSegment]);
 
   const startMicrophone = useCallback(async () => {
@@ -125,6 +178,7 @@ export const useAudioRecording = (
 
       source.connect(workletNode);
       updateConsultation(activeConsultationId, { sessionState: 'recording' });
+      persistedCountRef.current = 0;
     } catch (err) {
       console.error('[useAudioRecording] Microphone Error:', err);
       updateConsultation(activeConsultationId, {
@@ -156,7 +210,7 @@ export const useAudioRecording = (
         startMicrophone();
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
           const results = data.Transcript?.Results ?? [];
@@ -188,7 +242,6 @@ export const useAudioRecording = (
                 return;
               }
 
-              // Final UI segment enriched live with entities from server push (data.ComprehendEntities)
               const uiSegment = prepareSegmentForUi({
                 id: result.ResultId,
                 speaker: currentSpeaker,
@@ -200,7 +253,6 @@ export const useAudioRecording = (
 
               newSegments.set(uiSegment.id, uiSegment);
 
-              // Queue for persistence (without entities)
               segmentsToPersist.push({
                 ui: uiSegment,
                 sequenceNumber: baseIndex + idx,
@@ -226,9 +278,10 @@ export const useAudioRecording = (
           });
 
           // Persist finalized segments (no entities) via backend API
-          segmentsToPersist.forEach(({ ui, sequenceNumber, detectedLanguage }) => {
-            persistFinalSegment(ui, sequenceNumber, detectedLanguage);
-          });
+          for (const { ui, sequenceNumber, detectedLanguage } of segmentsToPersist) {
+            // eslint-disable-next-line no-await-in-loop
+            await persistFinalSegment(ui, sequenceNumber, detectedLanguage);
+          }
         } catch (e) {
           console.error('[useAudioRecording] Error processing WebSocket message:', e);
         }
@@ -266,8 +319,8 @@ export const useAudioRecording = (
     persistFinalSegment
   ]);
 
-  const handlePause = useCallback(() => {
-    finalizeInterimSegment();
+  const handlePause = useCallback(async () => {
+    await finalizeInterimSegment();
     updateConsultation(activeConsultationId, { sessionState: 'paused' });
   }, [activeConsultationId, updateConsultation, finalizeInterimSegment]);
 
@@ -303,9 +356,42 @@ export const useAudioRecording = (
     }
 
     if (!finalized) {
-      finalizeInterimSegment();
+      await finalizeInterimSegment();
     }
-  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment]);
+
+    // Safety net: if we persisted 0 (or suspiciously few) segments during the session, backfill all
+    try {
+      const localCount = activeConsultation.transcriptSegments.size;
+      console.info("[useAudioRecording] Stop session: persistedCount vs localCount", {
+        persistedCount: persistedCountRef.current,
+        localCount
+      });
+
+      if (localCount > 0) {
+        const res = await apiClient.listTranscriptSegments({
+          token: undefined,
+          consultationId: activeConsultationId,
+          signal: undefined
+        });
+        const serverCount = res.ok && Array.isArray(res.data) ? res.data.length : 0;
+        console.info("[useAudioRecording] Server segment count at stop", {
+          consultationId: activeConsultationId,
+          serverCount
+        });
+
+        if (serverCount < localCount) {
+          console.warn("[useAudioRecording] Detected missing server segments. Backfilling…", {
+            consultationId: activeConsultationId,
+            serverCount,
+            localCount
+          });
+          await persistAllSegments();
+        }
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Backfill check failed:", err);
+    }
+  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments]);
 
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
     if (!activeConsultation) return;
@@ -353,12 +439,9 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
-  // Optional dev debug kept as no-op for DB writes
-  const debugTranscriptSegments = useCallback(() => {
-    // Leave as is or remove; do not write directly to DynamoDB
-  }, []);
+  // Optional dev debug
+  const debugTranscriptSegments = useCallback(() => {}, []);
 
-  // Re-export
   return {
     startSession,
     stopSession,
