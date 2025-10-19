@@ -569,25 +569,23 @@ export const Sidebar = ({
             <div className={styles.avatar} aria-hidden="true">
               {userInitials}
             </div>
-            <div className={styles.userMeta}>
-              <div className={styles.userDetails}>
-                <div className={styles.userName}>
-                  {displayName || "Signed-in user"}
-                </div>
-                {email && <div className={styles.userEmail}>{email}</div>}
+            <div className={styles.userDetails}>
+              <div className={styles.userName}>
+                {displayName || "Signed-in user"}
               </div>
-              {onSignOut && (
-                <button
-                  className={styles.signOutButton}
-                  onClick={onSignOut}
-                  type="button"
-                  aria-label="Sign out"
-                >
-                  Sign out
-                </button>
-              )}
+              {email && <div className={styles.userEmail}>{email}</div>}
             </div>
           </div>
+          {onSignOut && (
+            <button
+              className={styles.signOutButton}
+              onClick={onSignOut}
+              type="button"
+              aria-label="Sign out"
+            >
+              Sign out
+            </button>
+          )}
         </div>
       </aside>
 

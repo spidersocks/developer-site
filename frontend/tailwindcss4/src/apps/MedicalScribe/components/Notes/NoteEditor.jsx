@@ -1,7 +1,16 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import { DEFAULT_NOTE_TYPES } from "../../utils/constants";
 import { apiClient } from "../../utils/apiClient";
-import { formatNotesAsHTML, parseHTMLToNotes } from "../../utils/noteFormatters";
+import {
+  formatNotesAsHTML,
+  parseHTMLToNotes,
+} from "../../utils/noteFormatters";
 import {
   UndoIcon,
   RedoIcon,
@@ -12,13 +21,81 @@ import {
   SaveIcon,
   CancelIcon,
   DownloadIcon,
+  EditIcon,
 } from "../shared/Icons";
 import { NoteTypeConfirmationModal } from "../shared/Modal";
 import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./NoteEditor.module.css";
-
-// NEW: Add Template UI (no storage)
 import { NewNoteTemplateModal } from "./NewNoteTemplateModal";
+
+const CONSULTATION_INDICATORS = [
+  "consult",
+  "asked to see",
+  "thank you for asking",
+  "referred by dr",
+  "requested by dr",
+  "specialist",
+  "consultation requested",
+];
+
+const ADMISSION_INDICATORS = ["admitted", "admission", "hospital", "inpatient"];
+
+const BOOLEAN_TEXT = {
+  true: "Yes",
+  false: "No",
+};
+
+const buildSectionText = (rootNode, nestedClassName) => {
+  if (!rootNode) return "";
+
+  let textContent = "";
+
+  rootNode.childNodes.forEach((node) => {
+    if (node.nodeType !== Node.ELEMENT_NODE || node.tagName !== "DIV") return;
+
+    node.childNodes.forEach((childNode) => {
+      if (childNode.nodeType !== Node.ELEMENT_NODE) return;
+
+      switch (childNode.tagName) {
+        case "H3":
+          textContent += `\n${childNode.textContent}\n`;
+          break;
+        case "P":
+          textContent += `${childNode.textContent}\n`;
+          break;
+        case "UL": {
+          childNode.querySelectorAll("li").forEach((li) => {
+            textContent += `• ${li.textContent}\n`;
+          });
+          textContent += "\n";
+          break;
+        }
+        default:
+          if (childNode.className === nestedClassName) {
+            childNode.querySelectorAll("p").forEach((p) => {
+              textContent += `${p.textContent}\n`;
+            });
+            textContent += "\n";
+          } else {
+            textContent += `${childNode.textContent}\n`;
+          }
+      }
+    });
+  });
+
+  return textContent.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+const renderNestedSectionValue = (value) =>
+  typeof value === "boolean" ? BOOLEAN_TEXT[String(value)] : value;
+
+const createPrintWindow = (title) =>
+  window.open("", "", "height=800,width=800") ?? null;
+
+const safeArrayFromMapValues = (mapLike) => {
+  if (!mapLike || typeof mapLike.values !== "function") return [];
+  return Array.from(mapLike.values());
+};
 
 export const NoteEditor = ({
   notes,
@@ -33,125 +110,83 @@ export const NoteEditor = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
   const [copied, setCopied] = useState(false);
-  const [availableNoteTypes, setAvailableNoteTypes] = useState(DEFAULT_NOTE_TYPES);
+  const [availableNoteTypes, setAvailableNoteTypes] = useState(
+    DEFAULT_NOTE_TYPES
+  );
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingNoteType, setPendingNoteType] = useState(null);
-  const editorRef = useRef(null);
-  const notesDisplayRef = useRef(null);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
+  const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
+
+  const editorRef = useRef(null);
+  const notesDisplayRef = useRef(null);
   const lastContentRef = useRef("");
   const isUpdatingRef = useRef(false);
 
-  // NEW: Template modal open flag
-  const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
+  const transcriptText = useMemo(() => {
+    const segments = safeArrayFromMapValues(transcriptSegments);
+    if (!segments.length) return "";
 
-  // Fetch once per application session (cached in apiClient)
-  useEffect(() => {
-    let mounted = true;
-    apiClient.getNoteTypesCached()
-      .then((types) => {
-        if (!mounted) return;
-        if (Array.isArray(types) && types.length > 0) {
-          setAvailableNoteTypes(types);
-        } else {
-          setAvailableNoteTypes(DEFAULT_NOTE_TYPES);
+    return segments
+      .map((segment) => segment.displayText || segment.text || "")
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+  }, [transcriptSegments]);
+
+  const checkNoteTypeAppropriateness = useCallback(
+    (newType) => {
+      if (!transcriptText) return { appropriate: true };
+
+      if (newType === "consultation") {
+        const hasConsult = CONSULTATION_INDICATORS.some((indicator) =>
+          transcriptText.includes(indicator)
+        );
+
+        if (!hasConsult) {
+          return {
+            appropriate: false,
+            warning:
+              "This transcript appears to be a direct patient visit, not a consultation.",
+            recommendedType: "standard",
+            explanation:
+              "Consultation notes are for specialist evaluations requested by another provider.",
+          };
         }
-      })
-      .catch(() => setAvailableNoteTypes(DEFAULT_NOTE_TYPES));
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!isEditing) return;
-
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        handleUndo();
       }
-      if (
-        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z") ||
-        ((e.ctrlKey || e.metaKey) && e.key === "y")
-      ) {
-        e.preventDefault();
-        handleRedo();
+
+      if (newType === "hp") {
+        const hasAdmission = ADMISSION_INDICATORS.some((indicator) =>
+          transcriptText.includes(indicator)
+        );
+
+        if (!hasAdmission && transcriptText.length < 3000) {
+          return {
+            appropriate: false,
+            warning:
+              "H&P notes are typically for hospital admissions or comprehensive evaluations.",
+            recommendedType: "standard",
+            explanation:
+              "For outpatient visits, consider Standard or SOAP notes.",
+          };
+        }
       }
-    };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isEditing, undoStack, redoStack]);
+      return { appropriate: true };
+    },
+    [transcriptText]
+  );
 
-  const getFullTranscript = () => {
-    if (!transcriptSegments || transcriptSegments.size === 0) return "";
-    return Array.from(transcriptSegments.values())
-      .map((seg) => seg.displayText || seg.text || "")
-      .join(" ");
-  };
-
-  const checkNoteTypeAppropriateness = (newType) => {
-    const transcript = getFullTranscript().toLowerCase();
-
-    if (newType === "consultation") {
-      const consultIndicators = [
-        "consult",
-        "asked to see",
-        "thank you for asking",
-        "referred by dr",
-        "requested by dr",
-        "specialist",
-        "consultation requested",
-      ];
-      const hasConsult = consultIndicators.some((ind) =>
-        transcript.includes(ind)
-      );
-
-      if (!hasConsult) {
-        return {
-          appropriate: false,
-          warning:
-            "This transcript appears to be a direct patient visit, not a consultation.",
-          recommendedType: "standard",
-          explanation:
-            "Consultation notes are for specialist evaluations requested by another provider.",
-        };
-      }
-    }
-
-    if (newType === "hp") {
-      const admissionIndicators = [
-        "admitted",
-        "admission",
-        "hospital",
-        "inpatient",
-      ];
-      const hasAdmission = admissionIndicators.some((ind) =>
-        transcript.includes(ind)
-      );
-
-      if (!hasAdmission && transcript.length < 3000) {
-        return {
-          appropriate: false,
-          warning:
-            "H&P notes are typically for hospital admissions or comprehensive evaluations.",
-          recommendedType: "standard",
-          explanation: "For outpatient visits, consider Standard or SOAP notes.",
-        };
-      }
-    }
-
-    return { appropriate: true };
-  };
-
-  const getNoteTypeWarning = () => {
+  const warning = useMemo(() => {
     if (!notes) return null;
 
     const check = checkNoteTypeAppropriateness(noteType);
     if (!check.appropriate) {
       const recommendedTypeName =
-        availableNoteTypes.find((t) => t.id === check.recommendedType)?.name ||
-        check.recommendedType;
+        availableNoteTypes.find((type) => type.id === check.recommendedType)
+          ?.name || check.recommendedType;
+
       return {
         message: `${check.warning} Consider using "${recommendedTypeName}" instead.`,
         severity: "info",
@@ -159,232 +194,105 @@ export const NoteEditor = ({
     }
 
     return null;
-  };
+  }, [notes, noteType, availableNoteTypes, checkNoteTypeAppropriateness]);
 
-  const handleEdit = () => {
-    const htmlContent = formatNotesAsHTML(notes);
-    setEditedContent(htmlContent);
-    lastContentRef.current = htmlContent;
-    setUndoStack([htmlContent]);
-    setRedoStack([]);
-    setIsEditing(true);
-  };
+  const pendingTypeInfo = useMemo(
+    () =>
+      pendingNoteType
+        ? availableNoteTypes.find((type) => type.id === pendingNoteType)
+        : null,
+    [pendingNoteType, availableNoteTypes]
+  );
 
-  const handleSave = () => {
-    const parsedNotes = parseHTMLToNotes(editedContent);
-    setNotes(parsedNotes);
-    setIsEditing(false);
-    setUndoStack([]);
-    setRedoStack([]);
-  };
+  const pendingTypeCheck = useMemo(
+    () =>
+      pendingNoteType
+        ? checkNoteTypeAppropriateness(pendingNoteType)
+        : null,
+    [pendingNoteType, checkNoteTypeAppropriateness]
+  );
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setEditedContent("");
-    setUndoStack([]);
-    setRedoStack([]);
-  };
+  const recommendedTypeInfo = useMemo(
+    () =>
+      pendingTypeCheck?.recommendedType
+        ? availableNoteTypes.find(
+            (type) => type.id === pendingTypeCheck.recommendedType
+          )
+        : null,
+    [pendingTypeCheck, availableNoteTypes]
+  );
 
-  const handleCopy = () => {
-    const notesElement = notesDisplayRef.current;
-    if (!notesElement) return;
+  const copyIcon = copied ? "✓" : "📋";
+  const copyLabel = copied ? "Copied" : "Copy";
+  const copyAria = copied ? "Copied to clipboard" : "Copy note to clipboard";
 
-    let textContent = "";
-
-    notesElement.childNodes.forEach((node) => {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        if (node.tagName === "DIV") {
-          node.childNodes.forEach((childNode) => {
-            if (childNode.nodeType === Node.ELEMENT_NODE) {
-              if (childNode.tagName === "H3") {
-                textContent += `\n${childNode.textContent}\n`;
-              } else if (childNode.tagName === "P") {
-                textContent += `${childNode.textContent}\n`;
-              } else if (childNode.tagName === "UL") {
-                const listItems = childNode.querySelectorAll("li");
-                listItems.forEach((li) => {
-                  textContent += `• ${li.textContent}\n`;
-                });
-                textContent += "\n";
-              } else if (childNode.className === styles.nestedSection) {
-                childNode.querySelectorAll("p").forEach((p) => {
-                  textContent += `${p.textContent}\n`;
-                });
-                textContent += "\n";
-              } else {
-                textContent += `${childNode.textContent}\n`;
-              }
-            }
-          });
-        }
+  const loadNoteTypes = useCallback(async () => {
+    try {
+      const types = await apiClient.getNoteTypesCached();
+      if (Array.isArray(types) && types.length > 0) {
+        setAvailableNoteTypes(types);
+      } else {
+        setAvailableNoteTypes(DEFAULT_NOTE_TYPES);
       }
-    });
+    } catch {
+      setAvailableNoteTypes(DEFAULT_NOTE_TYPES);
+    }
+  }, []);
 
-    textContent = textContent.replace(/\n{3,}/g, "\n\n").trim();
+  const handleUndo = useCallback(() => {
+    if (undoStack.length <= 1) return;
 
-    navigator.clipboard.writeText(textContent).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
+    isUpdatingRef.current = true;
 
-  const handleDownloadPDF = () => {
-    const noteTypeName =
-      availableNoteTypes.find((t) => t.id === noteType)?.name ||
-      "Clinical Note";
-    const currentDate = new Date().toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    setUndoStack((prev) => {
+      const nextUndoStack = [...prev];
+      const current = nextUndoStack.pop();
+      const previous = nextUndoStack[nextUndoStack.length - 1];
 
-    const printWindow = window.open("", "", "height=800,width=800");
+      setRedoStack((redoPrev) => [...redoPrev, current]);
+      setEditedContent(previous);
+      lastContentRef.current = previous;
 
-    let htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${noteTypeName}</title>
-        <style>
-          @page {
-            size: A4;
-            margin: 2cm;
-          }
-          
-          body {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.6;
-            color: #000;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-          }
-          
-          .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 15px;
-          }
-          
-          .header h1 {
-            margin: 0 0 10px 0;
-            font-size: 18pt;
-            font-weight: bold;
-          }
-          
-          .header .date {
-            font-size: 11pt;
-            color: #333;
-          }
-          
-          h3 {
-            font-size: 13pt;
-            font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 5px;
-            page-break-after: avoid;
-          }
-          
-          h3:first-of-type {
-            margin-top: 0;
-          }
-          
-          p {
-            margin: 8px 0;
-            text-align: justify;
-            page-break-inside: avoid;
-          }
-          
-          ul {
-            margin: 10px 0;
-            padding-left: 25px;
-            list-style-type: disc;
-          }
-          
-          li {
-            margin: 5px 0;
-            page-break-inside: avoid;
-          }
-          
-          strong {
-            font-weight: bold;
-          }
-          
-          .section {
-            margin-bottom: 15px;
-          }
-          
-          @media print {
-            body {
-              padding: 0;
-            }
-            
-            .no-print {
-              display: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>${noteTypeName}</h1>
-          <div class="date">${currentDate}</div>
-        </div>
-    `;
-
-    Object.entries(notes).forEach(([section, items]) => {
-      if (!items || (Array.isArray(items) && items.length === 0)) return;
-
-      htmlContent += `<div class="section"><h3>${section}</h3>`;
-
-      if (typeof items === "string") {
-        if (items === "None") {
-          htmlContent += `<p><em>${items}</em></p>`;
-        } else if (section === "Assessment and Plan") {
-          items.split("\n").forEach((line) => {
-            if (line.trim()) htmlContent += `<p>${line.trim()}</p>`;
-          });
-        } else {
-          htmlContent += `<p>${items}</p>`;
-        }
-      } else if (Array.isArray(items)) {
-        htmlContent += "<ul>";
-        items.forEach((item) => {
-          htmlContent += `<li>${item.text}</li>`;
-        });
-        htmlContent += "</ul>";
-      } else if (typeof items === "object") {
-        Object.entries(items).forEach(([key, value]) => {
-          htmlContent += `<p><strong>${key}:</strong> ${
-            typeof value === "boolean" ? (value ? "Yes" : "No") : value
-          }</p>`;
-        });
+      if (editorRef.current) {
+        editorRef.current.innerHTML = previous;
       }
 
-      htmlContent += `</div>`;
+      return nextUndoStack;
     });
 
-    htmlContent += `
-      </body>
-      </html>
-    `;
+    requestAnimationFrame(() => {
+      isUpdatingRef.current = false;
+    });
+  }, [undoStack.length]);
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+  const handleRedo = useCallback(() => {
+    if (!redoStack.length) return;
 
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.onafterprint = () => printWindow.close();
-    };
-  };
+    isUpdatingRef.current = true;
 
-  const saveCursorPosition = () => {
+    setRedoStack((prev) => {
+      const nextRedoStack = [...prev];
+      const next = nextRedoStack.pop();
+
+      setUndoStack((undoPrev) => [...undoPrev, next]);
+      setEditedContent(next);
+      lastContentRef.current = next;
+
+      if (editorRef.current) {
+        editorRef.current.innerHTML = next;
+      }
+
+      return nextRedoStack;
+    });
+
+    requestAnimationFrame(() => {
+      isUpdatingRef.current = false;
+    });
+  }, [redoStack.length]);
+
+  const saveCursorPosition = useCallback(() => {
     const selection = window.getSelection();
-    if (!selection.rangeCount) return null;
+    if (!selection || !selection.rangeCount) return null;
 
     const range = selection.getRangeAt(0);
     const preCaretRange = range.cloneRange();
@@ -393,17 +301,16 @@ export const NoteEditor = ({
 
     return {
       offset: preCaretRange.toString().length,
-      container: range.endContainer,
-      containerOffset: range.endOffset,
     };
-  };
+  }, []);
 
-  const restoreCursorPosition = (position) => {
+  const restoreCursorPosition = useCallback((position) => {
     if (!position || !editorRef.current) return;
 
     const selection = window.getSelection();
-    const range = document.createRange();
+    if (!selection) return;
 
+    const range = document.createRange();
     let currentOffset = 0;
     let found = false;
 
@@ -419,11 +326,11 @@ export const NoteEditor = ({
           return;
         }
         currentOffset += nodeLength;
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        for (let i = 0; i < node.childNodes.length; i++) {
-          findNode(node.childNodes[i]);
-          if (found) return;
-        }
+        return;
+      }
+
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        node.childNodes.forEach(findNode);
       }
     };
 
@@ -433,124 +340,321 @@ export const NoteEditor = ({
       selection.removeAllRanges();
       selection.addRange(range);
     }
-  };
+  }, []);
 
-  const handleEditorInput = (e) => {
-    if (isUpdatingRef.current) return;
+  const handleEditorInput = useCallback(
+    (event) => {
+      if (isUpdatingRef.current) return;
 
-    const cursorPos = saveCursorPosition();
-    const content = e.currentTarget.innerHTML;
+      const cursorPos = saveCursorPosition();
+      const content = event.currentTarget.innerHTML;
 
-    if (content !== lastContentRef.current) {
-      setUndoStack((prev) => [...prev.slice(-19), lastContentRef.current]);
-      setRedoStack([]);
-      lastContentRef.current = content;
-    }
-
-    setEditedContent(content);
-
-    requestAnimationFrame(() => {
-      restoreCursorPosition(cursorPos);
-    });
-  };
-
-  const handleUndo = () => {
-    if (undoStack.length > 1) {
-      isUpdatingRef.current = true;
-
-      const newUndoStack = [...undoStack];
-      const current = newUndoStack.pop();
-      const previous = newUndoStack[newUndoStack.length - 1];
-
-      setRedoStack((prev) => [...prev, current]);
-      setUndoStack(newUndoStack);
-      setEditedContent(previous);
-      lastContentRef.current = previous;
-
-      if (editorRef.current) {
-        editorRef.current.innerHTML = previous;
+      if (content !== lastContentRef.current) {
+        setUndoStack((prev) => [...prev.slice(-19), lastContentRef.current]);
+        setRedoStack([]);
+        lastContentRef.current = content;
       }
 
-      setTimeout(() => {
-        isUpdatingRef.current = false;
-      }, 0);
-    }
-  };
+      setEditedContent(content);
 
-  const handleRedo = () => {
-    if (redoStack.length > 0) {
-      isUpdatingRef.current = true;
+      requestAnimationFrame(() => restoreCursorPosition(cursorPos));
+    },
+    [restoreCursorPosition, saveCursorPosition]
+  );
 
-      const newRedoStack = [...redoStack];
-      const next = newRedoStack.pop();
-
-      setUndoStack((prev) => [...prev, next]);
-      setRedoStack(newRedoStack);
-      setEditedContent(next);
-      lastContentRef.current = next;
-
-      if (editorRef.current) {
-        editorRef.current.innerHTML = next;
-      }
-
-      setTimeout(() => {
-        isUpdatingRef.current = false;
-      }, 0);
-    }
-  };
-
-  const applyFormat = (command) => {
+  const applyFormat = useCallback((command) => {
     document.execCommand(command, false, null);
     editorRef.current?.focus();
-  };
+  }, []);
 
-  const handleNoteTypeChangeInternal = (e) => {
-    const newType = e.target.value;
-    const check = checkNoteTypeAppropriateness(newType);
+  const proceedWithNoteTypeChange = useCallback(
+    (newType) => {
+      onNoteTypeChange(newType);
+      onRegenerate(newType);
+      setShowConfirmModal(false);
+      setPendingNoteType(null);
+    },
+    [onNoteTypeChange, onRegenerate]
+  );
 
-    if (!check.appropriate) {
-      setPendingNoteType(newType);
-      setShowConfirmModal(true);
-    } else {
-      proceedWithNoteTypeChange(newType);
+  const handleConfirmModalCancel = useCallback(() => {
+    if (!pendingNoteType) {
+      setShowConfirmModal(false);
+      return;
     }
-  };
 
-  const proceedWithNoteTypeChange = (newType) => {
-    onNoteTypeChange(newType);
-    onRegenerate(newType);
-    setShowConfirmModal(false);
-    setPendingNoteType(null);
-  };
-
-  const handleConfirmModalCancel = () => {
-    const check = checkNoteTypeAppropriateness(pendingNoteType);
-    if (check.recommendedType) {
-      proceedWithNoteTypeChange(check.recommendedType);
+    const checkResult = checkNoteTypeAppropriateness(pendingNoteType);
+    if (checkResult.recommendedType) {
+      proceedWithNoteTypeChange(checkResult.recommendedType);
     } else {
       setShowConfirmModal(false);
       setPendingNoteType(null);
     }
-  };
+  }, [pendingNoteType, checkNoteTypeAppropriateness, proceedWithNoteTypeChange]);
 
-  const handleConfirmModalContinue = () => {
+  const handleConfirmModalContinue = useCallback(() => {
+    if (!pendingNoteType) return;
     proceedWithNoteTypeChange(pendingNoteType);
-  };
+  }, [pendingNoteType, proceedWithNoteTypeChange]);
 
-  const warning = getNoteTypeWarning();
-  const pendingTypeInfo = availableNoteTypes.find(
-    (t) => t.id === pendingNoteType
+  const handleNoteTypeChangeInternal = useCallback(
+    (event) => {
+      const newType = event.target.value;
+      const checkResult = checkNoteTypeAppropriateness(newType);
+
+      if (!checkResult.appropriate) {
+        setPendingNoteType(newType);
+        setShowConfirmModal(true);
+        return;
+      }
+
+      proceedWithNoteTypeChange(newType);
+    },
+    [checkNoteTypeAppropriateness, proceedWithNoteTypeChange]
   );
-  const check = pendingNoteType
-    ? checkNoteTypeAppropriateness(pendingNoteType)
-    : null;
-  const recommendedTypeInfo = check
-    ? availableNoteTypes.find((t) => t.id === check.recommendedType)
-    : null;
 
-  if (loading) return <LoadingAnimation message="Generating clinical note..." />;
-  if (error) return <div className="error-box">{error}</div>;
-  if (!notes)
+  const handleEdit = useCallback(() => {
+    const htmlContent = formatNotesAsHTML(notes);
+    setEditedContent(htmlContent);
+    lastContentRef.current = htmlContent;
+    setUndoStack([htmlContent]);
+    setRedoStack([]);
+    setIsEditing(true);
+  }, [notes]);
+
+  const handleSave = useCallback(() => {
+    const parsedNotes = parseHTMLToNotes(editedContent);
+    setNotes(parsedNotes);
+    setIsEditing(false);
+    setUndoStack([]);
+    setRedoStack([]);
+  }, [editedContent, setNotes]);
+
+  const handleCancel = useCallback(() => {
+    setIsEditing(false);
+    setEditedContent("");
+    setUndoStack([]);
+    setRedoStack([]);
+  }, []);
+
+  const handleCopy = useCallback(() => {
+    const notesElement = notesDisplayRef.current;
+    if (!notesElement) return;
+
+    const textContent = buildSectionText(notesElement, styles.nestedSection);
+
+    navigator.clipboard.writeText(textContent).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, []);
+
+  const handleDownloadPDF = useCallback(() => {
+    const noteTypeName =
+      availableNoteTypes.find((type) => type.id === noteType)?.name ||
+      "Clinical Note";
+    const currentDate = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    const printWindow = createPrintWindow(noteTypeName);
+    if (!printWindow) return;
+
+    const sections = Object.entries(notes ?? {});
+    const printableSections = sections.filter(
+      ([_, items]) => items && (!Array.isArray(items) || items.length > 0)
+    );
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${noteTypeName}</title>
+          <style>
+            @page { size: A4; margin: 2cm; }
+            body {
+              font-family: 'Times New Roman', Times, serif;
+              font-size: 12pt;
+              line-height: 1.6;
+              color: #000;
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 15px;
+            }
+            .header h1 {
+              margin: 0 0 10px 0;
+              font-size: 18pt;
+              font-weight: bold;
+            }
+            .header .date {
+              font-size: 11pt;
+              color: #333;
+            }
+            h3 {
+              font-size: 13pt;
+              font-weight: bold;
+              margin-top: 20px;
+              margin-bottom: 10px;
+              border-bottom: 1px solid #ccc;
+              padding-bottom: 5px;
+              page-break-after: avoid;
+            }
+            h3:first-of-type { margin-top: 0; }
+            p {
+              margin: 8px 0;
+              text-align: justify;
+              page-break-inside: avoid;
+            }
+            ul {
+              margin: 10px 0;
+              padding-left: 25px;
+              list-style-type: disc;
+            }
+            li {
+              margin: 5px 0;
+              page-break-inside: avoid;
+            }
+            strong { font-weight: bold; }
+            .section { margin-bottom: 15px; }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${noteTypeName}</h1>
+            <div class="date">${currentDate}</div>
+          </div>
+          ${printableSections
+            .map(([section, items]) => {
+              if (typeof items === "string") {
+                if (items === "None") {
+                  return `
+                    <div class="section">
+                      <h3>${section}</h3>
+                      <p><em>${items}</em></p>
+                    </div>
+                  `;
+                }
+
+                if (section === "Assessment and Plan") {
+                  const paragraphs = items
+                    .split("\n")
+                    .filter((line) => line.trim())
+                    .map((line) => `<p>${line.trim()}</p>`)
+                    .join("");
+
+                  return `
+                    <div class="section">
+                      <h3>${section}</h3>
+                      ${paragraphs}
+                    </div>
+                  `;
+                }
+
+                return `
+                  <div class="section">
+                    <h3>${section}</h3>
+                    <p>${items}</p>
+                  </div>
+                `;
+              }
+
+              if (Array.isArray(items)) {
+                const listItems = items
+                  .map((item) => `<li>${item.text}</li>`)
+                  .join("");
+
+                return `
+                  <div class="section">
+                    <h3>${section}</h3>
+                    <ul>${listItems}</ul>
+                  </div>
+                `;
+              }
+
+              if (typeof items === "object") {
+                const objectEntries = Object.entries(items)
+                  .map(
+                    ([key, value]) =>
+                      `<p><strong>${key}:</strong> ${renderNestedSectionValue(
+                        value
+                      )}</p>`
+                  )
+                  .join("");
+
+                return `
+                  <div class="section">
+                    <h3>${section}</h3>
+                    ${objectEntries}
+                  </div>
+                `;
+              }
+
+              return "";
+            })
+            .join("")}
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+
+    printWindow.onload = () => {
+      printWindow.print();
+      printWindow.onafterprint = () => printWindow.close();
+    };
+  }, [availableNoteTypes, noteType, notes]);
+
+  useEffect(() => {
+    loadNoteTypes();
+  }, [loadNoteTypes]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const handleKeyDown = (event) => {
+      const { ctrlKey, metaKey, shiftKey, key } = event;
+      const modifier = ctrlKey || metaKey;
+
+      if (modifier && key === "z" && !shiftKey) {
+        event.preventDefault();
+        handleUndo();
+      }
+
+      const redoCombination =
+        (modifier && shiftKey && key === "z") || (modifier && key === "y");
+
+      if (redoCombination) {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isEditing, handleUndo, handleRedo]);
+
+  if (loading) {
+    return <LoadingAnimation message="Generating clinical note..." />;
+  }
+
+  if (error) {
+    return <div className="error-box">{error}</div>;
+  }
+
+  if (!notes) {
     return (
       <div className={styles.emptyNote}>
         <h3 className={styles.emptyNoteTitle}>No clinical note yet</h3>
@@ -559,6 +663,7 @@ export const NoteEditor = ({
         </p>
       </div>
     );
+  }
 
   if (isEditing) {
     return (
@@ -571,6 +676,7 @@ export const NoteEditor = ({
               className={styles.toolbarButton}
               disabled={undoStack.length <= 1}
               title="Undo (Ctrl+Z)"
+              aria-label="Undo"
             >
               <UndoIcon />
             </button>
@@ -580,6 +686,7 @@ export const NoteEditor = ({
               className={styles.toolbarButton}
               disabled={redoStack.length === 0}
               title="Redo (Ctrl+Y)"
+              aria-label="Redo"
             >
               <RedoIcon />
             </button>
@@ -593,6 +700,7 @@ export const NoteEditor = ({
               onClick={() => applyFormat("bold")}
               className={styles.toolbarButton}
               title="Bold (Ctrl+B)"
+              aria-label="Bold"
             >
               <BoldIcon />
             </button>
@@ -601,6 +709,7 @@ export const NoteEditor = ({
               onClick={() => applyFormat("italic")}
               className={styles.toolbarButton}
               title="Italic (Ctrl+I)"
+              aria-label="Italic"
             >
               <ItalicIcon />
             </button>
@@ -609,6 +718,7 @@ export const NoteEditor = ({
               onClick={() => applyFormat("underline")}
               className={styles.toolbarButton}
               title="Underline (Ctrl+U)"
+              aria-label="Underline"
             >
               <UnderlineIcon />
             </button>
@@ -617,6 +727,7 @@ export const NoteEditor = ({
               onClick={() => applyFormat("strikeThrough")}
               className={styles.toolbarButton}
               title="Strikethrough"
+              aria-label="Strikethrough"
             >
               <StrikethroughIcon />
             </button>
@@ -631,17 +742,21 @@ export const NoteEditor = ({
               type="button"
               onClick={handleCancel}
               className={`${styles.toolbarActionButton} ${styles.toolbarCancel}`}
+              aria-label="Cancel editing"
+              title="Cancel"
             >
               <CancelIcon />
-              <span>Cancel</span>
+              <span className={styles.actionText}>Cancel</span>
             </button>
             <button
               type="button"
               onClick={handleSave}
               className={`${styles.toolbarActionButton} ${styles.toolbarSave}`}
+              aria-label="Save changes"
+              title="Save changes"
             >
               <SaveIcon />
-              <span>Save Changes</span>
+              <span className={styles.actionText}>Save Changes</span>
             </button>
           </div>
         </div>
@@ -663,8 +778,8 @@ export const NoteEditor = ({
       <NoteTypeConfirmationModal
         show={showConfirmModal}
         noteTypeName={pendingTypeInfo?.name}
-        warning={check?.warning}
-        recommendedType={check?.recommendedType}
+        warning={pendingTypeCheck?.warning}
+        recommendedType={pendingTypeCheck?.recommendedType}
         recommendedTypeName={recommendedTypeInfo?.name}
         onConfirm={handleConfirmModalContinue}
         onCancel={handleConfirmModalCancel}
@@ -674,7 +789,6 @@ export const NoteEditor = ({
         <NewNoteTemplateModal
           onClose={() => setShowNewTemplateModal(false)}
           onSave={(payload) => {
-            // No persistence: log and close. You can wire this to your backend later.
             console.log("[Templates] Created payload:", payload);
           }}
         />
@@ -688,37 +802,56 @@ export const NoteEditor = ({
           >
             Note Type:
           </label>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              minWidth: 0,
+            }}
+          >
             <select
               id="note-type-select"
               value={noteType}
               onChange={handleNoteTypeChangeInternal}
               className={styles.noteTypeSelect}
               disabled={loading}
+              aria-label="Select note type"
             >
-            {availableNoteTypes.map((type) => (
-              <option key={type.id} value={type.id}>
-                {type.name}
-              </option>
-            ))}
+              {availableNoteTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
             </select>
             <button
               type="button"
-              className={`button ${styles.iconButton || ""} ${styles.templateButton || ""}`}
+              className={`button ${styles.iconButton || ""} ${
+                styles.templateButton || ""
+              }`}
               onClick={() => setShowNewTemplateModal(true)}
               title="Create a new custom template"
             >
-              + Add your own
+              <span className={styles.actionIcon} aria-hidden>
+                ＋
+              </span>
+              <span className={styles.actionText}>Add your own</span>
             </button>
           </div>
         </div>
+
         <div className={styles.notesActions}>
           <button
             type="button"
             onClick={handleEdit}
             className={`button ${styles.iconButton}`}
+            aria-label="Edit note"
+            title="Edit"
           >
-            ✎ Edit
+            <span className={styles.actionIcon} aria-hidden>
+              <EditIcon />
+            </span>
+            <span className={styles.actionText}>Edit</span>
           </button>
           <button
             type="button"
@@ -726,43 +859,61 @@ export const NoteEditor = ({
             className={`button ${styles.iconButton} ${
               copied ? styles.iconButtonCopied : ""
             }`}
+            aria-label={copyAria}
+            title={copyLabel}
           >
-            {copied ? "✓ Copied" : "📋 Copy"}
+            <span className={styles.actionIcon} aria-hidden>
+              {copyIcon}
+            </span>
+            <span className={styles.actionText}>{copyLabel}</span>
           </button>
           <button
             type="button"
             onClick={handleDownloadPDF}
             className={`button ${styles.iconButton}`}
+            aria-label="Download as PDF"
+            title="PDF"
           >
-            <DownloadIcon /> PDF
+            <span className={styles.actionIcon} aria-hidden>
+              <DownloadIcon />
+            </span>
+            <span className={styles.actionText}>PDF</span>
           </button>
         </div>
       </div>
 
+      {warning && (
+        <div className={styles.warningBanner} role="alert">
+          {warning.message}
+        </div>
+      )}
+
       <div ref={notesDisplayRef} className={styles.notesDisplay}>
         {Object.entries(notes).map(([section, items]) => {
-          if (!items || (Array.isArray(items) && items.length === 0))
+          if (!items || (Array.isArray(items) && items.length === 0)) {
             return null;
+          }
 
           return (
             <div key={section}>
               <h3>{section}</h3>
+
               {typeof items === "string" ? (
                 items === "None" ? (
                   <p className={styles.noneText}>{items}</p>
                 ) : section === "Assessment and Plan" ? (
                   items
                     .split("\n")
-                    .map((line, idx) =>
-                      line.trim() ? <p key={idx}>{line.trim()}</p> : null
+                    .map((line, index) =>
+                      line.trim() ? <p key={index}>{line.trim()}</p> : null
                     )
                 ) : (
                   <p>{items}</p>
                 )
               ) : Array.isArray(items) ? (
                 <ul>
-                  {items.map((item, idx) => (
-                    <li key={idx}>{item.text}</li>
+                  {items.map((item, index) => (
+                    <li key={index}>{item.text}</li>
                   ))}
                 </ul>
               ) : typeof items === "object" ? (
@@ -770,7 +921,7 @@ export const NoteEditor = ({
                   {Object.entries(items).map(([key, value]) => (
                     <p key={key}>
                       <strong>{key}:</strong>{" "}
-                      {typeof value === "boolean" ? (value ? "Yes" : "No") : value}
+                      {renderNestedSectionValue(value)}
                     </p>
                   ))}
                 </div>

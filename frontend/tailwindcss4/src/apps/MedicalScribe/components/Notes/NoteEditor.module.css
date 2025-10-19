@@ -2,18 +2,21 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-panel);
   position: sticky;
   top: 0;
   z-index: 5;
+  flex-wrap: wrap; /* allow wrapping so nothing gets cut off */
 }
 
 .noteTypeSelectorContainer {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .noteTypeLabel {
@@ -35,6 +38,7 @@
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   min-width: 220px;
+  max-width: 100%;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -58,13 +62,14 @@
 .notesActions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
 }
 
 .iconButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.85rem;
   background-color: var(--bg-panel);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
@@ -111,6 +116,17 @@
   background-color: var(--accent-secondary-dark);
   border-color: var(--accent-secondary-dark);
   color: #ffffff;
+}
+
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.actionText {
+  display: inline-block;
 }
 
 .noteTypeHint {
@@ -268,7 +284,7 @@
 }
 
 .toolbarActionButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
@@ -352,9 +368,44 @@
   max-width: 400px;
 }
 
-/* NEW: Mobile-friendly - remove nested scrolling in editor */
-@media (max-width: 1024px) {
-  .richEditorContent {
-    overflow: visible;
+/* MOBILE: compact header and icons-only actions to prevent cut-off */
+@media (max-width: 768px) {
+  .noteTypeSelect {
+    min-width: 150px;
+    width: auto;
+  }
+
+  .notesHeaderControls {
+    gap: 0.4rem;
+  }
+
+  .notesActions {
+    margin-left: auto;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  .templateButton {
+    display: none; /* hide "Add your own" on mobile to keep header compact */
+  }
+
+  .iconButton {
+    padding: 0.5rem; /* icon-only buttons */
+  }
+
+  .actionText {
+    display: none; /* hide labels, keep icons visible */
+  }
+
+  .toolbarActionButton .actionText,
+  .toolbarActionButton span {
+    display: none; /* icon-only for Save/Cancel */
+  }
+}
+
+/* TABLET: slightly tighter select */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .noteTypeSelect {
+    min-width: 180px;
   }
 }
