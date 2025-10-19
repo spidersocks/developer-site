@@ -17,6 +17,9 @@ import { NoteTypeConfirmationModal } from "../shared/Modal";
 import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./NoteEditor.module.css";
 
+// NEW: Add Template UI (no storage)
+import { NewNoteTemplateModal } from "./NewNoteTemplateModal";
+
 export const NoteEditor = ({
   notes,
   setNotes,
@@ -39,6 +42,9 @@ export const NoteEditor = ({
   const [redoStack, setRedoStack] = useState([]);
   const lastContentRef = useRef("");
   const isUpdatingRef = useRef(false);
+
+  // NEW: Template modal open flag
+  const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
 
   // Fetch once per application session (cached in apiClient)
   useEffect(() => {
@@ -664,6 +670,16 @@ export const NoteEditor = ({
         onCancel={handleConfirmModalCancel}
       />
 
+      {showNewTemplateModal && (
+        <NewNoteTemplateModal
+          onClose={() => setShowNewTemplateModal(false)}
+          onSave={(payload) => {
+            // No persistence: log and close. You can wire this to your backend later.
+            console.log("[Templates] Created payload:", payload);
+          }}
+        />
+      )}
+
       <div className={styles.notesHeaderControls}>
         <div className={styles.noteTypeSelectorContainer}>
           <label
@@ -672,19 +688,29 @@ export const NoteEditor = ({
           >
             Note Type:
           </label>
-          <select
-            id="note-type-select"
-            value={noteType}
-            onChange={handleNoteTypeChangeInternal}
-            className={styles.noteTypeSelect}
-            disabled={loading}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <select
+              id="note-type-select"
+              value={noteType}
+              onChange={handleNoteTypeChangeInternal}
+              className={styles.noteTypeSelect}
+              disabled={loading}
+            >
             {availableNoteTypes.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.name}
               </option>
             ))}
-          </select>
+            </select>
+            <button
+              type="button"
+              className={`button ${styles.iconButton || ""}`}
+              onClick={() => setShowNewTemplateModal(true)}
+              title="Create a new custom template"
+            >
+              + Template
+            </button>
+          </div>
         </div>
         <div className={styles.notesActions}>
           <button

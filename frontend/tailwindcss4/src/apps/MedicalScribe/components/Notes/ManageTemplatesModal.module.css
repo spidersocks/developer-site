@@ -1,0 +1,14 @@
+.modalContent {
+  max-width: 640px;
+}
+
+.empty {
+  text-align: center;
+  padding: 24px 8px;
+}
+
+.subtle {
+  color: #666;
+  font-size: 13px;
+  margin-top: 4px;
+}

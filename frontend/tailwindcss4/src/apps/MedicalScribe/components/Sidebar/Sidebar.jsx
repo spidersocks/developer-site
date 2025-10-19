@@ -14,6 +14,9 @@ import {
 } from "../shared/Icons";
 import styles from "./Sidebar.module.css";
 
+// NEW: Templates manager (no-op for now)
+import { ManageTemplatesModal } from "../Notes/ManageTemplatesModal";
+
 export const Sidebar = ({
   consultations,
   patients,
@@ -53,6 +56,9 @@ export const Sidebar = ({
     const saved = localStorage.getItem("starredPatients");
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
+
+  // NEW: Templates manager modal
+  const [showTemplatesManager, setShowTemplatesManager] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(
@@ -556,18 +562,27 @@ export const Sidebar = ({
         </div>
 
         <div className={styles.sidebarFooter}>
-          <div className={styles.userBlock}>
-            <div className={styles.avatar} aria-hidden="true">
-              {userInitials}
-            </div>
-            <div className={styles.userMeta}>
-              <div className={styles.userDetails}>
-                <div className={styles.userName}>
-                  {displayName || "Signed-in user"}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, width: "100%" }}>
+            <div className={styles.userBlock}>
+              <div className={styles.avatar} aria-hidden="true">
+                {userInitials}
+              </div>
+              <div className={styles.userMeta}>
+                <div className={styles.userDetails}>
+                  <div className={styles.userName}>
+                    {displayName || "Signed-in user"}
+                  </div>
+                  {email && <div className={styles.userEmail}>{email}</div>}
                 </div>
-                {email && <div className={styles.userEmail}>{email}</div>}
               </div>
             </div>
+            <button
+              className="button button-secondary"
+              onClick={() => setShowTemplatesManager(true)}
+              title="Manage templates"
+            >
+              Templates
+            </button>
           </div>
         </div>
       </aside>
@@ -655,6 +670,10 @@ export const Sidebar = ({
             </div>
           </div>
         </div>
+      )}
+
+      {showTemplatesManager && (
+        <ManageTemplatesModal onClose={() => setShowTemplatesManager(false)} />
       )}
     </>
   );

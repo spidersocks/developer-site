@@ -1,0 +1,93 @@
+.modalContent {
+  max-width: 800px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.label {
+  display: inline-block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.req {
+  color: var(--accent-danger);
+  margin-left: 4px;
+}
+
+.control {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.sectionsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 14px 0 8px;
+  font-weight: 600;
+}
+
+.smallButton {
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--btn-bg, #f8f8f8);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sectionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionRow {
+  border: 1px solid var(--border-color, #eee);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.sectionCol {
+  margin-bottom: 8px;
+}
+
+.smallLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.sectionActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.removeButton {
+  font-size: 12px;
+  color: #a00;
+  border: 1px solid #f0caca;
+  background: #fff5f5;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.uploadRow {
+  margin-top: 8px;
+}
+
+.errorText {
+  margin-top: 8px;
+  color: var(--accent-danger, #b00020);
+  font-size: 13px;
+}
