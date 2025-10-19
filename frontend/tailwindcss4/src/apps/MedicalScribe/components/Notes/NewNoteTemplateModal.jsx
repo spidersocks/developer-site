@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styles from "./NewNoteTemplateModal.module.css";
 
 export const NewNoteTemplateModal = ({
@@ -17,7 +17,10 @@ export const NewNoteTemplateModal = ({
       : [{ id: "sec_1", name: "", description: "" }]
   );
   const [exampleNoteText, setExampleNoteText] = useState(initialValue?.exampleNoteText || "");
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [error, setError] = useState("");
+
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     validate();
@@ -65,6 +68,7 @@ export const NewNoteTemplateModal = ({
     }
     const text = await file.text().catch(() => "");
     setExampleNoteText((prev) => (prev ? `${prev}\n\n${text}` : text));
+    setSelectedFileName(file.name || "");
   };
 
   const handleSave = () => {
@@ -88,6 +92,10 @@ export const NewNoteTemplateModal = ({
 
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) onClose?.();
+  };
+
+  const triggerFilePicker = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -116,7 +124,7 @@ export const NewNoteTemplateModal = ({
           </div>
 
           <div className={styles.sectionsHeader}>
-            <span>Sections (1–8)</span>
+            <span>Sections</span>
             <button type="button" className={styles.smallButton} onClick={addSection} disabled={sections.length >= 8}>
               + Add section
             </button>
@@ -169,12 +177,25 @@ export const NewNoteTemplateModal = ({
               onChange={(e) => setExampleNoteText(e.target.value)}
               placeholder="Paste an example note to guide structure and tone."
             />
+
             <div className={styles.uploadRow}>
               <input
+                ref={fileInputRef}
+                className={styles.hiddenFileInput}
                 type="file"
                 accept=".txt,text/plain,.md,text/markdown"
                 onChange={(e) => handleFileUpload(e.target.files?.[0])}
               />
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={triggerFilePicker}
+              >
+                Attach file
+              </button>
+              <span className={styles.fileName}>
+                {selectedFileName || "No file chosen"}
+              </span>
             </div>
           </div>
 

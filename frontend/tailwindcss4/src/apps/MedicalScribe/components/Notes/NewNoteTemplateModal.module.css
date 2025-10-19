@@ -23,6 +23,15 @@
   border: 1px solid var(--border-color, #ddd);
   border-radius: 6px;
   font-size: 14px;
+  background: #ffffff;
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.control:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
 }
 
 .sectionsHeader {
@@ -31,15 +40,24 @@
   align-items: center;
   margin: 14px 0 8px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .smallButton {
   font-size: 13px;
   padding: 6px 10px;
   border: 1px solid var(--border-color, #ddd);
-  background: var(--btn-bg, #f8f8f8);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
   border-radius: 6px;
   cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.smallButton:hover {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 
 .sectionsList {
@@ -64,7 +82,7 @@
   font-size: 12px;
   font-weight: 600;
   margin-bottom: 4px;
-  color: #333;
+  color: var(--text-secondary);
 }
 
 .sectionActions {
@@ -84,6 +102,18 @@
 
 .uploadRow {
   margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.fileName {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
 }
 
 .errorText {

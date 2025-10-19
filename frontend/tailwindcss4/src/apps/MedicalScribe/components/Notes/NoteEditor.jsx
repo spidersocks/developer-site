@@ -704,11 +704,11 @@ export const NoteEditor = ({
             </select>
             <button
               type="button"
-              className={`button ${styles.iconButton || ""}`}
+              className={`button ${styles.iconButton || ""} ${styles.templateButton || ""}`}
               onClick={() => setShowNewTemplateModal(true)}
               title="Create a new custom template"
             >
-              + Template
+              + Add your own
             </button>
           </div>
         </div>
