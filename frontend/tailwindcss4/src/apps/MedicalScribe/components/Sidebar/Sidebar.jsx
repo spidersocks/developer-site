@@ -12,6 +12,7 @@ import {
   DownloadIcon,
   PlusIcon,
 } from "../shared/Icons";
+import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./Sidebar.module.css";
 
 export const Sidebar = ({
@@ -26,6 +27,8 @@ export const Sidebar = ({
   onDeletePatient,
   sidebarOpen,
   onCloseSidebar,
+  // NEW: show loading state instead of "No patients yet" while hydrating
+  isHydrating = false,
 }) => {
   const { displayName, email } = useAuth();
 
@@ -381,7 +384,11 @@ export const Sidebar = ({
         </div>
 
         <div className={styles.sidebarNavWrapper}>
-          {patients.length === 0 && consultations.length === 0 ? (
+          {isHydrating ? (
+            <div className={`${styles.sidebarEmpty} ${styles.centered}`}>
+              <LoadingAnimation message="Loading patients..." />
+            </div>
+          ) : patients.length === 0 && consultations.length === 0 ? (
             <div className={`${styles.sidebarEmpty} ${styles.centered}`}>
               <div className={`${styles.emptyTitle} ${styles.subtle}`}>
                 No patients yet

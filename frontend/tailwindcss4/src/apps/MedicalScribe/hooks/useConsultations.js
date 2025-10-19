@@ -507,9 +507,6 @@ export const useConsultations = (ownerUserId = null) => {
         },
       }));
 
-      // IMPORTANT: do NOT call ensureSegmentsLoaded here.
-      // App.jsx effect will handle loading for the active consultation.
-
       console.info("[useConsultations] Remote hydration complete", {
         safeOwnerUserId,
         patients: mergedPatients.length,
@@ -802,11 +799,13 @@ export const useConsultations = (ownerUserId = null) => {
     (id, updates) => {
       setAppState((prevState) => {
         const prevConsultations = prevState.consultations;
+        const prevPatients = prevState.patients;
+        const now = new Date().toISOString();
 
-        const updatedConsultations = prevConsultations.map((consultation) => {
+        // First pass: update the targeted consultation
+        let updatedConsultations = prevConsultations.map((consultation) => {
           if (consultation.id !== id) return consultation;
 
-          const now = new Date().toISOString();
           const nextTranscriptSegments =
             updates.transcriptSegments !== undefined
               ? toTranscriptMap(updates.transcriptSegments)
@@ -820,80 +819,137 @@ export const useConsultations = (ownerUserId = null) => {
             ownerUserId: consultation.ownerUserId ?? safeOwnerUserId,
           };
 
-          // Handle patient profile changes
-          if (updates.patientProfile) {
-            const profile = {
-              ...consultation.patientProfile,
-              ...updates.patientProfile,
+            // We'll handle patient profile propagation below
+          return updatedConsultation;
+        });
+
+        // If patientProfile changed, propagate patient-specific fields across all consultations for that patient
+        if (updates.patientProfile) {
+          // The current (old) patientId from the target consultation
+          const targetBefore = prevConsultations.find(c => c.id === id);
+          const oldPatientId = targetBefore?.patientId ?? null;
+
+          // Build merged profile for the target consultation
+          const targetAfter = updatedConsultations.find(c => c.id === id);
+          const mergedProfile = {
+            ...(targetBefore?.patientProfile ?? {}),
+            ...(updates.patientProfile || {}),
+          };
+
+          // Extract only patient-specific fields to propagate (not consultation-specific)
+          const sharedFields = {
+            name: mergedProfile.name ?? "",
+            dateOfBirth: mergedProfile.dateOfBirth ?? "",
+            sex: mergedProfile.sex ?? "",
+            medicalRecordNumber: mergedProfile.medicalRecordNumber ?? "",
+            email: mergedProfile.email ?? "",
+            phoneNumber: mergedProfile.phoneNumber ?? "",
+          };
+
+          const newPatientId = generatePatientId(mergedProfile);
+          const newPatientName = generatePatientName(mergedProfile);
+
+          // Update target consultation to ensure id/name/profile are consistent
+          updatedConsultations = updatedConsultations.map(c => {
+            if (c.id !== id) return c;
+            return {
+              ...c,
+              patientProfile: {
+                ...c.patientProfile,
+                ...sharedFields,
+                referringPhysician: c.patientProfile?.referringPhysician ?? "", // keep as-is
+              },
+              patientId: newPatientId,
+              patientName: newPatientName,
+              updatedAt: now,
             };
-            const derivedPatientId = generatePatientId(profile);
-            const derivedPatientName = generatePatientName(profile);
+          });
 
-            updatedConsultation.patientProfile = profile;
-            updatedConsultation.patientId = derivedPatientId;
-            updatedConsultation.patientName = derivedPatientName;
+          // Propagate to all other consultations with same oldPatientId
+          const impactedIds = [];
+          updatedConsultations = updatedConsultations.map(c => {
+            if (!oldPatientId || c.patientId !== oldPatientId || c.id === id) return c;
+            impactedIds.push(c.id);
+            return {
+              ...c,
+              patientProfile: {
+                ...c.patientProfile,
+                ...sharedFields,
+                // Keep consultation-specific fields intact:
+                referringPhysician: c.patientProfile?.referringPhysician ?? "",
+              },
+              patientId: newPatientId,
+              patientName: newPatientName,
+              updatedAt: now,
+            };
+          });
 
-            // Update or create patient record
-            setTimeout(() => {
-              setAppState((prev) => {
-                const prevPatients = prev.patients;
-                const patientNow = new Date().toISOString();
-                const existingPatient = prevPatients.find(
-                  (patient) => patient.id === derivedPatientId
-                );
+          // Update patients list (rename or upsert)
+          let updatedPatients = [...prevPatients];
+          const existingOld = oldPatientId ? updatedPatients.find(p => p.id === oldPatientId) : null;
+          const existingNew = updatedPatients.find(p => p.id === newPatientId);
 
-                let updatedPatients;
-                let patientForSync;
+          const newPatientRecord = {
+            id: newPatientId,
+            name: newPatientName,
+            displayName: newPatientName,
+            profile: {
+              ...(existingOld?.profile ?? {}),
+              ...sharedFields,
+            },
+            createdAt: existingOld?.createdAt ?? existingNew?.createdAt ?? now,
+            updatedAt: now,
+            ownerUserId: existingOld?.ownerUserId ?? existingNew?.ownerUserId ?? safeOwnerUserId,
+          };
 
-                if (existingPatient) {
-                  const revisedPatient = {
-                    ...existingPatient,
-                    name: derivedPatientName,
-                    displayName: derivedPatientName,
-                    profile,
-                    updatedAt: patientNow,
-                    ownerUserId: existingPatient.ownerUserId ?? safeOwnerUserId,
-                  };
-                  patientForSync = revisedPatient;
-                  updatedPatients = prevPatients.map((patient) =>
-                    patient.id === derivedPatientId ? revisedPatient : patient
-                  );
-                } else {
-                  const createdPatient = {
-                    id: derivedPatientId,
-                    name: derivedPatientName,
-                    displayName: derivedPatientName,
-                    profile,
-                    createdAt: patientNow,
-                    updatedAt: patientNow,
-                    ownerUserId: safeOwnerUserId,
-                  };
-                  patientForSync = createdPatient;
-                  updatedPatients = [...prevPatients, createdPatient];
-                }
-
-                if (patientForSync) setTimeout(() => queuePatientSync(patientForSync), 0);
-
-                return { ...prev, patients: updatedPatients };
-              });
-            }, 0);
+          // Remove old record if patientId changed
+          if (oldPatientId && oldPatientId !== newPatientId) {
+            updatedPatients = updatedPatients.filter(p => p.id !== oldPatientId);
           }
 
-          // Handle notes sync when notes provided
-          if (updates.notes !== undefined) {
+          if (existingNew) {
+            updatedPatients = updatedPatients.map(p => (p.id === newPatientId ? newPatientRecord : p));
+          } else {
+            updatedPatients.push(newPatientRecord);
+          }
+
+          // Queue sync for patient and all impacted consultations (including target)
+          setTimeout(() => {
+            queuePatientSync(newPatientRecord);
+            const allImpacted = [id, ...impactedIds];
+            allImpacted.forEach(cid => {
+              const c = updatedConsultations.find(x => x.id === cid);
+              if (c) queueConsultationSync(c);
+            });
+          }, 0);
+
+          return { ...prevState, consultations: updatedConsultations, patients: updatedPatients };
+        }
+
+        // Handle notes sync when notes provided
+        if (updates.notes !== undefined) {
+          const target = updatedConsultations.find(c => c.id === id);
+          if (target) {
             const noteUpdatedAt = now;
-            const existingNoteCreatedAt = consultation.notesCreatedAt ?? null;
+            const existingNoteCreatedAt = target.notesCreatedAt ?? null;
             const noteCreatedAt = existingNoteCreatedAt ?? noteUpdatedAt;
-            const resolvedNoteId = consultation.noteId ?? consultation.id;
+            const resolvedNoteId = target.noteId ?? target.id;
 
             const serializedContent =
               typeof updates.notes === "string"
                 ? updates.notes
                 : JSON.stringify(updates.notes ?? {});
 
-            updatedConsultation.notesCreatedAt = noteCreatedAt;
-            updatedConsultation.notesUpdatedAt = noteUpdatedAt;
-            updatedConsultation.noteId = resolvedNoteId;
+            // Update the target consultation's note timestamps/ids
+            updatedConsultations = updatedConsultations.map(c => {
+              if (c.id !== id) return c;
+              return {
+                ...c,
+                notesCreatedAt: noteCreatedAt,
+                notesUpdatedAt: noteUpdatedAt,
+                noteId: resolvedNoteId,
+              };
+            });
 
             if (
               serializedContent !== null &&
@@ -902,29 +958,31 @@ export const useConsultations = (ownerUserId = null) => {
             ) {
               const clinicalNoteForSync = {
                 id: resolvedNoteId,
-                ownerUserId: updatedConsultation.ownerUserId ?? safeOwnerUserId,
-                consultationId: updatedConsultation.id,
+                ownerUserId: target.ownerUserId ?? safeOwnerUserId,
+                consultationId: target.id,
                 title:
-                  updatedConsultation.title ??
-                  updatedConsultation.name ??
-                  `Consultation ${updatedConsultation.id}`,
-                noteType: updatedConsultation.noteType ?? "General",
-                language: updatedConsultation.language ?? "en-US",
+                  target.title ??
+                  target.name ??
+                  `Consultation ${target.id}`,
+                noteType: target.noteType ?? "General",
+                language: target.language ?? "en-US",
                 content: serializedContent,
                 createdAt: noteCreatedAt,
                 updatedAt: noteUpdatedAt,
-                summary: updatedConsultation.notesSummary ?? null,
-                status: updatedConsultation.notesStatus ?? null,
-                debugLabel: `consultation:${updatedConsultation.id}`,
+                summary: target.notesSummary ?? null,
+                status: target.notesStatus ?? null,
+                debugLabel: `consultation:${target.id}`,
               };
               setTimeout(() => syncService.enqueueClinicalNote(clinicalNoteForSync), 0);
             }
           }
+        }
 
-          // Queue consultation upsert
-          setTimeout(() => queueConsultationSync(updatedConsultation), 0);
-          return updatedConsultation;
-        });
+        // Queue consultation upsert for the target consultation by default
+        const updatedTarget = updatedConsultations.find(c => c.id === id);
+        if (updatedTarget) {
+          setTimeout(() => queueConsultationSync(updatedTarget), 0);
+        }
 
         return { ...prevState, consultations: updatedConsultations };
       });
@@ -999,17 +1057,24 @@ export const useConsultations = (ownerUserId = null) => {
 
   const resetConsultation = useCallback(
     (id) => {
-      updateConsultation(id, {
-        transcriptSegments: new Map(),
-        interimTranscript: "",
-        interimSpeaker: null,
-        notes: null,
-        error: null,
-        loading: false,
-        sessionState: "idle",
+      setAppState((prevState) => {
+        const updatedConsultations = prevState.consultations.map((consultation) => {
+          if (consultation.id !== id) return consultation;
+          return {
+            ...consultation,
+            transcriptSegments: new Map(),
+            interimTranscript: "",
+            interimSpeaker: null,
+            notes: null,
+            error: null,
+            loading: false,
+            sessionState: "idle",
+          };
+        });
+        return { ...prevState, consultations: updatedConsultations };
       });
     },
-    [updateConsultation]
+    []
   );
 
   const finalizeConsultationTimestamp = useCallback(

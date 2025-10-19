@@ -69,32 +69,6 @@ const HydrationErrorOverlay = ({ error, onRetry }) => (
   </div>
 );
 
-const SyncStatusIndicator = ({ status }) => {
-  if (!ENABLE_BACKGROUND_SYNC) return null;
-  
-  let statusText = "Not synced";
-  let statusClass = "sync-status-neutral";
-  
-  if (status.isSyncing) {
-    statusText = "Syncing...";
-    statusClass = "sync-status-syncing";
-  } else if (status.error) {
-    statusText = `Sync error: ${status.error}`;
-    statusClass = "sync-status-error";
-  } else if (status.lastSynced) {
-    const date = new Date(status.lastSynced);
-    statusText = `Last synced: ${date.toLocaleTimeString()}`;
-    statusClass = "sync-status-success";
-  }
-  
-  return (
-    <div className={`sync-status-indicator ${statusClass}`}>
-      <span className="sync-status-dot"></span>
-      <span className="sync-status-text">{statusText}</span>
-    </div>
-  );
-};
-
 export default function MedicalScribeApp() {
   const { user, signOut } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
@@ -116,17 +90,12 @@ export default function MedicalScribeApp() {
     setConsultations,
     hydrationState,
     forceHydrate,
-    ensureSegmentsLoaded, // NEW
+    ensureSegmentsLoaded,
   } = useConsultations(ownerUserId);
 
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
-  const [syncStatus, setSyncStatus] = useState({
-    isSyncing: false,
-    lastSynced: null,
-    error: null
-  });
 
   // Refs
   const transcriptEndRef = useRef(null);
@@ -149,49 +118,13 @@ export default function MedicalScribeApp() {
     finalizeConsultationTimestamp
   );
 
-  // Force sync of all data
-  const ensureSyncComplete = async () => {
-    if (!ENABLE_BACKGROUND_SYNC) return;
-    
-    setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-    console.info("[App] Forcing sync flush to ensure data persistence");
-    
-    try {
-      await syncService.flushAll("manual-trigger");
-      setSyncStatus({ 
-        isSyncing: false, 
-        lastSynced: new Date().toISOString(),
-        error: null 
-      });
-      console.info("[App] Sync flush completed successfully");
-    } catch (error) {
-      setSyncStatus({ 
-        isSyncing: false, 
-        lastSynced: null,
-        error: error.message
-      });
-      console.error("[App] Error during manual sync flush:", error);
-    }
-  };
-
-  // Handle sign out with sync
+  // Handle sign out with a final background flush (no UI needed)
   const handleSignOut = async () => {
     if (ENABLE_BACKGROUND_SYNC) {
-      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
       try {
         await syncService.flushAll("sign-out");
-        setSyncStatus({ 
-          isSyncing: false, 
-          lastSynced: new Date().toISOString(),
-          error: null 
-        });
       } catch (error) {
         console.error("[MedicalScribeApp] Final sync before sign-out failed:", error);
-        setSyncStatus({ 
-          isSyncing: false, 
-          lastSynced: null,
-          error: error.message 
-        });
       }
     }
     await signOut();
@@ -205,18 +138,38 @@ export default function MedicalScribeApp() {
     activeConsultation?.interimTranscript,
   ]);
 
-  // Handle page unload sync
+  // Flush queue regularly (silent) to keep background sync moving
   useEffect(() => {
-    if (!ENABLE_BACKGROUND_SYNC) return;
-  
-    const handleBeforeUnload = () => {
-      syncService.flushAll("page-unload");
-      return null;
+    if (!ENABLE_BACKGROUND_SYNC) return undefined;
+
+    const FLUSH_INTERVAL_MS = 4000;
+
+    const flush = async (reason) => {
+      try {
+        await syncService.flushAll(reason);
+      } catch (error) {
+        console.error(`[MedicalScribeApp] Background sync flush failed (${reason}):`, error);
+      }
     };
+
+    const intervalId = window.setInterval(() => flush("interval"), FLUSH_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) flush("visibilitychange");
+    };
+    const handleOnline = () => flush("online");
+    const handleFocus = () => flush("focus");
     
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", handleFocus);
+
+    flush("mount");
+
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -229,61 +182,6 @@ export default function MedicalScribeApp() {
       ensureSegmentsLoaded(activeConsultationId, false);
     }
   }, [activeConsultationId, activeConsultation?.activeTab, ensureSegmentsLoaded]);
-
-  // Set up regular background sync
-  useEffect(() => {
-    if (!ENABLE_BACKGROUND_SYNC) return undefined;
-
-    let isUnmounted = false;
-    const FLUSH_INTERVAL_MS = 4000;
-
-    const flush = async (reason) => {
-      if (isUnmounted) return;
-      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-      try {
-        await syncService.flushAll(reason);
-        if (!isUnmounted) {
-          setSyncStatus({ 
-            isSyncing: false, 
-            lastSynced: new Date().toISOString(),
-            error: null 
-          });
-        }
-      } catch (error) {
-        console.error(`[MedicalScribeApp] Background sync flush failed (${reason}):`, error);
-        if (!isUnmounted) {
-          setSyncStatus({ 
-            isSyncing: false, 
-            lastSynced: null,
-            error: error.message 
-          });
-        }
-      }
-    };
-
-    const intervalId = window.setInterval(() => flush("interval"), FLUSH_INTERVAL_MS);
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        flush("visibilitychange");
-      }
-    };
-    const handleOnline = () => flush("online");
-    const handleFocus = () => flush("focus");
-    
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("focus", handleFocus);
-
-    flush("mount");
-
-    return () => {
-      isUnmounted = true;
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, []);
 
   // User interaction handlers
   const handleRenameConsultation = (id, newName) => {
@@ -321,13 +219,15 @@ export default function MedicalScribeApp() {
   // Prioritize note generation as soon as session stops
   const handleStopAndGenerate = async () => {
     await stopSession();
-    // Immediately kick off note generation (do NOT wait for background sync)
     if (activeConsultation && activeConsultation.transcriptSegments.size > 0) {
       await handleGenerateNote();
     }
-    // Flush background sync after we've started/finished generating (lower priority)
     if (ENABLE_BACKGROUND_SYNC) {
-      ensureSyncComplete();
+      try {
+        await syncService.flushAll("post-generate");
+      } catch (e) {
+        console.warn("Background flush after generate failed", e);
+      }
     }
   };
 
@@ -434,8 +334,6 @@ export default function MedicalScribeApp() {
     return (
       <div className="action-buttons">
         {renderPrimaryButton()}
-        
-        {/* Stop session button */}
         {(activeConsultation.sessionState === "recording" ||
           activeConsultation.sessionState === "paused") && (
           <button
@@ -445,80 +343,8 @@ export default function MedicalScribeApp() {
             Stop Session
           </button>
         )}
-        
-        {/* Force sync button */}
-        {ENABLE_BACKGROUND_SYNC && activeConsultation.sessionState === "recording" && (
-          <button 
-            onClick={ensureSyncComplete}
-            className="button button-secondary" 
-            disabled={syncStatus.isSyncing}
-            title="Force sync transcript to database"
-          >
-            {syncStatus.isSyncing ? "Syncing..." : "Force Sync"}
-          </button>
-        )}
       </div>
     );
-  };
-
-  // Tab content renderer
-  const renderTabContent = () => {
-    if (!activeConsultation) return null;
-
-    switch (activeConsultation.activeTab) {
-      case "transcript":
-        return (
-          <TranscriptPanel
-            activeConsultation={activeConsultation}
-            transcriptEndRef={transcriptEndRef}
-            onSpeakerRoleToggle={handleSpeakerRoleToggle}
-            renderActionButtons={renderActionButtons}
-            getStatusDisplay={getStatusDisplay}
-            updateConsultation={updateConsultation}
-            activeConsultationId={activeConsultationId}
-          />
-        );
-      case "patient":
-        return (
-          <PatientInfoPanel
-            activeConsultation={activeConsultation}
-            updateConsultation={updateConsultation}
-            activeConsultationId={activeConsultationId}
-            onRegenerateNote={handleGenerateNote}
-          />
-        );
-      case "note":
-        return (
-          <>
-            <div className="notes-content">
-              <NoteEditor
-                notes={activeConsultation.notes}
-                setNotes={(newNotes) =>
-                  updateConsultation(activeConsultationId, {
-                    notes: newNotes,
-                  })
-                }
-                loading={activeConsultation.loading}
-                error={activeConsultation.error}
-                noteType={activeConsultation.noteType}
-                onNoteTypeChange={handleNoteTypeChange}
-                onRegenerate={handleGenerateNote}
-                transcriptSegments={activeConsultation.transcriptSegments}
-              />
-            </div>
-            <CommandBar
-              notes={activeConsultation.notes}
-              setNotes={(newNotes) =>
-                updateConsultation(activeConsultationId, {
-                  notes: newNotes,
-                })
-              }
-            />
-          </>
-        );
-      default:
-        return null;
-    }
   };
 
   // Main render
@@ -536,6 +362,7 @@ export default function MedicalScribeApp() {
         onDeletePatient={handleDeletePatient}
         sidebarOpen={sidebarOpen}
         onCloseSidebar={() => setSidebarOpen(false)}
+        isHydrating={hydrationState?.status === "loading"}
       />
 
       <button
@@ -546,8 +373,6 @@ export default function MedicalScribeApp() {
       >
         Sign out
       </button>
-      
-      <SyncStatusIndicator status={syncStatus} />
 
       <div className="app-main">
         <button
@@ -610,7 +435,51 @@ export default function MedicalScribeApp() {
               </div>
 
               <div className="tab-content">
-                {renderTabContent()}
+                {activeConsultation.activeTab === "transcript" ? (
+                  <TranscriptPanel
+                    activeConsultation={activeConsultation}
+                    transcriptEndRef={transcriptEndRef}
+                    onSpeakerRoleToggle={handleSpeakerRoleToggle}
+                    renderActionButtons={renderActionButtons}
+                    getStatusDisplay={getStatusDisplay}
+                    updateConsultation={updateConsultation}
+                    activeConsultationId={activeConsultationId}
+                  />
+                ) : activeConsultation.activeTab === "patient" ? (
+                  <PatientInfoPanel
+                    activeConsultation={activeConsultation}
+                    updateConsultation={updateConsultation}
+                    activeConsultationId={activeConsultationId}
+                    onRegenerateNote={handleGenerateNote}
+                  />
+                ) : (
+                  <>
+                    <div className="notes-content">
+                      <NoteEditor
+                        notes={activeConsultation.notes}
+                        setNotes={(newNotes) =>
+                          updateConsultation(activeConsultationId, {
+                            notes: newNotes,
+                          })
+                        }
+                        loading={activeConsultation.loading}
+                        error={activeConsultation.error}
+                        noteType={activeConsultation.noteType}
+                        onNoteTypeChange={handleNoteTypeChange}
+                        onRegenerate={handleGenerateNote}
+                        transcriptSegments={activeConsultation.transcriptSegments}
+                      />
+                    </div>
+                    <CommandBar
+                      notes={activeConsultation.notes}
+                      setNotes={(newNotes) =>
+                        updateConsultation(activeConsultationId, {
+                          notes: newNotes,
+                        })
+                      }
+                    />
+                  </>
+                )}
               </div>
             </div>
           ) : (
