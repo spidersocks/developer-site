@@ -186,6 +186,27 @@ export default function MedicalScribeApp() {
     }
   }, [activeConsultationId, activeConsultation?.activeTab, ensureSegmentsLoaded]);
 
+  // Keep the current tab when switching between consultations of the SAME patient
+  const handleConsultationSelectSamePatientAware = (nextConsultationId) => {
+    if (!nextConsultationId) return;
+    const current = activeConsultation;
+    const next = consultations.find((c) => c.id === nextConsultationId);
+    if (
+      current &&
+      next &&
+      current.patientId &&
+      next.patientId &&
+      current.patientId === next.patientId
+    ) {
+      const currentTab = current.activeTab;
+      if (currentTab && next.activeTab !== currentTab) {
+        // Update the next consultation's tab to match the current one
+        updateConsultation(nextConsultationId, { activeTab: currentTab });
+      }
+    }
+    setActiveConsultationId(nextConsultationId);
+  };
+
   // User interaction handlers
   const handleRenameConsultation = (id, newName) => {
     updateConsultation(id, { name: newName, customNameSet: true });
@@ -357,7 +378,7 @@ export default function MedicalScribeApp() {
         consultations={consultations}
         patients={patients}
         activeConsultationId={activeConsultationId}
-        onConsultationSelect={setActiveConsultationId}
+        onConsultationSelect={handleConsultationSelectSamePatientAware}
         onAddConsultationForPatient={addConsultationForPatient}
         onAddNewPatient={() => setShowNewPatientModal(true)}
         onRenameConsultation={handleRenameConsultation}

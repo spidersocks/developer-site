@@ -12,7 +12,6 @@ import {
   DownloadIcon,
   PlusIcon,
 } from "../shared/Icons";
-import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./Sidebar.module.css";
 
 export const Sidebar = ({
@@ -386,7 +385,12 @@ export const Sidebar = ({
         <div className={styles.sidebarNavWrapper}>
           {isHydrating ? (
             <div className={`${styles.sidebarEmpty} ${styles.centered}`}>
-              <LoadingAnimation message="Loading patients..." />
+              <div className={`${styles.emptyTitle} ${styles.subtle}`}>
+                Fetching patients...
+              </div>
+              <div className={styles.emptySub}>
+                Syncing with your account
+              </div>
             </div>
           ) : patients.length === 0 && consultations.length === 0 ? (
             <div className={`${styles.sidebarEmpty} ${styles.centered}`}>
