@@ -13,6 +13,7 @@ import { CommandBar } from "./components/Notes/CommandBar";
 import { Sidebar } from "./components/Sidebar/Sidebar";
 import { ENABLE_BACKGROUND_SYNC } from "./utils/constants";
 import { syncService } from "./utils/syncService";
+import { ensureAwsCredentials } from "./utils/awsClients"; // NEW
 import { LoadingAnimation } from "./components/shared/LoadingAnimation";
 import './utils/debugUtils';
 
@@ -73,7 +74,6 @@ export default function MedicalScribeApp() {
   const { user, signOut } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
 
-  // Core application state
   const {
     consultations,
     patients,
@@ -129,6 +129,14 @@ export default function MedicalScribeApp() {
     }
     await signOut();
   };
+
+  // Warm AWS creds only when this app is mounted and user is signed in
+  useEffect(() => {
+    if (!ENABLE_BACKGROUND_SYNC) return;
+    if (!user) return;
+    ensureAwsCredentials({ silentIfSignedOut: true }).catch(() => {});
+  }, [user]);
+  // Core application state
 
   // NOTE: Removed automatic scroll-to-bottom on transcript tab to prevent page jumping.
   // If needed later, we can restore a scoped auto-scroll inside the transcript box only.

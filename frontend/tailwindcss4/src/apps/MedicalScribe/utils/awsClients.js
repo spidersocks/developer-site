@@ -62,16 +62,49 @@ export const credentialsProvider = fromCognitoIdentityPool({
 let dynamoClient = null;
 let documentClient = null;
 
-export const warmAwsCredentials = async () => {
+/**
+ * Explicitly warm AWS credentials if a user is signed in.
+ * - Returns credentials or null if the user is signed out.
+ * - No noisy console errors when signed out.
+ * - Memoized so concurrent calls share one promise.
+ */
+let _warmPromise = null;
+export const ensureAwsCredentials = async ({ silentIfSignedOut = true } = {}) => {
   if (!ENABLE_BACKGROUND_SYNC) return null;
-  try {
-    const creds = await credentialsProvider();
-    console.info("[awsClients] Obtained AWS credentials");
-    return creds;
-  } catch (error) {
-    console.error("[awsClients] Failed to obtain AWS credentials", error);
-    throw error;
-  }
+
+  if (_warmPromise) return _warmPromise;
+
+  _warmPromise = (async () => {
+    try {
+      const { tokens } = await fetchAuthSession();
+      const idToken = tokens?.idToken?.toString();
+      if (!idToken) {
+        if (!silentIfSignedOut) {
+          console.info("[awsClients] Skipping credential warm: user is signed out.");
+        }
+        return null;
+      }
+      const creds = await credentialsProvider();
+      console.info("[awsClients] AWS credentials obtained");
+      return creds;
+    } catch (error) {
+      // Only log hard errors (network, config). Missing token isn't an error case here.
+      if (!/No ID token available/i.test(String(error?.message || ""))) {
+        console.error("[awsClients] Failed to obtain AWS credentials", error);
+      } else if (!silentIfSignedOut) {
+        console.info("[awsClients] Skipping credential warm: no ID token.");
+      }
+      return null;
+    } finally {
+      // allow subsequent warm attempts after this completes
+      const tmp = _warmPromise;
+      _warmPromise = null;
+      return tmp;
+    }
+  })();
+
+  // Resolve inner promise value
+  return _warmPromise.then((result) => result);
 };
 
 export const getDynamoClient = () => {

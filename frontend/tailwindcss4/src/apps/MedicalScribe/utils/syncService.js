@@ -4,18 +4,17 @@ import {
   AWS_REGION,
   credentialsProvider,
   getDynamoClient,
-  warmAwsCredentials,
+  // ensureAwsCredentials,  // Optional: you can import and use this inside flush if you want eager warm there.
 } from "./awsClients";
 
 const SEGMENT_BATCH_LIMIT = 25;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
-if (ENABLE_BACKGROUND_SYNC) {
-  warmAwsCredentials().catch(() => {
-    /* warmAwsCredentials already logged the error */
-  });
-}
+// REMOVE eager warming at module load to avoid errors across unrelated pages
+// if (ENABLE_BACKGROUND_SYNC) {
+//   ensureAwsCredentials({ silentIfSignedOut: true }).catch(() => {});
+// }
 
 const dynamoClient = ENABLE_BACKGROUND_SYNC ? getDynamoClient() : null;
 
