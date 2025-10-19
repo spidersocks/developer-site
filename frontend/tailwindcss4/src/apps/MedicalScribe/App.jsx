@@ -415,7 +415,9 @@ export default function MedicalScribeApp() {
 
         <main className="workspace">
           {hydrationState?.status === "loading" ? (
-            <LoadingAnimation message={hydrationState.message || "Fetching patients..."} />
+            <div className="panel start-screen-panel">
+              <LoadingAnimation message={hydrationState.message || "Fetching patients..."} />
+            </div>
           ) : consultations.length === 0 && patients.length === 0 ? (
             <WelcomeScreen onAddNewPatient={() => setShowNewPatientModal(true)} />
           ) : activeConsultation ? (

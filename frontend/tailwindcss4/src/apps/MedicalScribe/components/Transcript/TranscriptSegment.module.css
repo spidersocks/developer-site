@@ -1,15 +1,15 @@
 .transcriptSegmentContainer {
-  margin-bottom: 0.9em;
+  margin-bottom: 0.6em; /* reduced from 0.9em */
 }
 
 .originalTranscriptText {
   color: var(--text-secondary);
   font-size: 0.9em;
-  margin-bottom: 0.25em;
+  margin-bottom: 0.2em; /* slightly tighter */
 }
 
 .englishOnlyTranscript {
-  margin-bottom: 0.85em;
+  margin-bottom: 0.45em; /* reduced from 0.85em */
 }
 
 .speakerLabelClickable {

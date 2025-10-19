@@ -16,6 +16,13 @@ export const TranscriptPanel = ({
 }) => {
   const noSegmentsYet = activeConsultation.transcriptSegments.size === 0;
   const isIdleOrStopped = ["idle", "stopped"].includes(activeConsultation.sessionState);
+  const isActiveSession = ["recording", "paused", "connecting"].includes(
+    activeConsultation.sessionState
+  );
+
+  // Show loader only when truly loading and not during an active/connecting session
+  const shouldShowLoader =
+    activeConsultation.transcriptLoading && !isActiveSession;
 
   return (
     <>
@@ -50,15 +57,19 @@ export const TranscriptPanel = ({
         </div>
       )}
       <div className={styles.transcriptBox}>
-        {activeConsultation.transcriptLoading ? (
-          <LoadingAnimation message="Loading transcript..." />
+        {shouldShowLoader ? (
+          <div className={styles.loadingContainer}>
+            <LoadingAnimation message="Loading transcript..." />
+          </div>
         ) : noSegmentsYet && isIdleOrStopped ? (
           <div className={styles.emptyTranscript}>
             <h4>No transcript yet</h4>
             <p>Start a recording to see the live transcript here.</p>
           </div>
         ) : activeConsultation.transcriptSegments.size > 0 ||
-          ["recording", "paused"].includes(activeConsultation.sessionState) ? (
+          ["recording", "paused", "connecting"].includes(
+            activeConsultation.sessionState
+          ) ? (
           <>
             {Array.from(activeConsultation.transcriptSegments.values()).map(
               (seg) => (

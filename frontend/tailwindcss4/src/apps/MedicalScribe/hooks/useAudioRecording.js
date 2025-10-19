@@ -411,17 +411,24 @@ export const useAudioRecording = (
     if (!activeConsultation) return;
     const noteTypeToUse = noteTypeOverride || activeConsultation.noteType;
 
+    // Build transcript for generation
     let transcript = '';
     Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
       transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${seg.displayText}\n`;
     });
 
     if (!transcript.trim()) {
-      updateConsultation(activeConsultationId, { error: 'Transcript is empty. Nothing to generate.' });
+      // Keep UI usable; surface a gentle message in console
+      console.warn("[useAudioRecording] Generate note requested but transcript is empty.");
+      // Do not set a global error that collapses UI
       return;
     }
 
-    updateConsultation(activeConsultationId, { loading: true, error: null, notes: null });
+    // Preserve current notes so UI remains usable if generation fails
+    const hadExistingNotes = Boolean(activeConsultation.notes);
+
+    // Enter loading state but do not clear existing notes
+    updateConsultation(activeConsultationId, { loading: true, error: null });
 
     try {
       const requestBody = { full_transcript: transcript, note_type: noteTypeToUse };
@@ -430,26 +437,38 @@ export const useAudioRecording = (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Server error');
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        // If backend reports not found (e.g., route proxy not available), do not nuke UI
+        const detail = data?.detail || `${resp.status} ${resp.statusText}`;
+        throw new Error(detail);
+      }
 
       updateConsultation(activeConsultationId, {
         notes: data.notes,
         noteType: noteTypeToUse,
         noteId: activeConsultationId,
         notesCreatedAt: new Date().toISOString(),
-        notesUpdatedAt: new Date().toISOString()
+        notesUpdatedAt: new Date().toISOString(),
+        loading: false
       });
 
       if (finalizeConsultationTimestamp) {
         finalizeConsultationTimestamp(activeConsultationId);
       }
     } catch (err) {
+      // Non-fatal: keep existing notes and controls visible
+      console.error("[useAudioRecording] Failed to generate final note:", err);
       updateConsultation(activeConsultationId, {
-        error: `Failed to generate final note: ${err.message}`
+        // Do NOT set a fatal error that hides the editor
+        // error: `Failed to generate final note: ${err.message}`,
+        loading: false
       });
-    } finally {
-      updateConsultation(activeConsultationId, { loading: false });
+
+      // If there were no notes before and generation failed, the NoteEditor will show its normal empty state.
+      if (!hadExistingNotes) {
+        console.info("[useAudioRecording] No prior notes; showing empty note state after failed generation.");
+      }
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
