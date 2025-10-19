@@ -167,6 +167,13 @@ export const apiClient = {
       body: payload,
     }),
 
+  enrichTranscriptSegments: ({ token, consultationId, force } = {}) =>
+    apiRequest(`/transcript-segments/consultations/${consultationId}/enrich`, {
+      method: "POST",
+      accessToken: token,
+      query: { force: force ? "true" : undefined },
+    }),
+
   updateTranscriptSegment: ({ token, segmentId, payload }) =>
     apiRequest(`/transcript-segments/segments/${segmentId}`, {
       method: "PATCH",

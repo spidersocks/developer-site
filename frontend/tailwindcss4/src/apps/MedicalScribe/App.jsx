@@ -96,7 +96,6 @@ const SyncStatusIndicator = ({ status }) => {
 };
 
 export default function MedicalScribeApp() {
-  // Auth & user context
   const { user, signOut } = useAuth();
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? user?.userId ?? null;
 
@@ -117,6 +116,7 @@ export default function MedicalScribeApp() {
     setConsultations,
     hydrationState,
     forceHydrate,
+    ensureSegmentsLoaded, // NEW
   } = useConsultations(ownerUserId);
 
   // UI state
@@ -220,6 +220,17 @@ export default function MedicalScribeApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeConsultationId || !activeConsultation) return;
+    if (activeConsultation.activeTab === "transcript") {
+      // Quick load then enrich in background
+      ensureSegmentsLoaded(activeConsultationId, true);
+    } else {
+      // Quick load without highlights (cache-only expansion)
+      ensureSegmentsLoaded(activeConsultationId, false);
+    }
+  }, [activeConsultationId, activeConsultation?.activeTab, ensureSegmentsLoaded]);
+
   // Set up regular background sync
   useEffect(() => {
     if (!ENABLE_BACKGROUND_SYNC) return undefined;
@@ -291,6 +302,11 @@ export default function MedicalScribeApp() {
   const handleTabChange = (tab) => {
     if (!activeConsultation) return;
     updateConsultation(activeConsultationId, { activeTab: tab });
+
+    // If switching to transcript, ensure highlights are loaded
+    if (tab === "transcript" && activeConsultationId) {
+      ensureSegmentsLoaded(activeConsultationId, true);
+    }
   };
 
   const handleSpeakerRoleToggle = (speakerId) => {
