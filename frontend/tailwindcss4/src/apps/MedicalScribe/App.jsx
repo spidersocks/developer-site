@@ -223,10 +223,9 @@ export default function MedicalScribeApp() {
   useEffect(() => {
     if (!activeConsultationId || !activeConsultation) return;
     if (activeConsultation.activeTab === "transcript") {
-      // Quick load then enrich in background
+      // Quick load then enrich in background (deduped inside hook)
       ensureSegmentsLoaded(activeConsultationId, true);
     } else {
-      // Quick load without highlights (cache-only expansion)
       ensureSegmentsLoaded(activeConsultationId, false);
     }
   }, [activeConsultationId, activeConsultation?.activeTab, ensureSegmentsLoaded]);
@@ -302,11 +301,6 @@ export default function MedicalScribeApp() {
   const handleTabChange = (tab) => {
     if (!activeConsultation) return;
     updateConsultation(activeConsultationId, { activeTab: tab });
-
-    // If switching to transcript, ensure highlights are loaded
-    if (tab === "transcript" && activeConsultationId) {
-      ensureSegmentsLoaded(activeConsultationId, true);
-    }
   };
 
   const handleSpeakerRoleToggle = (speakerId) => {

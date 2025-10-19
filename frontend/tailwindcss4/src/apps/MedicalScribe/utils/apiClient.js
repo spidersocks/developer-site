@@ -27,13 +27,10 @@ async function apiRequest(
 ) {
   const url = buildUrl(path, query);
 
-  const headers = new Headers({
-    "Content-Type": "application/json",
-  });
-
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
+  // IMPORTANT: only set Content-Type when sending a non-GET body to avoid CORS preflight on GET
+  const headers = new Headers();
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  if (body != null && method !== "GET") headers.set("Content-Type", "application/json");
 
   try {
     const response = await fetch(url.toString(), {
@@ -54,22 +51,15 @@ async function apiRequest(
         : await response.text().catch(() => null);
 
     if (!response.ok) {
-      // Build a helpful message for 4xx/5xx
       let message = `Request failed with status ${response.status}`;
       if (payload && typeof payload === "object" && payload.detail) {
-        // pydantic/fastapi-style error payloads
         message = Array.isArray(payload.detail)
           ? `Validation: ${JSON.stringify(payload.detail)}`
           : String(payload.detail);
       } else if (typeof payload === "string" && payload.trim()) {
         message = payload;
       }
-      return {
-        ok: false,
-        status: response.status,
-        data: payload,
-        error: new Error(message),
-      };
+      return { ok: false, status: response.status, data: payload, error: new Error(message) };
     }
 
     return { ok: true, status: response.status, data: payload };
@@ -79,8 +69,12 @@ async function apiRequest(
   }
 }
 
-// Module-scoped cache for note types (fetched once per app session)
+// Module-scoped caches
 let _noteTypesPromise = null;
+
+// Tiny 2s memo to coalesce repeat segment loads
+const _segmentsMemo = new Map(); // key -> { ts: number, res: { ok, status, data, error } }
+const SEGMENTS_TTL_MS = 2000;
 
 export const apiClient = {
   listPatients: ({ token, userId, signal } = {}) =>
@@ -154,14 +148,23 @@ export const apiClient = {
       accessToken: token,
     }),
 
-  listTranscriptSegments: ({ token, consultationId, signal, includeEntities } = {}) =>
-    apiRequest(`/transcript-segments/consultations/${consultationId}/segments`, {
+  listTranscriptSegments: ({ token, consultationId, signal, includeEntities } = {}) => {
+    const key = `${consultationId}|${includeEntities ? "1" : "0"}`;
+    const now = Date.now();
+    const cached = _segmentsMemo.get(key);
+    if (cached && now - cached.ts < SEGMENTS_TTL_MS) {
+      return Promise.resolve(cached.res);
+    }
+
+    return apiRequest(`/transcript-segments/consultations/${consultationId}/segments`, {
       accessToken: token,
       signal,
-      query: {
-        include_entities: includeEntities ? "true" : undefined,
-      },
-    }),
+      query: { include_entities: includeEntities ? "true" : undefined },
+    }).then((res) => {
+      _segmentsMemo.set(key, { ts: Date.now(), res });
+      return res;
+    });
+  },
 
   createTranscriptSegment: ({ token, consultationId, payload }) =>
     apiRequest(`/transcript-segments/consultations/${consultationId}/segments`, {
@@ -203,20 +206,17 @@ export const apiClient = {
       body: payload,
     }),
 
-  // Fetch once, cache for entire session
-  getNoteTypesCached: () => {
+ getNoteTypesCached: () => {
     if (_noteTypesPromise) return _noteTypesPromise;
-    _noteTypesPromise = apiRequest("/note-types").then((res) => {
-      if (res.ok && res.data && Array.isArray(res.data.note_types)) {
-        return res.data.note_types;
-      }
-      // If failed or malformed, let the caller handle fallback
-      throw new Error(res.error?.message || "Failed to load note types");
-    }).catch((err) => {
-      // Ensure subsequent calls still resolve (with empty list) to avoid repeated fetches
-      console.warn("[apiClient] getNoteTypesCached fallback due to error:", err?.message);
-      return [];
-    });
+    _noteTypesPromise = apiRequest("/note-types")
+      .then((res) => {
+        if (res.ok && res.data && Array.isArray(res.data.note_types)) return res.data.note_types;
+        throw new Error(res.error?.message || "Failed to load note types");
+      })
+      .catch((err) => {
+        console.warn("[apiClient] getNoteTypesCached fallback due to error:", err?.message);
+        return [];
+      });
     return _noteTypesPromise;
   },
 };

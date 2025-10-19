@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { DEFAULT_CONSULTATION, ENABLE_BACKGROUND_SYNC } from "../utils/constants";
 import { generatePatientId, generatePatientName } from "../utils/helpers";
 import { syncService } from "../utils/syncService";
@@ -196,75 +196,120 @@ export const useConsultations = (ownerUserId = null) => {
   }, [consultations, patients, activeConsultationId]);
 
   /**
-   * Fetch segments for a consultation in two phases:
-   * 1) Fast pass (includeEntities=false) to paint quickly (expands cached compact if present)
-   * 2) Rich pass (includeEntities=true) to ensure highlights are available; uses cache if present
+   * In-flight de-duplication and cooldown
+   */
+  const inFlight = useRef(new Map()); // key -> Promise
+  const lastFetchAt = useRef(new Map()); // key -> timestamp
+  const COOLDOWN_MS = 2000;
+
+  const getConsultationById = useCallback(
+    (id) => appState.consultations.find((c) => c.id === id) || null,
+    [appState.consultations]
+  );
+
+  /**
+   * Fetch segments with dedupe and cooldown.
+   * - base fetch paints quickly (includeEntities=false), done once if no segments yet
+   * - rich fetch provides highlights (includeEntities=true), done once if no highlights cached
    */
   const ensureSegmentsLoaded = useCallback(
     async (consultationId, withHighlights = true) => {
       if (!consultationId) return;
 
-      // Phase 1: quick load (no compute)
-      try {
-        const baseRes = await apiClient.listTranscriptSegments({
-          consultationId,
-          includeEntities: false,
-        });
-        if (baseRes.ok) {
-          const segmentMap = mapSegmentsToUiMap(consultationId, baseRes.data);
-          setAppState((prev) => {
-            const updated = prev.consultations.map((c) =>
-              c.id === consultationId ? { ...c, transcriptSegments: segmentMap } : c
-            );
-            return { ...prev, consultations: updated };
-          });
-        } else {
-          console.warn("[useConsultations] Base segment load failed", {
-            consultationId,
-            status: baseRes.status,
-            error: baseRes.error?.message,
-          });
+      const now = Date.now();
+      const baseKey = `${consultationId}|base`;
+      const richKey = `${consultationId}|rich`;
+
+      const existing = getConsultationById(consultationId);
+      const hasAnySegments = existing?.transcriptSegments && existing.transcriptSegments.size > 0;
+      const hasHighlights =
+        hasAnySegments &&
+        Array.from(existing.transcriptSegments.values()).some(
+          (s) => Array.isArray(s.entities) && s.entities.length > 0
+        );
+
+      // BASE FETCH: only if we don't have any segments yet
+      if (!hasAnySegments) {
+        const last = lastFetchAt.current.get(baseKey) || 0;
+        if (now - last > COOLDOWN_MS) {
+          if (!inFlight.current.has(baseKey)) {
+            const p = (async () => {
+              const res = await apiClient.listTranscriptSegments({
+                consultationId,
+                includeEntities: false,
+              });
+              if (res.ok) {
+                const segmentMap = mapSegmentsToUiMap(consultationId, res.data);
+                setAppState((prev) => {
+                  const updated = prev.consultations.map((c) =>
+                    c.id === consultationId ? { ...c, transcriptSegments: segmentMap } : c
+                  );
+                  return { ...prev, consultations: updated };
+                });
+              } else {
+                console.warn("[useConsultations] Base segment load failed", {
+                  consultationId,
+                  status: res.status,
+                  error: res.error?.message,
+                });
+              }
+            })()
+              .catch((e) => console.error("[useConsultations] Base load exception", e))
+              .finally(() => {
+                inFlight.current.delete(baseKey);
+                lastFetchAt.current.set(baseKey, Date.now());
+              });
+            inFlight.current.set(baseKey, p);
+          }
+          await inFlight.current.get(baseKey);
         }
-      } catch (e) {
-        console.error("[useConsultations] Base segment load exception", { consultationId, e });
       }
 
       if (!withHighlights) return;
 
-      // Phase 2: highlighted load (compute only if not cached)
-      try {
-        const richRes = await apiClient.listTranscriptSegments({
-          consultationId,
-          includeEntities: true,
-        });
-        if (richRes.ok) {
-          const segmentMap = mapSegmentsToUiMap(consultationId, richRes.data);
-          setAppState((prev) => {
-            const updated = prev.consultations.map((c) =>
-              c.id === consultationId ? { ...c, transcriptSegments: segmentMap } : c
-            );
-            return { ...prev, consultations: updated };
-          });
-        } else {
-          console.warn("[useConsultations] Highlighted segment load failed", {
-            consultationId,
-            status: richRes.status,
-            error: richRes.error?.message,
-          });
+      // RICH FETCH: only if we don't already have highlights
+      if (!hasHighlights) {
+        const last = lastFetchAt.current.get(richKey) || 0;
+        if (now - last > COOLDOWN_MS) {
+          if (!inFlight.current.has(richKey)) {
+            const p = (async () => {
+              const res = await apiClient.listTranscriptSegments({
+                consultationId,
+                includeEntities: true,
+              });
+              if (res.ok) {
+                const segmentMap = mapSegmentsToUiMap(consultationId, res.data);
+                setAppState((prev) => {
+                  const updated = prev.consultations.map((c) =>
+                    c.id === consultationId ? { ...c, transcriptSegments: segmentMap } : c
+                  );
+                  return { ...prev, consultations: updated };
+                });
+              } else {
+                console.warn("[useConsultations] Highlighted segment load failed", {
+                  consultationId,
+                  status: res.status,
+                  error: res.error?.message,
+                });
+              }
+            })()
+              .catch((e) => console.error("[useConsultations] Rich load exception", e))
+              .finally(() => {
+                inFlight.current.delete(richKey);
+                lastFetchAt.current.set(richKey, Date.now());
+              });
+            inFlight.current.set(richKey, p);
+          }
+          await inFlight.current.get(richKey);
         }
-      } catch (e) {
-        console.error("[useConsultations] Highlighted segment load exception", {
-          consultationId,
-          e,
-        });
       }
     },
-    []
+    [getConsultationById]
   );
 
   /**
    * Hydrate patients/consultations/notes only (no bulk transcript fetching).
-   * After hydration, lazily load only the prioritized consultation's segments.
+   * After hydration, let the App decide which consultation's segments to load.
    */
   const runHydration = useCallback(async () => {
     if (!ENABLE_BACKGROUND_SYNC || !safeOwnerUserId) {
@@ -462,11 +507,8 @@ export const useConsultations = (ownerUserId = null) => {
         },
       }));
 
-      // Lazy-load only the prioritized consultation's segments now
-      if (prioritizedId) {
-        // Quick paint, then upgrade to highlights
-        await ensureSegmentsLoaded(prioritizedId, true);
-      }
+      // IMPORTANT: do NOT call ensureSegmentsLoaded here.
+      // App.jsx effect will handle loading for the active consultation.
 
       console.info("[useConsultations] Remote hydration complete", {
         safeOwnerUserId,
@@ -492,7 +534,7 @@ export const useConsultations = (ownerUserId = null) => {
     consultations,
     activeConsultationId,
     hydrationState.syncVersion,
-    ensureSegmentsLoaded,
+    setAppState,
   ]);
 
   /**
@@ -1038,7 +1080,7 @@ export const useConsultations = (ownerUserId = null) => {
     queueClinicalNoteSync,
     forceHydrate,
 
-    // Performance: on-demand transcript loader
+    // Performance: on-demand transcript loader (deduped + cooldown)
     ensureSegmentsLoaded,
   };
 };
