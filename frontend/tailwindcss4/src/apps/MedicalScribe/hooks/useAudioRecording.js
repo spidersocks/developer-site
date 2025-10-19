@@ -1,7 +1,8 @@
 import { useRef, useCallback } from 'react';
 import { BACKEND_WS_URL, BACKEND_API_URL, ENABLE_BACKGROUND_SYNC } from '../utils/constants';
 import { getAssetPath, getFriendlySpeakerLabel, calculateAge, to16BitPCM } from '../utils/helpers';
-import { syncService } from '../utils/syncService';
+// REMOVE: import { syncService } from "../utils/syncService";
+import { apiClient } from "../utils/apiClient";
 
 /**
  * Custom hook for audio recording and real-time transcription
@@ -21,120 +22,64 @@ export const useAudioRecording = (
   const sessionStateRef = useRef('idle');
   const ownerUserIdRef = useRef(null);
 
-  // Keep ownerUserId in ref for access in callbacks
   if (activeConsultation?.ownerUserId) {
     ownerUserIdRef.current = activeConsultation.ownerUserId;
   }
 
-  /**
-   * Prepares a segment for sync by handling complex nested structures
-   */
-  const prepareSegmentForSync = useCallback((segment) => {
-    if (!segment) return null;
-    
-    // Create a clean copy with only the fields we need
-    const preparedSegment = {
-      id: segment.id,
-      speaker: segment.speaker || null,
-      text: segment.text || "",
-      displayText: segment.displayText || segment.text || "",
-      translatedText: segment.translatedText || null,
-      // Create a simplified version of entities that's safe for DynamoDB
-      entities: Array.isArray(segment.entities) 
-        ? segment.entities.map(entity => ({
-            BeginOffset: entity.BeginOffset || 0,
-            EndOffset: entity.EndOffset || 0,
-            Category: entity.Category || "OTHER",
-            Type: entity.Type || "OTHER",
-            Text: entity.Text || "",
-            Score: typeof entity.Score === 'number' ? entity.Score : 0,
-            // Simplify or omit complex nested structures
-            Traits: Array.isArray(entity.Traits) 
-              ? entity.Traits.map(trait => ({
-                  Name: trait.Name || "",
-                  Score: typeof trait.Score === 'number' ? trait.Score : 0
-                }))
-              : []
-          }))
-        : []
+  // Persist a finalized segment to the backend (no entities)
+  const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
+    try {
+      await apiClient.createTranscriptSegment({
+        // If your API enforces auth, pass access token here from useAuth; otherwise this can be omitted
+        token: undefined,
+        consultationId: activeConsultationId,
+        payload: {
+          sequence_number: sequenceNumber,
+          speaker_label: segment.speaker ?? null,
+          speaker_role: undefined, // optional: derive from speakerRoles if desired
+          original_text: segment.text ?? "",
+          translated_text: segment.translatedText ?? null,
+          detected_language: detectedLanguage ?? null,
+          start_time_ms: undefined,
+          end_time_ms: undefined,
+          // IMPORTANT: do not send entities; they will be re-computed on demand
+          entities: undefined,
+        },
+      });
+    } catch (e) {
+      console.error("[useAudioRecording] Failed to persist transcript segment:", e);
+    }
+  }, [activeConsultationId]);
+
+  const prepareSegmentForUi = useCallback((raw) => {
+    if (!raw) return null;
+    return {
+      id: raw.id,
+      speaker: raw.speaker || null,
+      text: raw.text || "",
+      displayText: raw.displayText || raw.text || "",
+      translatedText: raw.translatedText || null,
+      entities: Array.isArray(raw.entities) ? raw.entities : [], // live entities (from websocket) only
     };
-    
-    return preparedSegment;
   }, []);
 
-  /**
-   * Synchronizes transcript segments to DynamoDB
-   */
-  const enqueueSegmentsForSync = useCallback((segments, baseIndex) => {
-    if (
-      !ENABLE_BACKGROUND_SYNC ||
-      !activeConsultationId ||
-      !segments?.length ||
-      baseIndex === null ||
-      baseIndex === undefined
-    ) {
-      console.warn("[useAudioRecording] Skipping sync - invalid params:", { 
-        sync: ENABLE_BACKGROUND_SYNC, 
-        consultationId: activeConsultationId,
-        segmentsLength: segments?.length,
-        baseIndex 
-      });
-      return;
-    }
+  // DO NOT enqueue segments to DynamoDB directly anymore
+  const enqueueSegmentsForSync = useCallback((_segments, _baseIndex) => {
+    // No-op: we now persist via backend API
+  }, []);
 
-    const ownerUserId = ownerUserIdRef.current;
-    
-    console.info("[useAudioRecording] enqueueSegmentsForSync payload", {
-      activeConsultationId,
-      ownerUserId,
-      segmentsLength: segments.length,
-      baseIndex,
-      segmentIds: segments.map(s => s.id),
-    });
-    
-    if (!ownerUserId) {
-      console.error(
-        "[useAudioRecording] enqueueSegmentsForSync FAILED: missing ownerUserId",
-        { activeConsultationId, segmentsLength: segments.length, baseIndex }
-      );
-      return;
-    }
-    
-    // Process segments to ensure proper structure
-    const processedSegments = segments
-      .map(prepareSegmentForSync)
-      .filter(Boolean);
-    
-    if (processedSegments.length === 0) {
-      console.warn("[useAudioRecording] No valid segments to sync after processing");
-      return;
-    }
-    
-    syncService.enqueueTranscriptSegments(
-      activeConsultationId,
-      processedSegments,
-      baseIndex,
-      ownerUserId
-    );
-  }, [activeConsultationId, prepareSegmentForSync]);
-
-  // Sync session state ref whenever consultation changes
   if (activeConsultation) {
     sessionStateRef.current = activeConsultation.sessionState;
   }
 
-  /**
-   * Finalizes an interim transcript segment and adds it to the permanent transcript
-   */
   const finalizeInterimSegment = useCallback(() => {
-    // Same implementation as before...
     if (!activeConsultation) return;
     const text = (activeConsultation.interimTranscript || '').trim();
     if (!text) return;
 
     const id = `local-final-${Date.now()}`;
     const baseIndex = activeConsultation.transcriptSegments.size;
-    
+
     const finalSegment = {
       id,
       speaker: activeConsultation.interimSpeaker,
@@ -144,14 +89,6 @@ export const useAudioRecording = (
       displayText: text
     };
 
-    console.info("[useAudioRecording] Finalizing interim segment", {
-      id,
-      text,
-      speaker: finalSegment.speaker,
-      baseIndex
-    });
-
-    // First update the local state with the new segment
     const newSegments = new Map(activeConsultation.transcriptSegments);
     newSegments.set(id, finalSegment);
 
@@ -161,13 +98,10 @@ export const useAudioRecording = (
       interimSpeaker: null
     });
 
-    // Then sync the segment to DynamoDB
-    enqueueSegmentsForSync([finalSegment], baseIndex);
-  }, [activeConsultation, activeConsultationId, updateConsultation, enqueueSegmentsForSync]);
+    // Persist via backend API (no entities)
+    persistFinalSegment(finalSegment, baseIndex, activeConsultation.language || "en-US");
+  }, [activeConsultation, activeConsultationId, updateConsultation, persistFinalSegment]);
 
-  /**
-   * Initializes and starts the microphone for recording
-   */
   const startMicrophone = useCallback(async () => {
     if (!activeConsultation) return;
     try {
@@ -201,9 +135,6 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation]);
 
-  /**
-   * Starts a new recording session
-   */
   const startSession = useCallback(async () => {
     if (!activeConsultation) return;
     resetConsultation(activeConsultationId);
@@ -231,8 +162,7 @@ export const useAudioRecording = (
           const results = data.Transcript?.Results ?? [];
           if (!results.length) return;
 
-          // Track segments that need to be synced
-          const segmentsToSync = [];
+          const segmentsToPersist = [];
 
           setConsultations((prevConsultations) => {
             const consultation = prevConsultations.find((c) => c.id === activeConsultationId);
@@ -258,23 +188,23 @@ export const useAudioRecording = (
                 return;
               }
 
-              // Final transcript segment
-              const finalSegment = {
+              // Final UI segment enriched live with entities from server push (data.ComprehendEntities)
+              const uiSegment = prepareSegmentForUi({
                 id: result.ResultId,
                 speaker: currentSpeaker,
                 text: transcriptText,
                 entities: Array.isArray(data.ComprehendEntities) ? data.ComprehendEntities : [],
                 translatedText: data.TranslatedText || null,
                 displayText: data.DisplayText || transcriptText,
-              };
+              });
 
-              // Add to state update
-              newSegments.set(result.ResultId, finalSegment);
-              
-              // Add to sync queue (with the correct index)
-              segmentsToSync.push({
-                segment: finalSegment,
-                index: baseIndex + idx
+              newSegments.set(uiSegment.id, uiSegment);
+
+              // Queue for persistence (without entities)
+              segmentsToPersist.push({
+                ui: uiSegment,
+                sequenceNumber: baseIndex + idx,
+                detectedLanguage: result.LanguageCode || activeConsultation.language || "en-US"
               });
 
               interimTranscript = '';
@@ -282,7 +212,6 @@ export const useAudioRecording = (
               if (currentSpeaker) hasShownHint = true;
             });
 
-            // Return updated consultation with new segments
             return prevConsultations.map((c) =>
               c.id === activeConsultationId
                 ? {
@@ -296,14 +225,9 @@ export const useAudioRecording = (
             );
           });
 
-          // Sync each segment
-          segmentsToSync.forEach(({ segment, index }) => {
-            console.info("[useAudioRecording] Syncing final segment", {
-              id: segment.id, 
-              index, 
-              text: segment.text?.substring(0, 20) + (segment.text?.length > 20 ? "..." : "")
-            });
-            enqueueSegmentsForSync([segment], index);
+          // Persist finalized segments (no entities) via backend API
+          segmentsToPersist.forEach(({ ui, sequenceNumber, detectedLanguage }) => {
+            persistFinalSegment(ui, sequenceNumber, detectedLanguage);
           });
         } catch (e) {
           console.error('[useAudioRecording] Error processing WebSocket message:', e);
@@ -332,192 +256,95 @@ export const useAudioRecording = (
       });
     }
   }, [
-    activeConsultation, 
-    activeConsultationId, 
-    resetConsultation, 
-    updateConsultation, 
-    startMicrophone, 
-    setConsultations, 
-    enqueueSegmentsForSync
+    activeConsultation,
+    activeConsultationId,
+    resetConsultation,
+    updateConsultation,
+    startMicrophone,
+    setConsultations,
+    prepareSegmentForUi,
+    persistFinalSegment
   ]);
 
-  /**
-   * Pauses the current recording session
-   */
   const handlePause = useCallback(() => {
-    console.info("[useAudioRecording] Pausing recording session");
     finalizeInterimSegment();
     updateConsultation(activeConsultationId, { sessionState: 'paused' });
   }, [activeConsultationId, updateConsultation, finalizeInterimSegment]);
 
-  /**
-   * Resumes the current recording session
-   */
   const handleResume = useCallback(() => {
-    console.info("[useAudioRecording] Resuming recording session");
     updateConsultation(activeConsultationId, { sessionState: 'recording' });
   }, [activeConsultationId, updateConsultation]);
 
-  /**
-   * Stops the current recording session
-   * 
-   * @param {boolean} closeSocket - Whether to close the WebSocket connection
-   * @returns {Promise<void>}
-   */
   const stopSession = useCallback(async (closeSocket = true) => {
     if (!activeConsultation) return;
-    
-    if (
-      activeConsultation.sessionState === 'stopped' ||
-      activeConsultation.sessionState === 'idle'
-    ) {
+    if (activeConsultation.sessionState === 'stopped' || activeConsultation.sessionState === 'idle') {
       return;
     }
 
-    console.info("[useAudioRecording] Stopping recording session");
     updateConsultation(activeConsultationId, { sessionState: 'stopped' });
 
-    // Stop microphone tracks
     if (microphoneStreamRef.current) {
       microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
       microphoneStreamRef.current = null;
     }
-    
-    // Close audio context
     if (audioContextRef.current?.state !== 'closed') {
-      try {
-        await audioContextRef.current?.close();
-      } catch (err) {
-        console.warn("[useAudioRecording] Error closing AudioContext:", err);
-      }
+      try { await audioContextRef.current?.close(); } catch {}
     }
 
-    // Finalize any interim transcript
     let finalized = false;
-    
+
     if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
       try {
-        // Send empty buffer to signal end of audio
         websocketRef.current.send(new ArrayBuffer(0));
-        // Wait a bit for any final results
         await new Promise((r) => setTimeout(r, 700));
         finalized = !activeConsultation.interimTranscript;
-      } catch (err) {
-        console.warn("[useAudioRecording] Error during WebSocket cleanup:", err);
-      }
-      
-      try {
-        websocketRef.current?.close();
-        websocketRef.current = null;
-      } catch (err) {
-        console.warn("[useAudioRecording] Error closing WebSocket:", err);
-      }
+      } catch {}
+      try { websocketRef.current?.close(); websocketRef.current = null; } catch {}
     }
-    
+
     if (!finalized) {
       finalizeInterimSegment();
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment]);
 
-  /**
-   * Generates a clinical note based on the transcript
-   * 
-   * @param {string} noteTypeOverride - Optional override for note type
-   * @returns {Promise<void>}
-   */
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
-    if (!activeConsultation) {
-      console.warn("[useAudioRecording] Cannot generate note: no active consultation");
-      return;
-    }
-
+    if (!activeConsultation) return;
     const noteTypeToUse = noteTypeOverride || activeConsultation.noteType;
-    console.info("[useAudioRecording] Generating note with type:", noteTypeToUse);
 
-    // Build transcript from all segments
     let transcript = '';
     Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
-      transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${
-        seg.displayText
-      }\n`;
+      transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${seg.displayText}\n`;
     });
-    
+
     if (!transcript.trim()) {
-      updateConsultation(activeConsultationId, {
-        error: 'Transcript is empty. Nothing to generate.'
-      });
+      updateConsultation(activeConsultationId, { error: 'Transcript is empty. Nothing to generate.' });
       return;
     }
 
-    // Prepare patient information for the API request
-    const patientInfo = {};
-    if (activeConsultation.patientProfile.name) {
-      patientInfo.name = activeConsultation.patientProfile.name;
-    }
-    if (activeConsultation.patientProfile.sex) {
-      patientInfo.sex = activeConsultation.patientProfile.sex;
-    }
-    if (activeConsultation.patientProfile.dateOfBirth) {
-      const age = calculateAge(activeConsultation.patientProfile.dateOfBirth);
-      if (age) patientInfo.age = age;
-    }
-    if (activeConsultation.patientProfile.referringPhysician) {
-      patientInfo.referring_physician = activeConsultation.patientProfile.referringPhysician;
-    }
-    if (activeConsultation.additionalContext) {
-      patientInfo.additional_context = activeConsultation.additionalContext;
-    }
-    
-    // Update consultation state to show loading
     updateConsultation(activeConsultationId, { loading: true, error: null, notes: null });
-    
+
     try {
-      const requestBody = {
-        full_transcript: transcript,
-        note_type: noteTypeToUse
-      };
-
-      if (Object.keys(patientInfo).length > 0) {
-        requestBody.patient_info = patientInfo;
-      }
-
-      console.info("[useAudioRecording] Sending note generation request:", {
-        transcriptLength: transcript.length,
-        noteType: noteTypeToUse,
-        hasPatientInfo: Object.keys(patientInfo).length > 0
-      });
-
-      // Call the API to generate the note
+      const requestBody = { full_transcript: transcript, note_type: noteTypeToUse };
       const resp = await fetch(`${BACKEND_API_URL}/generate-final-note`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       });
-      
       const data = await resp.json();
-      
-      if (!resp.ok) {
-        throw new Error(data.detail || 'An unknown server error occurred.');
-      }
+      if (!resp.ok) throw new Error(data.detail || 'Server error');
 
-      console.info("[useAudioRecording] Note generation successful");
-      
-      // Update consultation with the generated note
-      updateConsultation(activeConsultationId, { 
-        notes: data.notes, 
+      updateConsultation(activeConsultationId, {
+        notes: data.notes,
         noteType: noteTypeToUse,
-        // Set these fields to help with sync
         noteId: activeConsultationId,
         notesCreatedAt: new Date().toISOString(),
         notesUpdatedAt: new Date().toISOString()
       });
 
-      // Set consultation timestamp on first note generation
       if (finalizeConsultationTimestamp) {
         finalizeConsultationTimestamp(activeConsultationId);
       }
     } catch (err) {
-      console.error("[useAudioRecording] Note generation failed:", err);
       updateConsultation(activeConsultationId, {
         error: `Failed to generate final note: ${err.message}`
       });
@@ -526,86 +353,12 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
-  /**
-   * Creates a test segment for debugging purposes
-   */
+  // Optional dev debug kept as no-op for DB writes
   const debugTranscriptSegments = useCallback(() => {
-    if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) return;
-    
-    console.log("[useAudioRecording] Current transcript segments:", {
-      count: activeConsultation.transcriptSegments.size,
-      segments: Array.from(activeConsultation.transcriptSegments.entries())
-    });
-    
-    // Don't add test segments at index 0, use the actual size of the transcript
-    const currentSize = activeConsultation.transcriptSegments.size;
-    
-    // Create a test segment using the current timestamp so it's unique
-    const testSegment = {
-      id: `test-segment-${Date.now()}`,
-      speaker: "spk_0",
-      text: "Test segment",
-      displayText: "Test segment",
-      translatedText: null,
-      entities: []
-    };
-    
-    // Add to local state first
-    const newSegments = new Map(activeConsultation.transcriptSegments);
-    newSegments.set(testSegment.id, testSegment);
-    
-    updateConsultation(activeConsultationId, {
-      transcriptSegments: newSegments
-    });
-    
-    // Then sync to DynamoDB at the correct index
-    enqueueSegmentsForSync([testSegment], currentSize);
-    
-    return {
-      beforeCount: currentSize,
-      afterCount: currentSize + 1,
-      testSegment
-    };
-  }, [activeConsultation, activeConsultationId, updateConsultation, enqueueSegmentsForSync]);
-  
-  /**
-   * Syncs all transcript segments to DynamoDB
-   * This is crucial for ensuring all segments persist between sessions
-   */
-  const syncAllTranscriptSegments = useCallback(() => {
-    if (!activeConsultation || !ENABLE_BACKGROUND_SYNC) {
-      console.warn("[useAudioRecording] Cannot sync - no active consultation or sync disabled");
-      return { synced: 0 };
-    }
-    
-    const segments = Array.from(activeConsultation.transcriptSegments.values());
-    const segmentCount = segments.length;
-    
-    console.info("[useAudioRecording] Syncing all transcript segments", {
-      consultationId: activeConsultationId,
-      segmentCount
-    });
-    
-    if (segmentCount === 0) {
-      console.warn("[useAudioRecording] No segments to sync");
-      return { synced: 0 };
-    }
-    
-    // Process segments with the improved prepareSegmentForSync function
-    // This ensures complex nested objects are properly handled
-    const processedSegments = segments
-      .map(prepareSegmentForSync)
-      .filter(Boolean);
-    
-    // Sync all segments starting at index 0
-    enqueueSegmentsForSync(processedSegments, 0);
-    
-    return { 
-      synced: processedSegments.length,
-      segments: processedSegments.map(s => s.id) 
-    };
-  }, [activeConsultation, activeConsultationId, enqueueSegmentsForSync, prepareSegmentForSync]);
+    // Leave as is or remove; do not write directly to DynamoDB
+  }, []);
 
+  // Re-export
   return {
     startSession,
     stopSession,
@@ -613,7 +366,6 @@ export const useAudioRecording = (
     handleResume,
     handleGenerateNote,
     finalizeInterimSegment,
-    debugTranscriptSegments,
-    syncAllTranscriptSegments  // Now correctly exported
+    debugTranscriptSegments
   };
 };

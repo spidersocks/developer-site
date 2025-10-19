@@ -4,6 +4,7 @@ import { generatePatientId, generatePatientName } from "../utils/helpers";
 import { syncService } from "../utils/syncService";
 import { hydrateAll } from "../utils/hydrationService";
 import { syncDeleteConsultation, syncDeletePatient } from "../utils/syncOperations";
+import { apiClient } from "../utils/apiClient";
 
 /**
  * LocalStorage keys used by the consultations hook.
@@ -266,33 +267,19 @@ export const useConsultations = (ownerUserId = null) => {
     try {
       setAppState(prev => ({
         ...prev,
-        hydrationState: {
-          ...prev.hydrationState,
-          status: "loading", 
-          message: "Fetching data...",
-          progress: 10
-        }
+        hydrationState: { ...prev.hydrationState, status: "loading", message: "Fetching data...", progress: 10 }
       }));
-      
-      console.info("[useConsultations] Remote hydration start", {
-        safeOwnerUserId,
-      });
 
-      // Fetch remote data
+      // Patients, consultations, notes via Dynamo (unchanged)
       const {
         patients: remotePatients,
         consultations: remoteConsultations,
         clinicalNotes,
-        transcriptSegmentsByConsultation,
       } = await hydrateAll(safeOwnerUserId);
 
       setAppState(prev => ({
         ...prev,
-        hydrationState: {
-          ...prev.hydrationState,
-          progress: 50,
-          message: "Processing data..."
-        }
+        hydrationState: { ...prev.hydrationState, progress: 50, message: "Processing data..." }
       }));
 
       if ((remotePatients?.length ?? 0) === 0 && (remoteConsultations?.length ?? 0) === 0) {
@@ -331,33 +318,53 @@ export const useConsultations = (ownerUserId = null) => {
       }
 
       // Process transcript segments by consultation ID
-      const segmentsLookup = new Map(
-        (transcriptSegmentsByConsultation ?? []).map((entry) => {
-          // Log each consultation's segments for debugging
-          console.info(
-            `[useConsultations] Processing segments for consultation ${entry.consultationId}: ${entry.segments?.length || 0} segments`
-          );
-          
-          // Sort segments by index for proper ordering
-          const sortedSegments = [...(entry.segments ?? [])].sort(
-            (a, b) => Number(a.segmentIndex ?? 0) - Number(b.segmentIndex ?? 0)
-          );
-          
-          if (sortedSegments.length > 0) {
-            console.info(`[useConsultations] First segment example: ${JSON.stringify(sortedSegments[0]).substring(0, 200)}...`);
+      const segmentsLookup = new Map();
+      const MAX_CONCURRENT = 4;
+      const queue = [...(remoteConsultations ?? [])];
+
+      async function fetchSegmentsFor(consultationId) {
+        const res = await apiClient.listTranscriptSegments({
+          token: undefined,
+          consultationId,
+          signal: undefined
+        });
+        const items = res?.ok ? res.data ?? [] : [];
+        // Map backend schema -> UI segment shape
+        const mapped = items.map(seg => {
+          const id = String(seg.segment_id);
+          const speaker = seg.speaker_label ?? null;
+          const original = seg.original_text ?? "";
+          const translated = seg.translated_text ?? null;
+          return {
+            id,
+            speaker,
+            text: original,
+            displayText: original,
+            translatedText: translated,
+            entities: [], // not persisted; can be enriched later
+            _sequence: typeof seg.sequence_number === "number" ? seg.sequence_number : 0
+          };
+        }).sort((a, b) => a._sequence - b._sequence);
+        segmentsLookup.set(consultationId, mapped);
+      }
+
+      const workers = new Array(Math.min(MAX_CONCURRENT, queue.length)).fill(0).map(async () => {
+        while (queue.length) {
+          const c = queue.shift();
+          const cid = c?.id ?? c?.consultationId;
+          if (!cid) continue;
+          try {
+            await fetchSegmentsFor(cid);
+          } catch (e) {
+            console.error("[useConsultations] Failed fetching segments for", cid, e);
           }
-          
-          return [entry.consultationId, sortedSegments];
-        })
-      );
+        }
+      });
+      await Promise.all(workers);
 
       setAppState(prev => ({
         ...prev,
-        hydrationState: {
-          ...prev.hydrationState,
-          progress: 70,
-          message: "Processing patients and consultations..."
-        }
+        hydrationState: { ...prev.hydrationState, progress: 70, message: "Processing patients and consultations..." }
       }));
 
       // Process patients
@@ -374,15 +381,9 @@ export const useConsultations = (ownerUserId = null) => {
       );
 
       // Process consultations
-      const normalizedConsultations = (remoteConsultations ?? []).map(
-        (consultation) => {
-          const normalized = deserializeConsultationFromStorage(
-            consultation,
-            safeOwnerUserId
-          );
-
-          const consultationKey =
-            normalized.id ?? normalized.consultationId ?? null;
+      const normalizedConsultations = (remoteConsultations ?? []).map((consultation) => {
+        const normalized = deserializeConsultationFromStorage(consultation, safeOwnerUserId);
+        const consultationKey = normalized.id ?? normalized.consultationId ?? null;
 
           // Add clinical note data if available
           if (consultationKey && notesByConsultation.has(consultationKey)) {
@@ -429,41 +430,25 @@ export const useConsultations = (ownerUserId = null) => {
 
           // Process transcript segments
           if (consultationKey && segmentsLookup.has(consultationKey)) {
-            const segments = segmentsLookup.get(consultationKey);
-            console.info(`[useConsultations] Processing ${segments.length} transcript segments for consultation ${consultationKey}`);
-            
-            // Create a Map from the transcript segments
-            const segmentMap = new Map();
-            
-            segments.forEach(segment => {
-              // Use segmentId as the primary key for the Map
-              const segmentKey = segment.segmentId || segment.id || `segment-${segment.segmentIndex}`;
-              
-              // Log some debugging info for the first segment
-              if (segmentMap.size === 0) {
-                console.info(`[useConsultations] First segment: id=${segmentKey}, text="${segment.text?.substring(0, 30)}..."`);
-              }
-              
-              segmentMap.set(segmentKey, {
-                id: segmentKey,
-                speaker: segment.speaker || null,
-                text: segment.text || "",
-                displayText: segment.displayText || segment.text || "",
-                translatedText: segment.translatedText || null,
-                entities: Array.isArray(segment.entities) ? segment.entities : []
-              });
+          const segments = segmentsLookup.get(consultationKey);
+          const segmentMap = new Map();
+          segments.forEach(segment => {
+            segmentMap.set(segment.id, {
+              id: segment.id,
+              speaker: segment.speaker || null,
+              text: segment.text || "",
+              displayText: segment.displayText || segment.text || "",
+              translatedText: segment.translatedText || null,
+              entities: []
             });
-            
-            normalized.transcriptSegments = segmentMap;
-            
-            console.info(`[useConsultations] Processed ${segmentMap.size} segments for consultation ${consultationKey}`);
-          } else if (!(normalized.transcriptSegments instanceof Map)) {
-            normalized.transcriptSegments = toTranscriptMap(normalized.transcriptSegments);
-          }
-
-          return normalized;
+          });
+          normalized.transcriptSegments = segmentMap;
+        } else {
+          normalized.transcriptSegments = toTranscriptMap(normalized.transcriptSegments);
         }
-      );
+
+        return normalized;
+      });
 
       setAppState(prev => ({
         ...prev,
