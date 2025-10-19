@@ -384,6 +384,27 @@ export const useAudioRecording = (
     } catch (err) {
       console.error("[useAudioRecording] Backfill check failed:", err);
     }
+
+    // Fire-and-forget enrichment cache to speed up subsequent loads
+    try {
+      console.info("[useAudioRecording] Kicking off enrichment cache for consultation", {
+        consultationId: activeConsultationId
+      });
+      apiClient
+        .enrichTranscriptSegments({ consultationId: activeConsultationId, force: false })
+        .then((r) => {
+          console.info("[useAudioRecording] Enrichment cache request completed", {
+            consultationId: activeConsultationId,
+            status: r?.status,
+            ok: r?.ok
+          });
+        })
+        .catch((e) => {
+          console.warn("[useAudioRecording] Enrichment cache request failed", e);
+        });
+    } catch (e) {
+      console.warn("[useAudioRecording] Failed to start enrichment caching", e);
+    }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments]);
 
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
