@@ -44,5 +44,7 @@ export const DEFAULT_CONSULTATION = {
   patientId: null,       
   patientName: null,     
   createdAt: null,      
-  updatedAt: null,       
+  updatedAt: null,
+  transcriptLoading: false,
+  transcriptLoaded: false,
 };

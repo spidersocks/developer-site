@@ -50,8 +50,13 @@ export const TranscriptPanel = ({
         </div>
       )}
       <div className={styles.transcriptBox}>
-        {noSegmentsYet && isIdleOrStopped ? (
+        {activeConsultation.transcriptLoading ? (
           <LoadingAnimation message="Loading transcript..." />
+        ) : noSegmentsYet && isIdleOrStopped ? (
+          <div className={styles.emptyTranscript}>
+            <h4>No transcript yet</h4>
+            <p>Start a recording to see the live transcript here.</p>
+          </div>
         ) : activeConsultation.transcriptSegments.size > 0 ||
           ["recording", "paused"].includes(activeConsultation.sessionState) ? (
           <>

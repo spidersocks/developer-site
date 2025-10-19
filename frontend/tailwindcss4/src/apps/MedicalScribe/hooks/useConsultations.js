@@ -61,6 +61,9 @@ const deserializeConsultationFromStorage = (raw, ownerUserId) => {
         ? { ...DEFAULT_CONSULTATION.patientProfile }
         : {}),
     transcriptSegments: toTranscriptMap(raw?.transcriptSegments),
+    // Ensure new flags exist even for older cached records
+    transcriptLoading: Boolean(raw?.transcriptLoading) || false,
+    transcriptLoaded: Boolean(raw?.transcriptLoaded) || false,
   };
 };
 
@@ -233,6 +236,14 @@ export const useConsultations = (ownerUserId = null) => {
         const last = lastFetchAt.current.get(baseKey) || 0;
         if (now - last > COOLDOWN_MS) {
           if (!inFlight.current.has(baseKey)) {
+            // Mark loading start
+            setAppState((prev) => ({
+              ...prev,
+              consultations: prev.consultations.map((c) =>
+                c.id === consultationId ? { ...c, transcriptLoading: true } : c
+              ),
+            }));
+
             const p = (async () => {
               const res = await apiClient.listTranscriptSegments({
                 consultationId,
@@ -242,7 +253,14 @@ export const useConsultations = (ownerUserId = null) => {
                 const segmentMap = mapSegmentsToUiMap(consultationId, res.data);
                 setAppState((prev) => {
                   const updated = prev.consultations.map((c) =>
-                    c.id === consultationId ? { ...c, transcriptSegments: segmentMap } : c
+                    c.id === consultationId
+                      ? {
+                          ...c,
+                          transcriptSegments: segmentMap,
+                          transcriptLoaded: true,
+                          transcriptLoading: false,
+                        }
+                      : c
                   );
                   return { ...prev, consultations: updated };
                 });
@@ -252,9 +270,28 @@ export const useConsultations = (ownerUserId = null) => {
                   status: res.status,
                   error: res.error?.message,
                 });
+                // Even on failure, stop the loading indicator to avoid infinite spinner
+                setAppState((prev) => ({
+                  ...prev,
+                  consultations: prev.consultations.map((c) =>
+                    c.id === consultationId
+                      ? { ...c, transcriptLoaded: true, transcriptLoading: false }
+                      : c
+                  ),
+                }));
               }
             })()
-              .catch((e) => console.error("[useConsultations] Base load exception", e))
+              .catch((e) => {
+                console.error("[useConsultations] Base load exception", e);
+                setAppState((prev) => ({
+                  ...prev,
+                  consultations: prev.consultations.map((c) =>
+                    c.id === consultationId
+                      ? { ...c, transcriptLoaded: true, transcriptLoading: false }
+                      : c
+                  ),
+                }));
+              })
               .finally(() => {
                 inFlight.current.delete(baseKey);
                 lastFetchAt.current.set(baseKey, Date.now());
@@ -262,6 +299,16 @@ export const useConsultations = (ownerUserId = null) => {
             inFlight.current.set(baseKey, p);
           }
           await inFlight.current.get(baseKey);
+        }
+      } else {
+        // If segments already exist but we never marked as loaded, do so.
+        if (!existing?.transcriptLoaded) {
+          setAppState((prev) => ({
+            ...prev,
+            consultations: prev.consultations.map((c) =>
+              c.id === consultationId ? { ...c, transcriptLoaded: true, transcriptLoading: false } : c
+            ),
+          }));
         }
       }
 
@@ -281,7 +328,9 @@ export const useConsultations = (ownerUserId = null) => {
                 const segmentMap = mapSegmentsToUiMap(consultationId, res.data);
                 setAppState((prev) => {
                   const updated = prev.consultations.map((c) =>
-                    c.id === consultationId ? { ...c, transcriptSegments: segmentMap } : c
+                    c.id === consultationId
+                      ? { ...c, transcriptSegments: segmentMap }
+                      : c
                   );
                   return { ...prev, consultations: updated };
                 });
@@ -1069,6 +1118,9 @@ export const useConsultations = (ownerUserId = null) => {
             error: null,
             loading: false,
             sessionState: "idle",
+            // NEW: reset flags
+            transcriptLoading: false,
+            transcriptLoaded: false,
           };
         });
         return { ...prevState, consultations: updatedConsultations };
@@ -1120,7 +1172,7 @@ export const useConsultations = (ownerUserId = null) => {
     });
   }, []);
 
-  return {
+   return {
     // Data
     consultations,
     patients,
