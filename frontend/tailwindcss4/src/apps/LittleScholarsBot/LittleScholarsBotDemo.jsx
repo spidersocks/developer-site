@@ -60,7 +60,9 @@ function LittleScholarsBotDemo() {
       setError("Failed to connect to the backend or process the request.");
       setLastUserMessage(null); // Clear user message on failure
     } finally {
-      setIsLoading(false);
+      // This ensures isLoading is set to false, making "The bot is typing..." disappear,
+      // whether a response was received or not (including silent responses).
+      setIsLoading(false); 
     }
   };
 
