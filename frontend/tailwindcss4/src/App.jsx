@@ -10,6 +10,8 @@ import { AuthGate } from "./apps/MedicalScribe/AuthGate";
 import { Analytics } from "@vercel/analytics/react";
 import About from "./pages/About";
 import Resume from "./pages/Resume";
+// Import the new component
+import LittleScholarsBotDemo from "./apps/LittleScholarsBot/LittleScholarsBotDemo"; 
 
 // Class-based Error Boundary (per React docs)
 class ErrorBoundary extends React.Component {
@@ -47,6 +49,10 @@ export default function App() {
           <Route path="/about" element={<About />} />
           {/* Resume */}
           <Route path="/resume" element={<Resume />} />
+          
+          {/* NEW ROUTE: Little Scholars Bot Demo */}
+          <Route path="/little-scholars-bot" element={<LittleScholarsBotDemo />} />
+          
           {/* 800m Calculator (with language support) */}
           <Route path="/800m-calculator" element={<EightHundredCalculatorApp lang="en" />} />
           <Route path="/en/800m-calculator/*" element={<EightHundredCalculatorApp lang="en" />} />
