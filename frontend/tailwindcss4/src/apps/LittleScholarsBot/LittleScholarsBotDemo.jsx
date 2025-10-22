@@ -43,7 +43,17 @@ function LittleScholarsBotDemo() {
       }
 
       const data = await res.json();
-      setResponse(data);
+      
+      // IMPORTANT: If the backend returns an empty answer (due to strict instructions), 
+      // we should not display a bot bubble, but we should clear the user message 
+      // if the bot successfully processed the request (i.e., didn't error).
+      if (data.answer && data.answer.trim() !== "") {
+        setResponse(data);
+      } else {
+        // If the answer is empty, clear the response state but keep the user message displayed
+        setResponse(null); 
+      }
+
       setInputMessage("");
     } catch (err) {
       console.error("API Error:", err);
@@ -73,12 +83,7 @@ function LittleScholarsBotDemo() {
         {/* Chat History/Display Area */}
         <div className="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50 border border-gray-200 rounded-lg mb-8">
             
-            {/* Initial Bot Message */}
-            <div className="flex justify-start">
-                <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-green-100 text-gray-800 shadow-md">
-                    Welcome! I am the Little Scholars Information Bot. How can I help you today?
-                </div>
-            </div>
+            {/* Initial Bot Message (REMOVED) */}
 
             {/* Display Last User Message */}
             {lastUserMessage && (
