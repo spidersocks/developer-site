@@ -206,6 +206,37 @@ export const apiClient = {
       body: payload,
     }),
 
+  listTemplates: ({ token, userId, signal } = {}) =>
+    apiRequest("/templates", {
+      accessToken: token,
+      signal,
+      query: {
+        user_id: userId,
+        limit: 100,
+        offset: 0,
+      },
+    }),
+
+  createTemplate: ({ token, payload }) =>
+    apiRequest("/templates", {
+      method: "POST",
+      accessToken: token,
+      body: payload,
+    }),
+
+  updateTemplate: ({ token, templateId, payload }) =>
+    apiRequest(`/templates/${templateId}`, {
+      method: "PATCH",
+      accessToken: token,
+      body: payload,
+    }),
+
+  deleteTemplate: ({ token, templateId }) =>
+    apiRequest(`/templates/${templateId}`, {
+      method: "DELETE",
+      accessToken: token,
+    }),
+
  getNoteTypesCached: () => {
     if (_noteTypesPromise) return _noteTypesPromise;
     _noteTypesPromise = apiRequest("/note-types")
