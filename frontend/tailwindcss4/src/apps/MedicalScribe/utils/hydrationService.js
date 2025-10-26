@@ -1,3 +1,4 @@
+// https://github.com/spidersocks/developer-site/blob/master/frontend/tailwindcss4/src/apps/MedicalScribe/utils/hydrationService.js
 import { QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { ENABLE_BACKGROUND_SYNC } from "./constants";
 import { AWS_REGION, getDynamoDocumentClient } from "./awsClients";
@@ -57,81 +58,130 @@ const getDocumentClient = () => {
   return client;
 };
 
+// --- New: in-flight dedupe map and active timers set to avoid console.time collisions ---
+const _runningFetches = new Map(); // key -> Promise resolving to items array
+const _activeTimers = new Set(); // labels currently timed
+// -------------------------------------------------------------------------------
+
 const fetchItemsByOwner = async (tableName, ownerUserId) => {
   const client = getDocumentClient();
   const items = [];
 
-  const makeQueryCommand = (exclusiveStartKey) =>
-    new QueryCommand({
-      TableName: tableName,
-      IndexName: OWNER_GSI_NAME ?? undefined,
-      KeyConditionExpression: "#owner = :owner",
-      ExpressionAttributeNames: { "#owner": "ownerUserId" },
-      ExpressionAttributeValues: { ":owner": ownerUserId },
-      ExclusiveStartKey: exclusiveStartKey,
-      Limit: 100, // Process in smaller batches to avoid timeouts
-    });
+  // Dedupe concurrent identical fetches (table + owner)
+  const key = `${tableName}|${ownerUserId}`;
+  if (_runningFetches.has(key)) {
+    console.info(`[hydrationService] Returning in-flight fetch for ${key}`);
+    return _runningFetches.get(key);
+  }
 
-  const makeScanCommand = (exclusiveStartKey) =>
-    new ScanCommand({
-      TableName: tableName,
-      FilterExpression: "#owner = :owner",
-      ExpressionAttributeNames: { "#owner": "ownerUserId" },
-      ExpressionAttributeValues: { ":owner": ownerUserId },
-      ExclusiveStartKey: exclusiveStartKey,
-      Limit: 50, // Process in smaller batches for scans which are slower
-    });
+  const promise = (async () => {
+    const makeQueryCommand = (exclusiveStartKey) =>
+      new QueryCommand({
+        TableName: tableName,
+        IndexName: OWNER_GSI_NAME ?? undefined,
+        KeyConditionExpression: "#owner = :owner",
+        ExpressionAttributeNames: { "#owner": "ownerUserId" },
+        ExpressionAttributeValues: { ":owner": ownerUserId },
+        ExclusiveStartKey: exclusiveStartKey,
+        Limit: 100, // Process in smaller batches to avoid timeouts
+      });
 
-  const runPaginated = async (commandFactory) => {
-    let exclusiveStartKey;
-    let iteration = 0;
-    let totalItems = 0;
-    
-    do {
-      iteration++;
-      console.info(`[hydrationService] Fetching page ${iteration} from ${tableName}`);
-      
-      try {
-        const command = commandFactory(exclusiveStartKey);
-        const response = await client.send(command);
-        const pageItems = response.Items ?? [];
-        items.push(...pageItems);
-        totalItems += pageItems.length;
-        exclusiveStartKey = response.LastEvaluatedKey;
-        
-        console.info(`[hydrationService] Retrieved ${pageItems.length} items from ${tableName}, total: ${totalItems}`);
-      } catch (error) {
-        console.error(`[hydrationService] Error fetching page ${iteration} from ${tableName}:`, error);
-        throw error;
+    const makeScanCommand = (exclusiveStartKey) =>
+      new ScanCommand({
+        TableName: tableName,
+        FilterExpression: "#owner = :owner",
+        ExpressionAttributeNames: { "#owner": "ownerUserId" },
+        ExpressionAttributeValues: { ":owner": ownerUserId },
+        ExclusiveStartKey: exclusiveStartKey,
+        Limit: 50, // Process in smaller batches for scans which are slower
+      });
+
+    const runPaginated = async (commandFactory) => {
+      let exclusiveStartKey;
+      let iteration = 0;
+      let totalItems = 0;
+
+      // Use a timer label unique to table + owner to avoid collisions
+      const timerLabel = `fetch-${tableName}-${ownerUserId}`;
+
+      // Start timer only once (guard with _activeTimers)
+      if (!_activeTimers.has(timerLabel)) {
+        try {
+          console.info(`[hydrationService] Starting fetch from ${tableName} for owner ${ownerUserId}`);
+          console.time(timerLabel);
+          _activeTimers.add(timerLabel);
+        } catch (e) {
+          // Some environments may not support console.time; ignore safely
+          console.warn(`[hydrationService] console.time start failed for ${timerLabel}`, e);
+        }
+      } else {
+        console.debug(`[hydrationService] Timer '${timerLabel}' already active, skipping console.time`);
       }
-    } while (exclusiveStartKey);
-  };
 
-  console.info(`[hydrationService] Starting fetch from ${tableName} for owner ${ownerUserId}`);
-  console.time(`fetch-${tableName}`);
-  
-  try {
-    if (OWNER_GSI_NAME) {
       try {
-        await runPaginated(makeQueryCommand);
-        console.timeEnd(`fetch-${tableName}`);
-        return items;
-      } catch (error) {
-        console.warn(
-          "[hydrationService] Query via GSI failed, falling back to scan",
-          { tableName, error }
-        );
+        do {
+          iteration++;
+          console.info(`[hydrationService] Fetching page ${iteration} from ${tableName}`);
+          const command = commandFactory(exclusiveStartKey);
+          const response = await client.send(command);
+          const pageItems = response.Items ?? [];
+          items.push(...pageItems);
+          totalItems += pageItems.length;
+          exclusiveStartKey = response.LastEvaluatedKey;
+
+          console.info(`[hydrationService] Retrieved ${pageItems.length} items from ${tableName}, total: ${totalItems}`);
+        } while (exclusiveStartKey);
+      } finally {
+        // End timer only if we started it here (guard with _activeTimers)
+        if (_activeTimers.has(timerLabel)) {
+          try {
+            console.timeEnd(timerLabel);
+          } catch (e) {
+            console.warn(`[hydrationService] console.timeEnd failed for ${timerLabel}`, e);
+          }
+          _activeTimers.delete(timerLabel);
+        } else {
+          console.debug(`[hydrationService] Timer '${timerLabel}' does not exist when attempting to timeEnd`);
+        }
+      }
+    };
+
+    try {
+      console.info(`[hydrationService] Starting fetch from ${tableName} for owner ${ownerUserId}`);
+      console.time && console.time(`fetch-${tableName}`); // legacy short label kept for compatibility logs
+
+      if (OWNER_GSI_NAME) {
+        try {
+          await runPaginated(makeQueryCommand);
+          return items;
+        } catch (error) {
+          console.warn(
+            "[hydrationService] Query via GSI failed, falling back to scan",
+            { tableName, error }
+          );
+          // fall through to scan
+        }
+      }
+
+      await runPaginated(makeScanCommand);
+      return items;
+    } catch (error) {
+      console.error(`[hydrationService] Failed to fetch from ${tableName}:`, error);
+      throw error;
+    } finally {
+      // legacy short label end (no-op if not started)
+      try {
+        console.timeEnd && console.timeEnd(`fetch-${tableName}`);
+      } catch (e) {
+        // ignore
       }
     }
+  })();
 
-    await runPaginated(makeScanCommand);
-    console.timeEnd(`fetch-${tableName}`);
-    return items;
-  } catch (error) {
-    console.error(`[hydrationService] Failed to fetch from ${tableName}:`, error);
-    console.timeEnd(`fetch-${tableName}`);
-    throw error;
-  }
+  // store and return the in-flight promise, ensuring we clean it up once resolved/rejected
+  _runningFetches.set(key, promise);
+  promise.finally(() => _runningFetches.delete(key));
+  return promise;
 };
 
 const fetchTranscriptSegmentsForConsultations = async (consultations) => {
@@ -148,7 +198,7 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
 
   console.info(`[hydrationService] Fetching transcript segments for ${consultations.length} consultations`);
   console.time('fetch-transcript-segments');
-  
+
   try {
     while (queue.length > 0) {
       const batch = queue.splice(0, MAX_CONCURRENT);
@@ -160,17 +210,17 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
           try {
             // Try multiple approaches to find segments for this consultation
             const segments = await fetchSegmentsWithMultipleApproaches(client, consultationId);
-            
+
             if (segments.length > 0) {
               // Transform the segments to ensure they have all required fields
               const processedSegments = segments.map(segment => {
                 // Handle different field naming conventions that might appear in DynamoDB
                 const id = segment.segmentId || segment.id || `segment-${segment.segmentIndex}`;
-                
+
                 // Create a normalized segment with consistent field names
                 return {
                   id: id, // Primary key for UI components
-                  segmentId: id, // Ensure we always have segmentId 
+                  segmentId: id, // Ensure we always have segmentId
                   consultationId: segment.consultationId || consultationId,
                   segmentIndex: segment.segmentIndex || 0,
                   speaker: segment.speaker || null,
@@ -181,19 +231,19 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
                   createdAt: segment.createdAt || new Date().toISOString()
                 };
               });
-              
+
               // Sort by segmentIndex to ensure proper order
               processedSegments.sort((a, b) => Number(a.segmentIndex) - Number(b.segmentIndex));
-              
+
               // Log some detailed information about what we found
               console.info(
                 `[hydrationService] Found ${processedSegments.length} transcript segments for consultation ${consultationId}`
               );
-              
+
               if (processedSegments.length > 0) {
                 console.info("[hydrationService] Sample segment:", JSON.stringify(processedSegments[0]));
               }
-              
+
               byConsultation.set(consultationId, processedSegments);
             } else {
               console.warn(`[hydrationService] No transcript segments found for consultation ${consultationId}`);
@@ -210,17 +260,15 @@ const fetchTranscriptSegmentsForConsultations = async (consultations) => {
   } catch (error) {
     console.error("[hydrationService] Error in transcript segments batch processing:", error);
   }
-  
+
   console.timeEnd('fetch-transcript-segments');
   console.info(`[hydrationService] Fetched segments for ${byConsultation.size}/${consultations.length} consultations`);
   return byConsultation;
 };
 
-// Try multiple approaches to find transcript segments for a consultation
 async function fetchSegmentsWithMultipleApproaches(client, consultationId) {
   const allSegments = [];
-  
-  // Try multiple query approaches to handle different schema possibilities
+
   try {
     // Approach 1: Try Query on consultationId if it's the primary key
     try {
@@ -229,16 +277,15 @@ async function fetchSegmentsWithMultipleApproaches(client, consultationId) {
         KeyConditionExpression: "consultationId = :cid",
         ExpressionAttributeValues: { ":cid": consultationId },
       }));
-      
+
       if (queryResults.Items?.length > 0) {
         console.info(`[hydrationService] Found ${queryResults.Items.length} segments via direct query`);
         allSegments.push(...queryResults.Items);
       }
     } catch (e) {
-      // If this fails, likely consultationId is not the table's partition key
       console.info(`[hydrationService] Direct query failed, trying scan: ${e.message}`);
     }
-    
+
     // Approach 2: Scan with FilterExpression on consultationId
     if (allSegments.length === 0) {
       let exclusiveStartKey;
@@ -250,17 +297,17 @@ async function fetchSegmentsWithMultipleApproaches(client, consultationId) {
           ExclusiveStartKey: exclusiveStartKey,
           Limit: 100
         });
-        
+
         const response = await client.send(scanCommand);
         if (response.Items?.length > 0) {
           console.info(`[hydrationService] Found ${response.Items.length} segments via scan`);
           allSegments.push(...response.Items);
         }
-        
+
         exclusiveStartKey = response.LastEvaluatedKey;
       } while (exclusiveStartKey);
     }
-    
+
     // Approach 3: Try finding by any attribute that might be consultationId
     if (allSegments.length === 0) {
       let exclusiveStartKey;
@@ -270,28 +317,27 @@ async function fetchSegmentsWithMultipleApproaches(client, consultationId) {
           Limit: 1000,
           ExclusiveStartKey: exclusiveStartKey
         });
-        
+
         const response = await client.send(scanCommand);
         if (response.Items?.length > 0) {
           const filteredItems = response.Items.filter(item => {
-            // Look for consultationId in any field
             return (
-              item.consultationId === consultationId || 
+              item.consultationId === consultationId ||
               item.consultation_id === consultationId ||
               item.ConsultationId === consultationId
             );
           });
-          
+
           if (filteredItems.length > 0) {
             console.info(`[hydrationService] Found ${filteredItems.length} segments via full table scan`);
             allSegments.push(...filteredItems);
           }
         }
-        
+
         exclusiveStartKey = response.LastEvaluatedKey;
-      } while (exclusiveStartKey && allSegments.length === 0); // Stop scanning if we found segments
+      } while (exclusiveStartKey && allSegments.length === 0);
     }
-    
+
     return allSegments;
   } catch (error) {
     console.error(`[hydrationService] All segment fetch approaches failed: ${error}`);
@@ -316,7 +362,7 @@ export const hydrateAll = async (ownerUserId) => {
     indexName: OWNER_GSI_NAME,
   });
 
-  // Fetch patients, consultations, and notes in parallel
+  // Fetch patients, consultations, notes, and templates in parallel
   const [patients, consultations, clinicalNotes, rawTemplates] = await Promise.all([
     fetchItemsByOwner(PATIENTS_TABLE, ownerUserId),
     fetchItemsByOwner(CONSULTATIONS_TABLE, ownerUserId),
@@ -332,16 +378,11 @@ export const hydrateAll = async (ownerUserId) => {
 
   // Normalize templates: ensure sections is an array of {id,name,description}
   const templates = (rawTemplates || []).map((t) => {
-    // defensive field selection to support different key naming conventions
     const id = t.id || t.templateId || t.template_id || null;
     const owner = t.ownerUserId || t.owner_user_id || t.owner || ownerUserId;
     const name = t.name || t.templateName || t.title || "Untitled Template";
     const example_text = t.example_text || t.exampleNoteText || t.example || "";
 
-    // sections may come as:
-    // - an array (preferred)
-    // - a JSON string (marshal/unmarshal)
-    // - stored under other keys
     let sectionsRaw = t.sections ?? t.sections_json ?? t.sections_string ?? t.sections_str ?? null;
     if (!sectionsRaw && t.body) {
       sectionsRaw = t.body.sections ?? null;
@@ -353,7 +394,6 @@ export const hydrateAll = async (ownerUserId) => {
         const parsed = JSON.parse(sectionsRaw);
         sections = Array.isArray(parsed) ? parsed : [];
       } catch (err) {
-        // Fallback: attempt to parse a minimal comma-separated list (best-effort)
         console.warn("[hydrationService] Failed to parse template.sections JSON, falling back:", err);
         sections = [];
       }
@@ -363,7 +403,6 @@ export const hydrateAll = async (ownerUserId) => {
       sections = [];
     }
 
-    // Ensure each section has id, name, description
     sections = sections.map((s, i) => {
       if (!s) s = {};
       return {
@@ -373,7 +412,6 @@ export const hydrateAll = async (ownerUserId) => {
       };
     });
 
-    // keep created/updated timestamps normalized
     const created_at = t.created_at || t.createdAt || t.created || null;
     const updated_at = t.updated_at || t.updatedAt || t.updated || null;
 
@@ -407,7 +445,7 @@ export const hydrateAll = async (ownerUserId) => {
     return consultation;
   });
 
-    return {
+  return {
     patients,
     consultations: processedConsultations,
     clinicalNotes,
