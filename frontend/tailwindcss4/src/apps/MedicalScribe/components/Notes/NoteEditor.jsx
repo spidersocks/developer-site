@@ -29,6 +29,7 @@ import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./NoteEditor.module.css";
 import { NewNoteTemplateModal } from "./NewNoteTemplateModal";
 import { ManageTemplatesModal } from "./ManageTemplatesModal";
+import { useAuth } from "../../AuthGate";
 
 const CONSULTATION_INDICATORS = [
   "consult",
@@ -109,11 +110,14 @@ export const NoteEditor = ({
   onRegenerate,
   transcriptSegments,
 }) => {
+  const { user, userId } = useAuth();
+  const ownerUserId = user?.attributes?.sub ?? user?.username ?? userId ?? null;
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
   const [copied, setCopied] = useState(false);
   const [availableNoteTypes, setAvailableNoteTypes] = useState(
-    DEFAULT_NOTE_TYPES
+    DEFAULT_NOTE_TYPES.map((t) => ({ ...t, source: "builtin" }))
   );
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingNoteType, setPendingNoteType] = useState(null);
@@ -142,6 +146,11 @@ export const NoteEditor = ({
 
   const checkNoteTypeAppropriateness = useCallback(
     (newType) => {
+      // If selecting a custom template, skip heuristics here — assume user knows what they want
+      if (typeof newType === "string" && newType.startsWith("template:")) {
+        return { appropriate: true };
+      }
+
       if (!transcriptText) return { appropriate: true };
 
       if (newType === "consultation") {
@@ -231,18 +240,24 @@ export const NoteEditor = ({
   const copyLabel = copied ? "Copied" : "Copy";
   const copyAria = copied ? "Copied to clipboard" : "Copy note to clipboard";
 
+  // Load note types, prefer per-user list when ownerUserId is known.
   const loadNoteTypes = useCallback(async () => {
     try {
-      const types = await apiClient.getNoteTypesCached();
+      const types = await apiClient.getNoteTypesCached({
+        userId: ownerUserId,
+        force: !!ownerUserId, // when we have a user, ensure we get the user-specific list
+      });
       if (Array.isArray(types) && types.length > 0) {
-        setAvailableNoteTypes(types);
+        // Ensure each item has a source default
+        const normalized = types.map((t) => ({ ...(t || {}), source: t?.source || "builtin" }));
+        setAvailableNoteTypes(normalized);
       } else {
-        setAvailableNoteTypes(DEFAULT_NOTE_TYPES);
+        setAvailableNoteTypes(DEFAULT_NOTE_TYPES.map((t) => ({ ...t, source: "builtin" })));
       }
-    } catch {
-      setAvailableNoteTypes(DEFAULT_NOTE_TYPES);
+    } catch (err) {
+      setAvailableNoteTypes(DEFAULT_NOTE_TYPES.map((t) => ({ ...t, source: "builtin" })));
     }
-  }, []);
+  }, [ownerUserId]);
 
   const handleUndo = useCallback(() => {
     if (undoStack.length <= 1) return;
@@ -375,6 +390,8 @@ export const NoteEditor = ({
   const proceedWithNoteTypeChange = useCallback(
     (newType) => {
       onNoteTypeChange(newType);
+      // Pass the literal selected id through to the generator; the generation hook will
+      // interpret template:<uuid> specially and include template_id in backend payload.
       onRegenerate(newType);
       setShowConfirmModal(false);
       setPendingNoteType(null);
@@ -622,9 +639,10 @@ export const NoteEditor = ({
     };
   }, [availableNoteTypes, noteType, notes]);
 
+  // Load types when ownerUserId becomes available (or on mount)
   useEffect(() => {
     loadNoteTypes();
-  }, [loadNoteTypes]);
+  }, [loadNoteTypes, ownerUserId]);
 
   useEffect(() => {
     if (!isEditing) return;
@@ -798,6 +816,10 @@ export const NoteEditor = ({
     );
   }
 
+  // Split types into builtins and templates for grouped dropdown rendering
+  const builtinTypes = availableNoteTypes.filter((t) => t.source !== "template");
+  const templateTypes = availableNoteTypes.filter((t) => t.source === "template");
+
   return (
     <>
       <NoteTypeConfirmationModal
@@ -849,11 +871,24 @@ export const NoteEditor = ({
               disabled={loading}
               aria-label="Select note type"
             >
-              {availableNoteTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
+              {/* Builtins first */}
+              <optgroup label="Built-in">
+                {builtinTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </optgroup>
+
+              {templateTypes.length > 0 && (
+                <optgroup label="Custom templates">
+                  {templateTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name} {/* option text can't be styled; label communicates customness via optgroup */}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
 
             {/* Single button: "Custom Templates +" opens a small accordion-style menu with Create / Manage */}

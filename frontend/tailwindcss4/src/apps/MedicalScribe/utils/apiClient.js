@@ -245,9 +245,12 @@ export const apiClient = {
    * Get cached note types. Optionally pass { userId } to include user templates.
    * Returns a Promise resolving to an array of note type objects.
    */
-  getNoteTypesCached: ({ userId } = {}) => {
+  getNoteTypesCached: ({ userId, force = false } = {}) => {
     const key = userId ? String(userId) : "anon";
-    if (_noteTypesCache.has(key)) return _noteTypesCache.get(key);
+
+    if (!force && _noteTypesCache.has(key)) {
+      return _noteTypesCache.get(key);
+    }
 
     const p = apiRequest("/note-types", {
       query: { user_id: userId || undefined },
@@ -263,6 +266,15 @@ export const apiClient = {
 
     _noteTypesCache.set(key, p);
     return p;
+  },
+
+  // Small helper to invalidate cached values (useful on sign-in / user change)
+  invalidateNoteTypesCache: (userId) => {
+    if (userId) {
+      _noteTypesCache.delete(String(userId));
+    } else {
+      _noteTypesCache.clear();
+    }
   },
 };
 
