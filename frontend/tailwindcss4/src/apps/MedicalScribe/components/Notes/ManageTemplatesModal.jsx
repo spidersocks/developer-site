@@ -57,26 +57,43 @@ export const ManageTemplatesModal = ({ onClose }) => {
         payload: body,
       });
 
-      if (res.ok && res.data) {
-        setTemplates((prev) => [res.data, ...prev]);
+      // Only small additions: console.info before enqueue to make the UI->queue handoff visible.
 
-        // Also enqueue to background sync (best-effort offline behavior)
-        if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
-          try {
-            syncService.enqueueTemplateUpsert({
-              id: res.data.id,
-              ownerUserId: ownerUserId,
-              name: res.data.name,
-              sections: res.data.sections,
-              example_text: res.data.example_text ?? res.data.exampleNoteText ?? "",
-              createdAt: res.data.created_at ?? new Date().toISOString(),
-              updatedAt: res.data.updated_at ?? new Date().toISOString(),
-            });
-          } catch (e) {
-            console.warn("[Templates] enqueueTemplateUpsert failed", e);
-          }
+  if (res.ok && res.data) {
+    setTemplates((prev) => [res.data, ...prev]);
+
+    // Also enqueue to background sync (best-effort offline behavior)
+    if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
+      try {
+        // DEBUG: log the exact object we will send to the syncService
+        console.info("[Templates] enqueueTemplateUpsert payload about to be sent to syncService", {
+          id: res.data.id,
+          ownerUserId,
+          name: res.data.name,
+          sections: res.data.sections,
+          example_text: res.data.example_text ?? res.data.exampleNoteText ?? ""
+        });
+
+        syncService.enqueueTemplateUpsert({
+          id: res.data.id,
+          ownerUserId: ownerUserId,
+          name: res.data.name,
+          sections: res.data.sections,
+          example_text: res.data.example_text ?? res.data.exampleNoteText ?? "",
+          createdAt: res.data.created_at ?? new Date().toISOString(),
+          updatedAt: res.data.updated_at ?? new Date().toISOString(),
+        });
+
+        // After enqueue, show queue stats in dev console
+        if (import.meta.env.DEV && window.__syncService) {
+          console.info("[Templates] syncService stats after enqueue", window.__syncService.getStats());
+          console.info("[Templates] syncService queue snapshot", window.__syncService.dumpQueue());
         }
-      } else {
+      } catch (e) {
+        console.warn("[Templates] enqueueTemplateUpsert failed", e);
+      }
+    }
+  } else {
         const msg = res?.error?.message || `Failed to create template (status ${res?.status})`;
         setError(msg);
       }

@@ -77,28 +77,30 @@
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.12s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .iconButton:hover {
+  /* keep hover subtle, avoid strong blue highlights per request */
   background-color: var(--bg-primary);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 /* New: subtler look just for the template button */
 .templateButton {
   color: var(--text-secondary);
   border-color: var(--border-color);
+  background: transparent;
 }
 
 .templateButton:hover {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   border-color: var(--border-color);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 
 .iconButton:active {
@@ -129,6 +131,62 @@
   display: inline-block;
 }
 
+/* ---- Custom Templates single-button + accordion menu ---- */
+.templateMenuWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.customTemplatesButton {
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.45rem 0.75rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+}
+
+/* Menu that appears under the button */
+.templatesMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 160px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+  z-index: 60;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* menu items — keep simple styling, no heavy accent colors */
+.templatesMenuItem {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.templatesMenuItem:hover {
+  background: var(--bg-primary);
+}
+
+/* End menu styles */
+
+/* note/warning/banner and rest of file preserved below (unchanged) */
 .noteTypeHint {
   display: flex;
   align-items: center;
@@ -385,8 +443,13 @@
     gap: 0.35rem;
   }
 
-  .templateButton {
-    display: none; /* hide "Add your own" on mobile to keep header compact */
+  /* On mobile make the custom templates button icon-only (compact) */
+  .customTemplatesButton {
+    padding: 0.45rem;
+  }
+
+  .customTemplatesButton .actionText {
+    display: none;
   }
 
   .iconButton {

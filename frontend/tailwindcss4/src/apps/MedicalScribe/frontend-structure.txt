@@ -25,117 +25,84 @@ developer-site/
                 ├── MedicalScribeDemo.module.css
                 ├── assets/
                 ├── utils/
-                │   ├── helpers.js
-                │   ├── noteFormatters.js
                 │   ├── apiClient.js
-                │   └── constants.js
+                │   ├── constants.js
+                │   ├── helpers.js
+                │   ├── index.js
+                │   ├── noteFormatters.js
+                │   └── syncService.js
                 ├── hooks/
                 │   ├── useAudioRecording.js
                 │   └── useConsultations.js
                 └── components/
                     ├── Notes/
-                    │   ├── NoteEditor.jsx
-                    │   ├── NoteEditor.module.css
+                    │   ├── CommandBar.jsx
+                    │   ├── CommandBar.module.css
                     │   ├── HighlightedText.jsx
                     │   ├── HighlightedText.module.css
-                    │   ├── CommandBar.jsx
-                    │   └── CommandBar.module.css
+                    │   ├── NoteEditor.jsx
+                    │   └── NoteEditor.module.css
                     ├── Patient/
-                    │   ├── PatientInfoPanel.jsx
-                    │   ├── PatientInfoPanel.module.css
                     │   ├── NewPatientModal.jsx
-                    │   └── NewPatientModal.module.css
-                    ├── shared/
-                    │   ├── Icons.jsx
-                    │   ├── LoadingAnimation.jsx
-                    │   ├── LoadingAnimation.module.css
-                    │   ├── Modal.jsx
-                    │   └── Modal.module.css
+                    │   ├── NewPatientModal.module.css
+                    │   ├── PatientInfoPanel.jsx
+                    │   └── PatientInfoPanel.module.css
                     ├── Sidebar/
                     │   ├── Sidebar.jsx
                     │   └── Sidebar.module.css
-                    └── Transcript/
-                        ├── TranscriptPanel.jsx
-                        ├── TranscriptPanel.module.css
-                        ├── TranscriptSegment.jsx
-                        └── TranscriptSegment.module.css
-
-Notes on key files (quick reference)
-
+                    ├── Transcript/
+                    │   ├── TranscriptPanel.jsx
+                    │   ├── TranscriptPanel.module.css
+                    │   ├── TranscriptSegment.jsx
+                    │   └── TranscriptSegment.module.css
+                    └── shared/
+                        ├── Icons.jsx
+                        ├── LoadingAnimation.jsx
+                        ├── LoadingAnimation.module.css
+                        ├── Modal.jsx
+                        └── Modal.module.css
+Notes on key files (updated)
 App.jsx (MedicalScribe)
-Core layout: Sidebar + main workspace
-Tabs: Patient Information, Live Transcript, Clinical Note
-Data/controllers: uses useConsultations.js and useAudioRecording.js
-Renders: TranscriptPanel, PatientInfoPanel, NoteEditor, CommandBar, NewPatientModal, MedicalScribeDemo
+Core layout unchanged (Sidebar + main workspace + tab panels). Now includes a background-sync flush effect that periodically invokes syncService.flushAll() and reacts to visibilitychange, focus, and online events when ENABLE_BACKGROUND_SYNC is true.
 
 App.css
-Defines design tokens (colors, typography, spacing, shadows) and global layout primitives (grid shell, tabs, buttons, modals, etc.).
-All component-specific styling now lives in their respective `.module.css` files.
+Continues to provide design tokens, global layout primitives, and shared styles.
 
 AuthGate.jsx / AuthGate.module.css
-Route guard handling Cognito sign-in flow, session state, and sign-out UI with scoped styling.
+Cognito route guard and scoped styling.
 
 MedicalScribeDemo.jsx / MedicalScribeDemo.module.css
-Demo harness for showcasing the scribe experience; styles isolated via CSS module.
-
-utils/helpers.js
-getAssetPath, getFriendlySpeakerLabel, calculateAge, generate IDs/names
+Standalone demo experience with isolated styles.
 
 utils/constants.js
-BACKEND_WS_URL, BACKEND_API_URL, DEFAULT_NOTES, DEFAULT_PATIENT_PROFILE, DEFAULT_CONSULTATION
+Still exports backend URLs, defaults, etc. Now also exposes the ENABLE_BACKGROUND_SYNC feature flag (via import.meta.env.VITE_ENABLE_BACKGROUND_SYNC).
+
+utils/syncService.js (new)
+In-memory queue managing DynamoDB writes for patients, consultations, and transcript segments using the AWS SDK v3 (@aws-sdk/client-dynamodb). Every enqueue is gated behind ENABLE_BACKGROUND_SYNC.
+
+utils/index.js (new)
+Barrel file for re-exporting utilities (now includes syncService, along with existing helpers if desired).
 
 hooks/useConsultations.js
-Manages consultations, patients, activeConsultation
-CRUD actions: addNewPatient, addConsultationForPatient, updateConsultation, deleteConsultation, deletePatient
-Persists to localStorage
+Keeps localStorage persistence for patients/consultations. After local updates, it conditionally enqueues background sync tasks (patient/consultation upserts) via syncService when enabled.
 
 hooks/useAudioRecording.js
-WebSocket transcription pipeline
-Audio capture and processing with Web Audio API
-Exposes startSession, stopSession, handlePause, handleResume, handleGenerateNote
+Maintains the WebSocket transcription pipeline and Web Audio capture. Finalized transcript segments are now enqueued for background syncing with consultation-specific segment indexes.
 
-components/Sidebar/
-Sidebar.jsx + Sidebar.module.css handle patient grouping, search, consultation actions, and adaptive layout.
+components (Notes, Patient, Sidebar, Transcript, shared)
+Structure unchanged; each component continues to use scoped CSS modules.
 
-components/Transcript/
-TranscriptPanel.jsx + TranscriptPanel.module.css manage language controls, recording status bar, transcript scroll.
-TranscriptSegment.jsx + TranscriptSegment.module.css cover segment layout, speaker label toggles, and translation display.
-
-components/Patient/
-PatientInfoPanel.jsx + module pair manage the patient profile form.
-NewPatientModal.jsx + module pair provide the add-patient dialog styling.
-
-components/Notes/
-NoteEditor.jsx + module pair power the rich text editor UI.
-CommandBar.jsx + module pair style the natural-language command HUD.
-HighlightedText.jsx + module pair render entity highlights with tooltips.
-
-components/shared/
-Modal.jsx + module pair supply the generalized modal shell.
-LoadingAnimation.jsx + module pair provide spinner/empty states.
-Icons.jsx remains purely presentational (SVG exports only).
-
-assets/public
-Logos, icons, and audio-processor worklet remain under `public/`.
-
-note-formatters.js
-formatNotesAsHTML, parseHTMLToNotes (HTML ⇄ notes conversion)
-
-How to read this ASCII diagram
-Hierarchy: Each indentation level represents a deeper package or folder.
-Key modules map to UI pieces:
-UI: App.jsx, TranscriptPanel.jsx, PatientInfoPanel.jsx, NoteEditor.jsx, MedicalScribeDemo.jsx
-Data/State: useConsultations.js, useAudioRecording.js
-Utilities: helpers.js, constants.js, noteFormatters.js
-Shared/UI: Modal.jsx, LoadingAnimation.jsx, Icons.jsx
-
-Data flow (quick mental model):
-Live transcription: useAudioRecording.js streams via WebSocket → TranscriptPanel updates transcriptSegments/interim transcript.
-Note generation: NoteEditor + CommandBar → /generate-final-note endpoint → notes stored in activeConsultation.notes.
-Patient/Consultation management: Sidebar & NewPatientModal feed useConsultations.js.
-
-Styling:
-App.css supplies cross-app tokens and shared primitives; each React component now imports its own `.module.css` for scoped styles, eliminating redundant global classes.
-
-Persistence:
-LocalStorage stores consultations, patients, and activeConsultationId to persist across reloads.
+Data & sync flow (updated)
+Local state & persistence remain powered by useConsultations and localStorage.
+Background sync (opt-in)
+VITE_ENABLE_BACKGROUND_SYNC=true turns on remote mirroring.
+useConsultations queues patient/consultation upserts.
+useAudioRecording queues transcript segments.
+App.jsx periodically flushes the queue and responds to browser lifecycle events.
+Note generation pipeline unchanged (useAudioRecording → /generate-final-note → consultation notes).
+Styling & assets
+App.css provides global tokens; component styles remain isolated in .module.css.
+Static assets (logos, audio processor worklet) stay under public/.
+Persistence recap
+LocalStorage still manages patients, consultations, and activeConsultationId.
+DynamoDB sync (optional) kicks in when the feature flag is enabled and AWS credentials are configured in the environment.

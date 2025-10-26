@@ -22,11 +22,13 @@ import {
   CancelIcon,
   DownloadIcon,
   EditIcon,
+  PlusIcon,
 } from "../shared/Icons";
 import { NoteTypeConfirmationModal } from "../shared/Modal";
 import { LoadingAnimation } from "../shared/LoadingAnimation";
 import styles from "./NoteEditor.module.css";
 import { NewNoteTemplateModal } from "./NewNoteTemplateModal";
+import { ManageTemplatesModal } from "./ManageTemplatesModal";
 
 const CONSULTATION_INDICATORS = [
   "consult",
@@ -118,11 +120,14 @@ export const NoteEditor = ({
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
+  const [showManageTemplates, setShowManageTemplates] = useState(false);
+  const [showTemplateMenu, setShowTemplateMenu] = useState(false);
 
   const editorRef = useRef(null);
   const notesDisplayRef = useRef(null);
   const lastContentRef = useRef("");
   const isUpdatingRef = useRef(false);
+  const templateMenuRef = useRef(null);
 
   const transcriptText = useMemo(() => {
     const segments = safeArrayFromMapValues(transcriptSegments);
@@ -646,6 +651,26 @@ export const NoteEditor = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isEditing, handleUndo, handleRedo]);
 
+  // close template menu when clicking outside
+  useEffect(() => {
+    if (!showTemplateMenu) return;
+    const onDocClick = (e) => {
+      if (!templateMenuRef.current) return;
+      if (!templateMenuRef.current.contains(e.target)) {
+        setShowTemplateMenu(false);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setShowTemplateMenu(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showTemplateMenu]);
+
   if (loading) {
     return <LoadingAnimation message="Generating clinical note..." />;
   }
@@ -794,6 +819,12 @@ export const NoteEditor = ({
         />
       )}
 
+      {showManageTemplates && (
+        <ManageTemplatesModal
+          onClose={() => setShowManageTemplates(false)}
+        />
+      )}
+
       <div className={styles.notesHeaderControls}>
         <div className={styles.noteTypeSelectorContainer}>
           <label
@@ -824,19 +855,50 @@ export const NoteEditor = ({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className={`button ${styles.iconButton || ""} ${
-                styles.templateButton || ""
-              }`}
-              onClick={() => setShowNewTemplateModal(true)}
-              title="Create a new custom template"
-            >
-              <span className={styles.actionIcon} aria-hidden>
-                ＋
-              </span>
-              <span className={styles.actionText}>Add your own</span>
-            </button>
+
+            {/* Single button: "Custom Templates +" opens a small accordion-style menu with Create / Manage */}
+            <div className={styles.templateMenuWrapper} ref={templateMenuRef}>
+              <button
+                type="button"
+                className={`button ${styles.iconButton} ${styles.customTemplatesButton}`}
+                onClick={() => setShowTemplateMenu((s) => !s)}
+                aria-haspopup="menu"
+                aria-expanded={showTemplateMenu}
+                title="Custom Templates"
+              >
+                <span className={styles.actionText}>Custom Templates</span>
+                <span className={styles.actionIcon} aria-hidden>
+                  <PlusIcon />
+                </span>
+              </button>
+
+              {showTemplateMenu && (
+                <div className={styles.templatesMenu} role="menu" aria-label="Custom templates">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.templatesMenuItem}
+                    onClick={() => {
+                      setShowNewTemplateModal(true);
+                      setShowTemplateMenu(false);
+                    }}
+                  >
+                    Create New
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={styles.templatesMenuItem}
+                    onClick={() => {
+                      setShowManageTemplates(true);
+                      setShowTemplateMenu(false);
+                    }}
+                  >
+                    Manage Templates
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
