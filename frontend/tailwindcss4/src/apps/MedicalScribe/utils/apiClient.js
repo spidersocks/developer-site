@@ -207,7 +207,7 @@ export const apiClient = {
     }),
 
   listTemplates: ({ token, userId, signal } = {}) =>
-    apiRequest("/templates", {
+    apiRequest("/templates/", {
       accessToken: token,
       signal,
       query: {
@@ -218,7 +218,7 @@ export const apiClient = {
     }),
 
   createTemplate: ({ token, userId, payload }) =>
-    apiRequest("/templates", {
+    apiRequest("/templates/", {
       method: "POST",
       accessToken: token,
       body: payload,

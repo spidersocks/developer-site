@@ -294,8 +294,9 @@ const syncService = {
       name: { S: template.name || "" },
       sections: { S: JSON.stringify(template.sections || []) },
       example_text: { S: template.example_text ?? "" },
-      createdAt: { S: template.createdAt ?? new Date().toISOString() },
-      updatedAt: { S: template.updatedAt ?? new Date().toISOString() },
+      // Use snake_case timestamps to match backend schema expectations
+      created_at: { S: template.created_at ?? template.createdAt ?? new Date().toISOString() },
+      updated_at: { S: template.updated_at ?? template.updatedAt ?? new Date().toISOString() },
     };
     queue.enqueue(
       safeSendPut("medical-scribe-templates", item, `template:${template.id}`),
