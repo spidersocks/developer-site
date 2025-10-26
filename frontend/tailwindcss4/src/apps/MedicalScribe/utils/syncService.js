@@ -318,6 +318,32 @@ export const syncService = {
     );
   },
 
+  enqueueTemplateUpsert(template) {
+    // template: { id, ownerUserId, name, sections, example_text, createdAt, updatedAt }
+    if (!ENABLE_BACKGROUND_SYNC || !template?.id) return;
+    const item = {
+      id: { S: template.id },
+      ownerUserId: { S: template.ownerUserId },
+      name: { S: template.name || "" },
+      sections: { S: JSON.stringify(template.sections || []) },
+      example_text: { S: template.example_text || "" },
+      createdAt: { S: template.createdAt || new Date().toISOString() },
+      updatedAt: { S: template.updatedAt || new Date().toISOString() },
+    };
+    queue.enqueue(
+      putItem("medical-scribe-templates", item, `template:${template.id}`),
+      { label: `template:${template.id}` }
+    );
+  },
+
+  enqueueTemplateDeletion(templateId, ownerUserId) {
+    if (!ENABLE_BACKGROUND_SYNC || !templateId) return;
+    queue.enqueue(
+      deleteItem("medical-scribe-templates", { id: { S: templateId } }, `delete-template:${templateId}`),
+      { label: `delete-template:${templateId}` }
+    );
+  },
+
   enqueueTranscriptSegments(consultationId, segments, startingIndex, ownerUserId) {
   console.info("[syncService] enqueueTranscriptSegments", {
     consultationId,

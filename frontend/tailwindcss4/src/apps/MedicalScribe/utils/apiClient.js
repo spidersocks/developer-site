@@ -217,11 +217,14 @@ export const apiClient = {
       },
     }),
 
-  createTemplate: ({ token, payload }) =>
+  createTemplate: ({ token, userId, payload }) =>
     apiRequest("/templates", {
       method: "POST",
       accessToken: token,
       body: payload,
+      query: {
+        user_id: userId,
+      },
     }),
 
   updateTemplate: ({ token, templateId, payload }) =>

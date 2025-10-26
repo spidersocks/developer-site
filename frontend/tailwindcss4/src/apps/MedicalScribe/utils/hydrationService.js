@@ -23,6 +23,8 @@ const PATIENTS_TABLE = readEnv(
   "medical-scribe-patients"
 );
 
+const TEMPLATES_TABLE = readEnv("VITE_DDB_TEMPLATES_TABLE", "medical-scribe-templates");
+
 const CONSULTATIONS_TABLE = readEnv(
   "VITE_DDB_CONSULTATIONS_TABLE",
   "medical-scribe-consultations"
@@ -315,16 +317,76 @@ export const hydrateAll = async (ownerUserId) => {
   });
 
   // Fetch patients, consultations, and notes in parallel
-  const [patients, consultations, clinicalNotes] = await Promise.all([
+  const [patients, consultations, clinicalNotes, rawTemplates] = await Promise.all([
     fetchItemsByOwner(PATIENTS_TABLE, ownerUserId),
     fetchItemsByOwner(CONSULTATIONS_TABLE, ownerUserId),
     fetchItemsByOwner(CLINICAL_NOTES_TABLE, ownerUserId),
+    fetchItemsByOwner(TEMPLATES_TABLE, ownerUserId),
   ]);
 
   console.info("[hydrationService] Patients, consultations, and notes fetched", {
     patientsCount: patients.length,
     consultationsCount: consultations.length,
     notesCount: clinicalNotes.length,
+  });
+
+  // Normalize templates: ensure sections is an array of {id,name,description}
+  const templates = (rawTemplates || []).map((t) => {
+    // defensive field selection to support different key naming conventions
+    const id = t.id || t.templateId || t.template_id || null;
+    const owner = t.ownerUserId || t.owner_user_id || t.owner || ownerUserId;
+    const name = t.name || t.templateName || t.title || "Untitled Template";
+    const example_text = t.example_text || t.exampleNoteText || t.example || "";
+
+    // sections may come as:
+    // - an array (preferred)
+    // - a JSON string (marshal/unmarshal)
+    // - stored under other keys
+    let sectionsRaw = t.sections ?? t.sections_json ?? t.sections_string ?? t.sections_str ?? null;
+    if (!sectionsRaw && t.body) {
+      sectionsRaw = t.body.sections ?? null;
+    }
+
+    let sections = [];
+    if (typeof sectionsRaw === "string") {
+      try {
+        const parsed = JSON.parse(sectionsRaw);
+        sections = Array.isArray(parsed) ? parsed : [];
+      } catch (err) {
+        // Fallback: attempt to parse a minimal comma-separated list (best-effort)
+        console.warn("[hydrationService] Failed to parse template.sections JSON, falling back:", err);
+        sections = [];
+      }
+    } else if (Array.isArray(sectionsRaw)) {
+      sections = sectionsRaw;
+    } else {
+      sections = [];
+    }
+
+    // Ensure each section has id, name, description
+    sections = sections.map((s, i) => {
+      if (!s) s = {};
+      return {
+        id: s.id || s.section_id || s.key || `sec_${i + 1}`,
+        name: s.name || s.title || s.label || `Section ${i + 1}`,
+        description: s.description || s.desc || s.instructions || "",
+      };
+    });
+
+    // keep created/updated timestamps normalized
+    const created_at = t.created_at || t.createdAt || t.created || null;
+    const updated_at = t.updated_at || t.updatedAt || t.updated || null;
+
+    return {
+      id,
+      ownerUserId: owner,
+      name,
+      sections,
+      example_text,
+      created_at,
+      updated_at,
+      raw: t,
+    };
   });
 
   // Map patients by ID for quick lookup
@@ -345,11 +407,11 @@ export const hydrateAll = async (ownerUserId) => {
     return consultation;
   });
 
-  return {
+    return {
     patients,
     consultations: processedConsultations,
     clinicalNotes,
-    // Legacy field removed to avoid noisy logs and confusion
+    templates,
     transcriptSegmentsByConsultation: [],
   };
 };
