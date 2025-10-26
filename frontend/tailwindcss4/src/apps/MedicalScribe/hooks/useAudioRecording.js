@@ -420,7 +420,6 @@ export const useAudioRecording = (
       const parts = rawSelectedType.split(":", 2);
       templateId = parts[1] ?? null;
       // choose a base note_type for prompt module — 'standard' is a safe default.
-      // You could change this later if templates include a preferred base note type.
       noteTypeToUse = "standard";
     }
 
@@ -431,9 +430,7 @@ export const useAudioRecording = (
     });
 
     if (!transcript.trim()) {
-      // Keep UI usable; surface a gentle message in console
       console.warn("[useAudioRecording] Generate note requested but transcript is empty.");
-      // Do not set a global error that collapses UI
       return;
     }
 
@@ -451,12 +448,40 @@ export const useAudioRecording = (
         activeConsultation.notesCreatedAt ||
         new Date().toISOString();
 
+      // Build patient_info object for the backend/prompt
+      const profile = activeConsultation.patientProfile || {};
+      const patientInfo = {};
+
+      if (profile.name) patientInfo.name = profile.name;
+      if (profile.sex) patientInfo.sex = profile.sex;
+      if (profile.dateOfBirth) {
+        // calculateAge returns number or null; prompt expects an age string/number
+        try {
+          const ageVal = calculateAge(profile.dateOfBirth);
+          if (ageVal !== null && ageVal !== undefined) {
+            // convert to string to keep payload simple (backend accepts either)
+            patientInfo.age = String(ageVal);
+          }
+        } catch (e) {
+          // ignore if date parsing fails
+        }
+      }
+      if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
+      if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
+
       const requestBody = {
         full_transcript: transcript,
         note_type: noteTypeToUse,
         encounter_time: encounterTime,
       };
+
+      // attach template id if selecting a custom template
       if (templateId) requestBody.template_id = templateId;
+
+      // attach patient_info only if we have any meaningful keys
+      if (Object.keys(patientInfo).length > 0) {
+        requestBody.patient_info = patientInfo;
+      }
 
       const resp = await fetch(`${BACKEND_API_URL}/generate-final-note`, {
         method: 'POST',
@@ -465,7 +490,6 @@ export const useAudioRecording = (
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        // If backend reports not found (e.g., route proxy not available), do not nuke UI
         const detail = data?.detail || `${resp.status} ${resp.statusText}`;
         throw new Error(detail);
       }
@@ -483,15 +507,11 @@ export const useAudioRecording = (
         finalizeConsultationTimestamp(activeConsultationId);
       }
     } catch (err) {
-      // Non-fatal: keep existing notes and controls visible
       console.error("[useAudioRecording] Failed to generate final note:", err);
       updateConsultation(activeConsultationId, {
-        // Do NOT set a fatal error that hides the editor
-        // error: `Failed to generate final note: ${err.message}`,
         loading: false
       });
 
-      // If there were no notes before and generation failed, the NoteEditor will show its normal empty state.
       if (!hadExistingNotes) {
         console.info("[useAudioRecording] No prior notes; showing empty note state after failed generation.");
       }
