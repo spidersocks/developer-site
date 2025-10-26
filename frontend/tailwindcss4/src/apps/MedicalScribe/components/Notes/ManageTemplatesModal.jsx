@@ -135,9 +135,23 @@ export const ManageTemplatesModal = ({ onClose }) => {
     setShowNew(true);
   };
 
+  // overlay click guard to avoid closing while selecting text
+  const handleOverlayClick = (e) => {
+    if (e.target !== e.currentTarget) return;
+    try {
+      const selection = typeof window !== "undefined" && window.getSelection ? window.getSelection().toString() : "";
+      if (selection && selection.trim().length > 0) {
+        return;
+      }
+    } catch (err) {
+      console.warn("[ManageTemplatesModal] selection check failed", err);
+    }
+    onClose();
+  };
+
   return (
     <>
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay" onClick={handleOverlayClick}>
         <div className={`modal-content ${styles.modalContent}`} onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <h3 className="modal-title">Manage Templates</h3>

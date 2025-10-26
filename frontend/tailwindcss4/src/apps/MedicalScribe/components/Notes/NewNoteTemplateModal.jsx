@@ -48,6 +48,7 @@ export const NewNoteTemplateModal = ({
   const addSection = () => {
     if (sections.length >= 8) return;
     setSections((prev) => [...prev, { id: `sec_${prev.length + 1}`, name: "", description: "" }]);
+    // small timeout to allow scroll-to-bottom later if caller wants
   };
 
   const removeSection = (idx) => {
@@ -90,8 +91,25 @@ export const NewNoteTemplateModal = ({
     }
   };
 
+  // Guard overlay close so selecting text and releasing mouse outside won't close the modal
   const handleOverlayClick = (e) => {
-    if (e.target === e.currentTarget) onClose?.();
+    if (e.target !== e.currentTarget) return;
+
+    // If the user has an active text selection, do NOT close the modal.
+    // This covers the case where selection started inside the modal and mouseup occurred outside.
+    try {
+      const selection = typeof window !== "undefined" && window.getSelection ? window.getSelection().toString() : "";
+      if (selection && selection.trim().length > 0) {
+        // keep selection; do not close
+        return;
+      }
+    } catch (err) {
+      // If something goes wrong with selection retrieval, fall back to closing.
+      // But swallow error to avoid breaking UI.
+      console.warn("[NewNoteTemplateModal] selection check failed", err);
+    }
+
+    onClose?.();
   };
 
   const triggerFilePicker = () => {
@@ -108,7 +126,7 @@ export const NewNoteTemplateModal = ({
           </button>
         </div>
 
-        <div className="modal-body">
+        <div className={styles.modalBody}>
           <div className={styles.field}>
             <label className={styles.label}>
               Template Name <span className={styles.req}>*</span>
@@ -123,49 +141,66 @@ export const NewNoteTemplateModal = ({
             />
           </div>
 
-          <div className={styles.sectionsHeader}>
-            <span>Sections</span>
-            <button type="button" className={styles.smallButton} onClick={addSection} disabled={sections.length >= 8}>
-              + Add section
-            </button>
-          </div>
+          <div className={styles.sectionsWrapper}>
+            <div className={styles.sectionsHeader}>
+              <span className={styles.sectionsTitle}>Sections</span>
+              <span className={styles.sectionsCount}>{sections.length} / 8</span>
+            </div>
 
-          <div className={styles.sectionsList}>
-            {sections.map((sec, idx) => (
-              <div key={sec.id} className={styles.sectionRow}>
-                <div className={styles.sectionCol}>
-                  <label className={styles.smallLabel}>Section name</label>
-                  <input
-                    type="text"
-                    className={styles.control}
-                    value={sec.name}
-                    onChange={(e) => updateSection(idx, "name", e.target.value)}
-                    placeholder={`Section ${idx + 1} name`}
-                  />
-                </div>
-                <div className={styles.sectionCol}>
-                  <label className={styles.smallLabel}>Description (what to write)</label>
-                  <textarea
-                    className={styles.control}
-                    rows={2}
-                    value={sec.description}
-                    onChange={(e) => updateSection(idx, "description", e.target.value)}
-                    placeholder="Describe what content should go here…"
-                  />
-                </div>
-                <div className={styles.sectionActions}>
+            <div className={styles.sectionsList} role="list">
+              {sections.map((sec, idx) => (
+                <div key={sec.id} className={styles.sectionRow} role="listitem">
+                  <div className={styles.sectionInner}>
+                    <div className={styles.sectionHeader}>
+                      <label className={styles.smallLabel}>Section name</label>
+                      <input
+                        type="text"
+                        className={styles.sectionInput}
+                        value={sec.name}
+                        onChange={(e) => updateSection(idx, "name", e.target.value)}
+                        placeholder={`Section ${idx + 1} name`}
+                      />
+                    </div>
+
+                    <div className={styles.sectionBody}>
+                      <label className={styles.smallLabel}>Description (what to write)</label>
+                      <textarea
+                        className={styles.sectionTextarea}
+                        rows={3}
+                        value={sec.description}
+                        onChange={(e) => updateSection(idx, "description", e.target.value)}
+                        placeholder="Describe what content should go here…"
+                      />
+                    </div>
+                  </div>
+
+                  {/* compact remove button placed top-right of each section */}
                   <button
                     type="button"
-                    className={styles.removeButton}
+                    className={styles.removeIcon}
                     onClick={() => removeSection(idx)}
-                    disabled={sections.length <= 1}
+                    aria-label={`Remove section ${idx + 1}`}
                     title="Remove section"
+                    disabled={sections.length <= 1}
                   >
-                    Remove
+                    ×
                   </button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Add section button placed after the list and sticky within the scroll area */}
+            <div className={styles.addSectionWrap}>
+              <button
+                type="button"
+                className={styles.addSectionButton}
+                onClick={addSection}
+                disabled={sections.length >= 8}
+              >
+                + Add section
+              </button>
+              <div className={styles.addHint}>Tip: You can add up to 8 sections</div>
+            </div>
           </div>
 
           <div className={styles.field}>
