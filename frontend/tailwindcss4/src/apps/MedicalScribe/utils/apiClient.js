@@ -70,7 +70,8 @@ async function apiRequest(
 }
 
 // Module-scoped caches
-let _noteTypesPromise = null;
+// Previously _noteTypesPromise single promise; switched to per-user cache to support templates per-user
+const _noteTypesCache = new Map(); // key -> Promise resolving to note types array
 
 // Tiny 2s memo to coalesce repeat segment loads
 const _segmentsMemo = new Map(); // key -> { ts: number, res: { ok, status, data, error } }
@@ -240,9 +241,17 @@ export const apiClient = {
       accessToken: token,
     }),
 
- getNoteTypesCached: () => {
-    if (_noteTypesPromise) return _noteTypesPromise;
-    _noteTypesPromise = apiRequest("/note-types")
+  /**
+   * Get cached note types. Optionally pass { userId } to include user templates.
+   * Returns a Promise resolving to an array of note type objects.
+   */
+  getNoteTypesCached: ({ userId } = {}) => {
+    const key = userId ? String(userId) : "anon";
+    if (_noteTypesCache.has(key)) return _noteTypesCache.get(key);
+
+    const p = apiRequest("/note-types", {
+      query: { user_id: userId || undefined },
+    })
       .then((res) => {
         if (res.ok && res.data && Array.isArray(res.data.note_types)) return res.data.note_types;
         throw new Error(res.error?.message || "Failed to load note types");
@@ -251,7 +260,9 @@ export const apiClient = {
         console.warn("[apiClient] getNoteTypesCached fallback due to error:", err?.message);
         return [];
       });
-    return _noteTypesPromise;
+
+    _noteTypesCache.set(key, p);
+    return p;
   },
 };
 
