@@ -444,7 +444,18 @@ export const useAudioRecording = (
     updateConsultation(activeConsultationId, { loading: true, error: null });
 
     try {
-      const requestBody = { full_transcript: transcript, note_type: noteTypeToUse };
+      // Prefer the consultation's createdAt (the timestamp logged when recording finished).
+      // Fall back to notesCreatedAt or current time if not available.
+      const encounterTime =
+        activeConsultation.createdAt ||
+        activeConsultation.notesCreatedAt ||
+        new Date().toISOString();
+
+      const requestBody = {
+        full_transcript: transcript,
+        note_type: noteTypeToUse,
+        encounter_time: encounterTime,
+      };
       if (templateId) requestBody.template_id = templateId;
 
       const resp = await fetch(`${BACKEND_API_URL}/generate-final-note`, {
