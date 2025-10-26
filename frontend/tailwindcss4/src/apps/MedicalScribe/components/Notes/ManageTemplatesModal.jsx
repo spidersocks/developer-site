@@ -8,9 +8,6 @@ import { ENABLE_BACKGROUND_SYNC } from "../../utils/constants";
 
 export const ManageTemplatesModal = ({ onClose }) => {
   const { user, accessToken, userId } = useAuth();
-  // AuthGate exposes userId and accessToken in your app; if not, adapt to your shape:
-  // const auth = useAuth(); const token = auth.accessToken; const ownerUserId = auth.user?.attributes?.sub || auth.userId;
-
   const ownerUserId = user?.attributes?.sub ?? user?.username ?? userId ?? null;
   const token = accessToken;
 
@@ -18,6 +15,7 @@ export const ManageTemplatesModal = ({ onClose }) => {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [editingTemplate, setEditingTemplate] = useState(null); // template being edited (or null)
 
   const loadTemplates = async () => {
     setLoading(true);
@@ -42,63 +40,78 @@ export const ManageTemplatesModal = ({ onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCreate = async (payload) => {
+  // Unified save handler for create OR update
+  const handleSaveTemplate = async (payload) => {
+    setError("");
     try {
-      // Call backend create endpoint (includes owner user via query param)
-      const body = {
-        name: payload.name,
-        sections: payload.sections,
-        example_text: payload.exampleNoteText ?? "",
-      };
-
-      const res = await apiClient.createTemplate({
-        token,
-        userId: ownerUserId,
-        payload: body,
-      });
-
-      // Only small additions: console.info before enqueue to make the UI->queue handoff visible.
-
-  if (res.ok && res.data) {
-    setTemplates((prev) => [res.data, ...prev]);
-
-    // Also enqueue to background sync (best-effort offline behavior)
-    if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
-      try {
-        // DEBUG: log the exact object we will send to the syncService
-        console.info("[Templates] enqueueTemplateUpsert payload about to be sent to syncService", {
-          id: res.data.id,
-          ownerUserId,
-          name: res.data.name,
-          sections: res.data.sections,
-          example_text: res.data.example_text ?? res.data.exampleNoteText ?? ""
+      if (editingTemplate) {
+        // Update existing template
+        const updateBody = {
+          name: payload.name,
+          sections: payload.sections,
+          example_text: payload.exampleNoteText ?? "",
+        };
+        const res = await apiClient.updateTemplate({
+          token,
+          templateId: editingTemplate.id,
+          payload: updateBody,
         });
 
-        syncService.enqueueTemplateUpsert({
-          id: res.data.id,
-          ownerUserId: ownerUserId,
-          name: res.data.name,
-          sections: res.data.sections,
-          example_text: res.data.example_text ?? res.data.exampleNoteText ?? "",
-          createdAt: res.data.created_at ?? new Date().toISOString(),
-          updatedAt: res.data.updated_at ?? new Date().toISOString(),
-        });
-
-        // After enqueue, show queue stats in dev console
-        if (import.meta.env.DEV && window.__syncService) {
-          console.info("[Templates] syncService stats after enqueue", window.__syncService.getStats());
-          console.info("[Templates] syncService queue snapshot", window.__syncService.dumpQueue());
+        if (res.ok && res.data) {
+          setTemplates((prev) => prev.map((t) => (t.id === res.data.id ? res.data : t)));
+          // enqueue updated template for background sync
+          if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
+            syncService.enqueueTemplateUpsert({
+              id: res.data.id,
+              ownerUserId: ownerUserId,
+              name: res.data.name,
+              sections: res.data.sections,
+              example_text: res.data.example_text ?? "",
+              created_at: res.data.created_at ?? new Date().toISOString(),
+              updated_at: res.data.updated_at ?? new Date().toISOString(),
+            });
+          }
+        } else {
+          const msg = res?.error?.message || `Failed to update template (status ${res?.status})`;
+          setError(msg);
         }
-      } catch (e) {
-        console.warn("[Templates] enqueueTemplateUpsert failed", e);
-      }
-    }
-  } else {
-        const msg = res?.error?.message || `Failed to create template (status ${res?.status})`;
-        setError(msg);
+      } else {
+        // Create new template
+        const createBody = {
+          name: payload.name,
+          sections: payload.sections,
+          example_text: payload.exampleNoteText ?? "",
+        };
+        const res = await apiClient.createTemplate({
+          token,
+          userId: ownerUserId,
+          payload: createBody,
+        });
+        if (res.ok && res.data) {
+          setTemplates((prev) => [res.data, ...prev]);
+          if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
+            syncService.enqueueTemplateUpsert({
+              id: res.data.id,
+              ownerUserId: ownerUserId,
+              name: res.data.name,
+              sections: res.data.sections,
+              example_text: res.data.example_text ?? "",
+              created_at: res.data.created_at ?? new Date().toISOString(),
+              updated_at: res.data.updated_at ?? new Date().toISOString(),
+            });
+          }
+        } else {
+          const msg = res?.error?.message || `Failed to create template (status ${res?.status})`;
+          setError(msg);
+        }
       }
     } catch (err) {
-      setError(err.message || String(err));
+      console.error("[Templates] save error", err);
+      setError(err?.message || String(err));
+    } finally {
+      // reset modal/editing
+      setEditingTemplate(null);
+      setShowNew(false);
     }
   };
 
@@ -108,6 +121,18 @@ export const ManageTemplatesModal = ({ onClose }) => {
     if (ENABLE_BACKGROUND_SYNC && ownerUserId) {
       syncService.enqueueTemplateDeletion(id, ownerUserId);
     }
+  };
+
+  const handleEditClick = (t) => {
+    // open modal prefilled
+    setEditingTemplate({
+      id: t.id,
+      name: t.name,
+      sections: Array.isArray(t.sections) ? t.sections : [],
+      exampleNoteText: t.example_text ?? t.exampleNoteText ?? "",
+      raw: t.raw ?? null,
+    });
+    setShowNew(true);
   };
 
   return (
@@ -131,40 +156,53 @@ export const ManageTemplatesModal = ({ onClose }) => {
               </div>
             ) : (
               <div className={styles.list}>
-                {templates.map((t) => (
-                  <div key={t.id} className={styles.templateRow}>
-                    <div className={styles.templateInfo}>
-                      <div className={styles.templateName}>{t.name}</div>
-                      <div className={styles.templateMeta}>
-                        <small>{t.sections?.length ?? 0} sections</small>
-                        <small>Updated: {new Date(t.updated_at ?? t.updatedAt ?? t.updatedAt).toLocaleString()}</small>
+                {templates.map((t) => {
+                  const sectionsCount = Array.isArray(t.sections) ? t.sections.length : 0;
+                  const updatedDate = new Date(t.updated_at ?? t.updatedAt ?? t.created_at ?? Date.now()).toLocaleString();
+                  return (
+                    <div key={t.id} className={styles.templateRow}>
+                      <div className={styles.templateInfo}>
+                        <div className={styles.templateName}>{t.name}</div>
+                        <div className={styles.templateMeta}>
+                          <span className={styles.metaItem}>{sectionsCount} section{sectionsCount !== 1 ? "s" : ""}</span>
+                          <span className={styles.metaDivider}>•</span>
+                          <span className={styles.metaItem}>Updated: {updatedDate}</span>
+                        </div>
+                      </div>
+
+                      <div className={styles.templateActions}>
+                        <button
+                          className="button button-secondary"
+                          onClick={() => handleEditClick(t)}
+                          title="Edit template"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          className="button button-danger"
+                          onClick={() => handleDeleteLocal(t.id)}
+                          title="Delete template (queued)"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
-                    <div className={styles.templateActions}>
-                      <button
-                        className="button button-secondary"
-                        onClick={() => navigator.clipboard?.writeText(JSON.stringify(t))}
-                        title="Copy template JSON"
-                      >
-                        Copy
-                      </button>
-                      <button
-                        className="button button-danger"
-                        onClick={() => handleDeleteLocal(t.id)}
-                        title="Delete template (queued)"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {error && <div className={styles.errorText}>{error}</div>}
           </div>
 
           <div className="modal-footer modal-footer-buttons">
-            <button className="button button-secondary" onClick={() => setShowNew(true)}>
+            <button
+              className="button button-secondary"
+              onClick={() => {
+                setEditingTemplate(null);
+                setShowNew(true);
+              }}
+            >
               + New Template
             </button>
             <button className="button button-primary" onClick={onClose}>Done</button>
@@ -174,10 +212,13 @@ export const ManageTemplatesModal = ({ onClose }) => {
 
       {showNew && (
         <NewNoteTemplateModal
-          onClose={() => setShowNew(false)}
-          onSave={(payload) => {
-            handleCreate(payload);
+          initialValue={editingTemplate}
+          onClose={() => {
             setShowNew(false);
+            setEditingTemplate(null);
+          }}
+          onSave={(payload) => {
+            handleSaveTemplate(payload);
           }}
         />
       )}
