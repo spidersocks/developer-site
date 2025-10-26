@@ -409,7 +409,20 @@ export const useAudioRecording = (
 
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
     if (!activeConsultation) return;
-    const noteTypeToUse = noteTypeOverride || activeConsultation.noteType;
+    const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
+
+    // If the selected type is a template reference (e.g. "template:<uuid>"),
+    // extract the template id and use a sensible base note_type (standard) for the prompt module.
+    let templateId = null;
+    let noteTypeToUse = rawSelectedType;
+
+    if (typeof rawSelectedType === "string" && rawSelectedType.startsWith("template:")) {
+      const parts = rawSelectedType.split(":", 2);
+      templateId = parts[1] ?? null;
+      // choose a base note_type for prompt module — 'standard' is a safe default.
+      // You could change this later if templates include a preferred base note type.
+      noteTypeToUse = "standard";
+    }
 
     // Build transcript for generation
     let transcript = '';
@@ -432,6 +445,8 @@ export const useAudioRecording = (
 
     try {
       const requestBody = { full_transcript: transcript, note_type: noteTypeToUse };
+      if (templateId) requestBody.template_id = templateId;
+
       const resp = await fetch(`${BACKEND_API_URL}/generate-final-note`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -446,7 +461,7 @@ export const useAudioRecording = (
 
       updateConsultation(activeConsultationId, {
         notes: data.notes,
-        noteType: noteTypeToUse,
+        noteType: rawSelectedType, // preserve the literal selected type in UI state (so template:... remains)
         noteId: activeConsultationId,
         notesCreatedAt: new Date().toISOString(),
         notesUpdatedAt: new Date().toISOString(),
