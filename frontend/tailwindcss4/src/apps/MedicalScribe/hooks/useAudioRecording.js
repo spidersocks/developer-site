@@ -236,8 +236,15 @@ export const useAudioRecording = (
                 return;
               }
 
+              // ---- Unique ID logic ----
+              let segmentId = result.ResultId;
+              if (!segmentId || newSegments.has(segmentId)) {
+                segmentId = `seg-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+              }
+              // ---- End unique ID logic ----
+
               const uiSegment = prepareSegmentForUi({
-                id: result.ResultId,
+                id: segmentId,
                 speaker: currentSpeaker,
                 text: transcriptText,
                 entities: Array.isArray(data.ComprehendEntities) ? data.ComprehendEntities : [],
