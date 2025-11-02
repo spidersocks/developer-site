@@ -193,7 +193,8 @@ export const useAudioRecording = (
 
     try {
       const ws = new WebSocket(
-        `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
+        // previously: `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
+        `${BACKEND_WS_URL}?language_code=auto`
       );
       websocketRef.current = ws;
 
