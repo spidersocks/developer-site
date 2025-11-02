@@ -231,6 +231,12 @@ export const useAudioRecording = (
               if (!alt) return;
 
               const transcriptText = alt.Transcript;
+              if (!transcriptText || !transcriptText.trim()) {
+                // Ignore empty finals to avoid flashing blank segments and 422s
+                if (!result.IsPartial) {
+                  return;
+                }
+    }
               const firstWord = alt.Items?.find((i) => i.Type === 'pronunciation');
               const currentSpeaker = firstWord ? firstWord.Speaker : null;
 
