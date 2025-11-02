@@ -192,10 +192,11 @@ export const useAudioRecording = (
     });
 
     try {
-      const ws = new WebSocket(
-        // previously: `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
-        `${BACKEND_WS_URL}?language_code=auto`
-      );
+      // ... inside startSession(), before new WebSocket(...)
+      const url = `${BACKEND_WS_URL}?language_code=auto`;
+      console.info("[useAudioRecording] Opening WebSocket:", url);
+
+      const ws = new WebSocket(url);
       websocketRef.current = ws;
 
       ws.onopen = () => {
@@ -207,6 +208,9 @@ export const useAudioRecording = (
       ws.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data?._engine) {
+            console.info("[useAudioRecording] Engine:", data._engine, "Detected:", data._detected_language || "(n/a)");
+          }
           const results = data.Transcript?.Results ?? [];
           if (!results.length) return;
 
