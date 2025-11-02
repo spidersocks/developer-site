@@ -12,7 +12,7 @@ export const TranscriptPanel = ({
   getStatusDisplay,
   updateConsultation,
   activeConsultationId,
-  showLanguageSelector = true,
+  // showLanguageSelector = true, // REMOVED, not needed anymore
 }) => {
   const noSegmentsYet = activeConsultation.transcriptSegments.size === 0;
   const isIdleOrStopped = ["idle", "stopped"].includes(activeConsultation.sessionState);
@@ -28,25 +28,7 @@ export const TranscriptPanel = ({
     <>
       {activeConsultation.sessionState === "idle" && (
         <div className={styles.inTranscriptControls}>
-          {showLanguageSelector && (
-            <div className={styles.languageSelectorContainer}>
-              <label htmlFor="language-select">Primary Language</label>
-              <select
-                id="language-select"
-                value={activeConsultation.language}
-                onChange={(e) =>
-                  updateConsultation(activeConsultationId, {
-                    language: e.target.value,
-                  })
-                }
-                className={styles.languageSelector}
-              >
-                <option value="en-US">English</option>
-                <option value="zh-HK">Cantonese (粵語)</option>
-                <option value="zh-TW">Mandarin Traditional (國語)</option>
-              </select>
-            </div>
-          )}
+          {/* Removed language selector dropdown */}
           {renderActionButtons()}
         </div>
       )}
