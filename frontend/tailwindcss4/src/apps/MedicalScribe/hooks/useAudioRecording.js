@@ -21,7 +21,6 @@ export const useAudioRecording = (
   const sessionStateRef = useRef('idle');
   const ownerUserIdRef = useRef(null);
 
-  // Track how many segments we believe are persisted server-side (best effort)
   const persistedCountRef = useRef(0);
 
   if (activeConsultation?.ownerUserId) {
@@ -31,7 +30,6 @@ export const useAudioRecording = (
     sessionStateRef.current = activeConsultation.sessionState;
   }
 
-  // Persist a finalized segment to the backend (no entities)
   const persistFinalSegment = useCallback(async (segment, sequenceNumber, detectedLanguage) => {
     try {
       const payload = {
@@ -40,7 +38,6 @@ export const useAudioRecording = (
         original_text: segment.text ?? "",
         translated_text: segment.translatedText ?? null,
         detected_language: detectedLanguage ?? null,
-        // Omit time fields and entities during debug to simplify
       };
 
       console.info("[useAudioRecording] Persisting segment payload", {
@@ -59,7 +56,7 @@ export const useAudioRecording = (
           consultationId: activeConsultationId,
           status: res.status,
           errorMessage: res.error?.message,
-          responseData: res.data // <- backend 422 detail should be visible now
+          responseData: res.data
         });
         return false;
       }
@@ -77,7 +74,6 @@ export const useAudioRecording = (
     }
   }, [activeConsultationId]);
 
-  // Persist a full set of segments (backfill), ordered by sequence
   const persistAllSegments = useCallback(async () => {
     if (!activeConsultation) return { attempted: 0, succeeded: 0 };
     const ordered = Array.from(activeConsultation.transcriptSegments.values()).map((seg, idx) => ({
@@ -92,7 +88,6 @@ export const useAudioRecording = (
 
     let success = 0;
     for (const { seg, seq } of ordered) {
-      // eslint-disable-next-line no-await-in-loop
       const ok = await persistFinalSegment(seg, seq, activeConsultation.language || "en-US");
       if (ok) success += 1;
     }
@@ -108,11 +103,16 @@ export const useAudioRecording = (
 
   const prepareSegmentForUi = useCallback((raw) => {
     if (!raw) return null;
+    // The backend now sends speaker labels in the Items array to match the old format
+    const firstItem = raw.alternatives?.[0]?.items?.[0];
+    const speaker = firstItem?.speaker || null;
+    const transcriptText = raw.alternatives?.[0]?.transcript || "";
+
     return {
-      id: raw.id,
-      speaker: raw.speaker || null,
-      text: raw.text || "",
-      displayText: raw.displayText || raw.text || "",
+      id: raw.resultId,
+      speaker: speaker,
+      text: transcriptText,
+      displayText: raw.displayText || transcriptText,
       translatedText: raw.translatedText || null,
       entities: Array.isArray(raw.entities) ? raw.entities : [],
     };
@@ -144,7 +144,6 @@ export const useAudioRecording = (
       interimSpeaker: null
     });
 
-    // Persist via backend API (no entities)
     await persistFinalSegment(finalSegment, baseIndex, activeConsultation.language || "en-US");
   }, [activeConsultation, activeConsultationId, updateConsultation, persistFinalSegment]);
 
@@ -192,9 +191,9 @@ export const useAudioRecording = (
     });
 
     try {
-      const ws = new WebSocket(
-        `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
-      );
+      // ✅ CHANGED: The backend now handles multi-language automatically.
+      // No need to pass the language code in the URL.
+      const ws = new WebSocket(BACKEND_WS_URL);
       websocketRef.current = ws;
 
       ws.onopen = () => {
@@ -235,22 +234,25 @@ export const useAudioRecording = (
                 return;
               }
 
+              // The new payload from Google STT has a slightly different shape.
+              // We adapt it here for the UI.
               const uiSegment = prepareSegmentForUi({
-                id: result.ResultId,
-                speaker: currentSpeaker,
-                text: transcriptText,
-                entities: Array.isArray(data.ComprehendEntities) ? data.ComprehendEntities : [],
+                resultId: result.ResultId,
+                alternatives: result.Alternatives,
+                displayText: data.DisplayText,
                 translatedText: data.TranslatedText || null,
-                displayText: data.DisplayText || transcriptText,
+                entities: data.ComprehendEntities || [],
               });
 
-              newSegments.set(uiSegment.id, uiSegment);
+              if (uiSegment.id && uiSegment.text) {
+                newSegments.set(uiSegment.id, uiSegment);
 
-              segmentsToPersist.push({
-                ui: uiSegment,
-                sequenceNumber: baseIndex + idx,
-                detectedLanguage: result.LanguageCode || activeConsultation.language || "en-US"
-              });
+                segmentsToPersist.push({
+                  ui: uiSegment,
+                  sequenceNumber: baseIndex + newSegments.size - 1,
+                  detectedLanguage: result.LanguageCode || "en-US"
+                });
+              }
 
               interimTranscript = '';
               interimSpeaker = null;
@@ -270,9 +272,7 @@ export const useAudioRecording = (
             );
           });
 
-          // Persist finalized segments (no entities) via backend API
           for (const { ui, sequenceNumber, detectedLanguage } of segmentsToPersist) {
-            // eslint-disable-next-line no-await-in-loop
             await persistFinalSegment(ui, sequenceNumber, detectedLanguage);
           }
         } catch (e) {
@@ -312,6 +312,7 @@ export const useAudioRecording = (
     persistFinalSegment
   ]);
 
+  // The rest of the hook (handlePause, handleResume, stopSession, handleGenerateNote) remains the same.
   const handlePause = useCallback(async () => {
     await finalizeInterimSegment();
     updateConsultation(activeConsultationId, { sessionState: 'paused' });
@@ -352,7 +353,6 @@ export const useAudioRecording = (
       await finalizeInterimSegment();
     }
 
-    // Safety net: if we persisted 0 (or suspiciously few) segments during the session, backfill all
     try {
       const localCount = activeConsultation.transcriptSegments.size;
       console.info("[useAudioRecording] Stop session: persistedCount vs localCount", {
@@ -385,7 +385,6 @@ export const useAudioRecording = (
       console.error("[useAudioRecording] Backfill check failed:", err);
     }
 
-    // Fire-and-forget enrichment cache to speed up subsequent loads
     try {
       console.info("[useAudioRecording] Kicking off enrichment cache for consultation", {
         consultationId: activeConsultationId
@@ -411,19 +410,15 @@ export const useAudioRecording = (
     if (!activeConsultation) return;
     const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
 
-    // If the selected type is a template reference (e.g. "template:<uuid>"),
-    // extract the template id and use a sensible base note_type (standard) for the prompt module.
     let templateId = null;
     let noteTypeToUse = rawSelectedType;
 
     if (typeof rawSelectedType === "string" && rawSelectedType.startsWith("template:")) {
       const parts = rawSelectedType.split(":", 2);
       templateId = parts[1] ?? null;
-      // choose a base note_type for prompt module — 'standard' is a safe default.
       noteTypeToUse = "standard";
     }
 
-    // Build transcript for generation
     let transcript = '';
     Array.from(activeConsultation.transcriptSegments.values()).forEach((seg) => {
       transcript += `[${getFriendlySpeakerLabel(seg.speaker, activeConsultation.speakerRoles)}]: ${seg.displayText}\n`;
@@ -434,37 +429,27 @@ export const useAudioRecording = (
       return;
     }
 
-    // Preserve current notes so UI remains usable if generation fails
     const hadExistingNotes = Boolean(activeConsultation.notes);
-
-    // Enter loading state but do not clear existing notes
     updateConsultation(activeConsultationId, { loading: true, error: null });
 
     try {
-      // Prefer the consultation's createdAt (the timestamp logged when recording finished).
-      // Fall back to notesCreatedAt or current time if not available.
       const encounterTime =
         activeConsultation.createdAt ||
         activeConsultation.notesCreatedAt ||
         new Date().toISOString();
 
-      // Build patient_info object for the backend/prompt
       const profile = activeConsultation.patientProfile || {};
       const patientInfo = {};
 
       if (profile.name) patientInfo.name = profile.name;
       if (profile.sex) patientInfo.sex = profile.sex;
       if (profile.dateOfBirth) {
-        // calculateAge returns number or null; prompt expects an age string/number
         try {
           const ageVal = calculateAge(profile.dateOfBirth);
           if (ageVal !== null && ageVal !== undefined) {
-            // convert to string to keep payload simple (backend accepts either)
             patientInfo.age = String(ageVal);
           }
-        } catch (e) {
-          // ignore if date parsing fails
-        }
+        } catch (e) {}
       }
       if (profile.referringPhysician) patientInfo.referring_physician = profile.referringPhysician;
       if (activeConsultation.additionalContext) patientInfo.additional_context = activeConsultation.additionalContext;
@@ -475,10 +460,7 @@ export const useAudioRecording = (
         encounter_time: encounterTime,
       };
 
-      // attach template id if selecting a custom template
       if (templateId) requestBody.template_id = templateId;
-
-      // attach patient_info only if we have any meaningful keys
       if (Object.keys(patientInfo).length > 0) {
         requestBody.patient_info = patientInfo;
       }
@@ -496,7 +478,7 @@ export const useAudioRecording = (
 
       updateConsultation(activeConsultationId, {
         notes: data.notes,
-        noteType: rawSelectedType, // preserve the literal selected type in UI state (so template:... remains)
+        noteType: rawSelectedType,
         noteId: activeConsultationId,
         notesCreatedAt: new Date().toISOString(),
         notesUpdatedAt: new Date().toISOString(),
@@ -518,7 +500,6 @@ export const useAudioRecording = (
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
 
-  // Optional dev debug
   const debugTranscriptSegments = useCallback(() => {}, []);
 
   return {
