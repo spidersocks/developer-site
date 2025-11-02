@@ -460,7 +460,6 @@ export const useAudioRecording = (
       const profile = activeConsultation.patientProfile || {};
       const patientInfo = {};
 
-      if (profile.name) patientInfo.name = profile.name;
       if (profile.sex) patientInfo.sex = profile.sex;
       if (profile.dateOfBirth) {
         // calculateAge returns number or null; prompt expects an age string/number
