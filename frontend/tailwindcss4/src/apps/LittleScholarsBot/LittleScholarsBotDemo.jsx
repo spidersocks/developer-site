@@ -1,68 +1,95 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 // The base URL for your FastAPI backend
 const API_BASE_URL = "https://unified-backend.fly.dev";
 
-// Define hex codes for colors to ensure consistency
+// Color palette (Tailwind blue/white)
 const ACTIVE_BG_COLOR = "#1d4ed8"; // Tailwind blue-700
 const DISABLED_BG_COLOR = "#3b82f6"; // Tailwind blue-500
 const TEXT_COLOR = "#ffffff"; // White
 
-function LittleScholarsBotDemo() {
+// Util: Maintain one session id per browser via localStorage
+function getOrCreateSessionId() {
+  let sessionId = localStorage.getItem("ls_bot_session_id");
+  if (!sessionId) {
+    sessionId = "web:" + Math.random().toString(36).substr(2, 8) + Date.now();
+    localStorage.setItem("ls_bot_session_id", sessionId);
+  }
+  return sessionId;
+}
+
+export default function LittleScholarsBotDemo() {
   const [inputMessage, setInputMessage] = useState("");
-  const [response, setResponse] = useState(null);
+  const [chatHistory, setChatHistory] = useState([]); // [{role: "user"/"bot", message: "..."}]
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  // State to store the last successful user message for display
-  const [lastUserMessage, setLastUserMessage] = useState(null);
 
+  const chatWindowRef = useRef(null);
+
+  // Auto-scroll chat to bottom when history changes
+  useEffect(() => {
+    if (chatWindowRef.current) {
+      chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+    }
+  }, [chatHistory, isLoading]);
+
+  // "Reset chat" button (clear history & localStorage)
+  function handleReset() {
+    setChatHistory([]);
+    setError(null);
+    const oldSession = localStorage.getItem("ls_bot_session_id");
+    localStorage.removeItem("ls_bot_session_id");
+    // New session is lazily generated on next send
+  }
+
+  // On send
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const message = inputMessage.trim();
-    if (!message) return;
+    const trimmed = inputMessage.trim();
+    if (!trimmed) return;
 
+    // Add user message immediately to history
+    setChatHistory((prev) => [...prev, { role: "user", message: trimmed }]);
     setIsLoading(true);
-    setResponse(null);
     setError(null);
-    setLastUserMessage(message); // Save the message before clearing input
+
+    const payload = {
+      message: trimmed,
+      session_id: getOrCreateSessionId(),
+      // language omitted – server will auto-detect
+    };
 
     try {
-      const payload = {
-        message: message,
-        // language omitted – server will auto-detect
-      };
-
       const res = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        throw new Error(`HTTP error! Status: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
 
       const data = await res.json();
-      
-      // IMPORTANT: If the backend returns an empty answer (due to strict instructions), 
-      // we should not display a bot bubble, but we should clear the user message 
-      // if the bot successfully processed the request (i.e., didn't error).
+
+      // The bot can respond silently (no output); don't show a bot bubble then
       if (data.answer && data.answer.trim() !== "") {
-        setResponse(data);
-      } else {
-        // If the answer is empty, clear the response state but keep the user message displayed
-        setResponse(null); 
+        setChatHistory((prev) => [
+          ...prev,
+          { role: "bot", message: data.answer },
+        ]);
       }
+      // else: silent, don't add bot message
 
       setInputMessage("");
     } catch (err) {
       console.error("API Error:", err);
       setError("Failed to connect to the backend or process the request.");
-      setLastUserMessage(null); // Clear user message on failure
+      setChatHistory((prev) =>
+        prev.length && prev[prev.length - 1]?.role === "user"
+          ? prev.slice(0, -1)
+          : prev
+      );
     } finally {
-      // This ensures isLoading is set to false, making "The bot is typing..." disappear,
-      // whether a response was received or not (including silent responses).
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
@@ -71,56 +98,76 @@ function LittleScholarsBotDemo() {
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-8">
       <div className="max-w-3xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
-        
         {/* Header Section */}
         <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">
-              Little Scholars KB Chat Demo
-            </h1>
-            <p className="text-gray-600">
-              Ask questions about the content indexed in the Bedrock Knowledge Base.
-            </p>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">
+            Little Scholars KB Chat Demo
+          </h1>
+          <p className="text-gray-600">
+            Ask questions about the content indexed in the Bedrock Knowledge Base.
+          </p>
+        </div>
+
+        {/* Reset/Info */}
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-xs text-gray-400">
+            Session: <span className="select-all">{localStorage.getItem("ls_bot_session_id") || "(none)"}</span>
+          </span>
+          <button
+            className="text-xs bg-gray-200 rounded px-3 py-1 hover:bg-gray-300 ml-2"
+            onClick={handleReset}
+            title="Restart chat session"
+            disabled={isLoading}
+          >
+            Reset Chat
+          </button>
         </div>
 
         {/* Chat History/Display Area */}
-        <div className="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50 border border-gray-200 rounded-lg mb-8">
-            
-            {/* Initial Bot Message (REMOVED) */}
+        <div
+          className="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50 border border-gray-200 rounded-lg mb-8"
+          ref={chatWindowRef}
+          style={{scrollBehavior: "smooth"}}
+        >
+          {chatHistory.length === 0 && (
+            <div className="flex justify-start">
+              <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-green-100 text-gray-800 shadow-md">
+                👋 Hello! Ask me anything about Little Scholars programs, schedules, class size, tuition, or policies.
+              </div>
+            </div>
+          )}
 
-            {/* Display Last User Message */}
-            {lastUserMessage && (
-                <div className="flex justify-end">
-                    <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-br-none bg-blue-500 text-white shadow-md">
-                        {lastUserMessage}
-                    </div>
+          {chatHistory.map((msg, idx) =>
+            msg.role === "user" ? (
+              <div className="flex justify-end" key={idx}>
+                <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-br-none bg-blue-500 text-white shadow-md">
+                  {msg.message}
                 </div>
-            )}
+              </div>
+            ) : (
+              <div className="flex justify-start" key={idx}>
+                <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-green-100 text-gray-800 shadow-md whitespace-pre-wrap">
+                  {msg.message}
+                </div>
+              </div>
+            )
+          )}
 
-            {/* Display Bot Response */}
-            {response && (
-                <div className="flex justify-start">
-                    <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-green-100 text-gray-800 shadow-md whitespace-pre-wrap">
-                        {response.answer}
-                    </div>
-                </div>
-            )}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-gray-200 text-gray-600 italic">
+                The bot is typing...
+              </div>
+            </div>
+          )}
 
-            {/* Display Loading/Error */}
-            {isLoading && (
-                <div className="flex justify-start">
-                    <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-gray-200 text-gray-600 italic">
-                        The bot is typing...
-                    </div>
-                </div>
-            )}
-
-            {error && (
-                <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-                    Error: {error}
-                </div>
-            )}
+          {error && (
+            <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              Error: {error}
+            </div>
+          )}
         </div>
-        
+
         {/* Input Form */}
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -131,6 +178,13 @@ function LittleScholarsBotDemo() {
               placeholder="E.g., 學費幾多？/ What's the tuition?"
               className="flex-grow p-3 border border-gray-300 rounded-full focus:ring-blue-500 focus:border-blue-500"
               disabled={isLoading}
+              autoFocus
+              autoComplete="off"
+              onKeyDown={e => {
+                if (e.key === "Enter" && !e.shiftKey && !isDisabled) {
+                  handleSubmit(e);
+                }
+              }}
             />
             <button
               type="submit"
@@ -151,5 +205,3 @@ function LittleScholarsBotDemo() {
     </div>
   );
 }
-
-export default LittleScholarsBotDemo;
