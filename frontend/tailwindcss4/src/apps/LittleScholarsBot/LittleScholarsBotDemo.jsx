@@ -101,10 +101,10 @@ export default function LittleScholarsBotDemo() {
         {/* Header Section */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Little Scholars KB Chat Demo
+            Little Scholars Bot Demo
           </h1>
           <p className="text-gray-600">
-            Ask questions about the content indexed in the Bedrock Knowledge Base.
+            Ask questions about content indexed in the knowledge base.
           </p>
         </div>
 
@@ -132,7 +132,7 @@ export default function LittleScholarsBotDemo() {
           {chatHistory.length === 0 && (
             <div className="flex justify-start">
               <div className="max-w-xs md:max-w-md p-3 rounded-xl rounded-tl-none bg-green-100 text-gray-800 shadow-md">
-                👋 Hello! Ask me anything about Little Scholars programs, schedules, class size, tuition, or policies.
+                👋 Hello this is the Little Scholars bot demo! Ask me anything.
               </div>
             </div>
           )}
