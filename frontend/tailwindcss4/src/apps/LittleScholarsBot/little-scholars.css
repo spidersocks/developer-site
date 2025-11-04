@@ -1,0 +1,312 @@
+/* ========== Root layout + variables ========== */
+:root{
+  /* Dynamic viewport fallback set by JS (--vh) */
+  --vh: 1vh;
+
+  /* Container system (shared by header and chat) */
+  --container-max: 1200px;   /* change to your taste */
+  --container-pad: 16px;     /* page side gutters */
+
+  /* Colors */
+  --wa-bg: #efeae2;
+  --panel: #F0F2F5;
+  --white: #fff;
+  --ink: #111827;
+  --muted: #9CA3AF;
+  --green: #25D366;
+
+  /* Radii/shadows */
+  --radius-pill: 9999px;
+  --radius-20: 18px;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.06);
+  --shadow-2: 0 6px 14px rgba(0,0,0,.12);
+}
+
+html, body, #root { height: 100%; }
+
+.ls-root{
+  min-height: calc(var(--vh,1vh) * 100);
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto; /* header / chat / input */
+  background: var(--wa-bg);
+}
+
+/* ========== Header ========== */
+.ls-header{
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #128C7E;
+  color: #fff;
+  padding-top: max(8px, env(safe-area-inset-top));
+  box-shadow: 0 1px 0 rgba(0,0,0,.08);
+}
+
+/* width-limited, centered; same as chat container */
+.ls-header-inner{
+  display: grid;
+  grid-template-columns: 1fr auto; /* left block grows; Reset on right */
+  align-items: center;
+  gap: 12px;
+
+  /* REMOVED: max-width and margin-inline to allow header content to span full width */
+  /* max-width: var(--container-max); */
+  /* margin-inline: auto; */
+  padding-inline: max(var(--container-pad), env(safe-area-inset-left)) max(var(--container-pad), env(safe-area-inset-right));
+  padding-block: 10px;
+}
+
+/* Left chunk: avatar + text; stays left aligned */
+.ls-header-left{
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: start;
+  gap: 10px;
+}
+
+/* Fluid avatar size */
+.ls-avatar{
+  inline-size: clamp(38px, 6vw, 64px);
+  block-size: clamp(38px, 6vw, 64px);
+  border-radius: var(--radius-pill);
+  background: rgba(255,255,255,.2);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Title block */
+.ls-title-wrap{ display: grid; gap: 2px; }
+
+/* Fluid title: slightly larger on phones, bigger on desktop */
+.ls-title{
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.2px;
+  font-size: clamp(18px, 2.4vw, 32px);
+}
+
+/* Subline scales subtly */
+.ls-session{
+  color: rgba(255,255,255,.9);
+  font-size: clamp(11px, 1.2vw, 14px);
+}
+
+/* Reset button pinned to right column */
+.ls-reset{
+  justify-self: end;
+  font-size: clamp(13px, 1.2vw, 15px);
+  color: #0b3b33;
+  background: #fff;
+  border-radius: var(--radius-pill);
+  padding: 8px 14px;
+  border: 0;
+  box-shadow: 0 1px 0 rgba(0,0,0,.06);
+}
+.ls-reset:disabled{ opacity: .6; }
+
+/* ========== Chat area (scrolling middle) ========== */
+.ls-chat{
+  min-height: 0; /* allow child to shrink in grid */
+  overflow-y: auto;
+  background: var(--panel);
+
+  /* REMOVED: max-width and margin-inline to allow chat area to span full width */
+  /* max-width: var(--container-max); */
+  /* margin-inline: auto; */
+  padding-inline: max(var(--container-pad), env(safe-area-inset-left)) max(var(--container-pad), env(safe-area-inset-right));
+  padding-block: 12px;
+}
+
+.ls-stack{ display: grid; gap: 8px; }
+.ls-row-start{ display: flex; justify-content: flex-start; }
+.ls-row-end{ display: flex; justify-content: flex-end; }
+
+/* Bubbles */
+.ls-bubble-bot,
+.ls-bubble-user{
+  position: relative;
+  max-width: min(88vw, 720px); /* roomy but capped on desktop */
+  padding: 8px 10px;
+  border-radius: var(--radius-20);
+  line-height: 1.45;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  color: var(--ink);
+  font-size: 15px;
+  background: var(--white);
+}
+
+.ls-bubble-bot{ border-top-left-radius: 6px; }
+.ls-bubble-user{ border-top-right-radius: 6px; background: #d9fdd3; }
+
+.ls-content{
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ls-meta{ display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.ls-time{ display: block; font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px; }
+
+/* Bubble tails */
+.ls-tail-bot,
+.ls-tail-user{
+  position: absolute;
+  bottom: 0;
+  inline-size: 0; block-size: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  transform: translateY(-2px);
+}
+.ls-tail-bot{ left: -6px; border-right: 12px solid var(--white); }
+.ls-tail-user{ right: -6px; border-left: 12px solid #d9fdd3; }
+
+/* ========== Input bar (sticky bottom) ========== */
+.ls-inputbar{
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+  background: var(--panel);
+  border-top: 1px solid rgba(0,0,0,.05);
+
+  padding: 8px
+    max(var(--container-pad), env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(var(--container-pad), env(safe-area-inset-left));
+}
+
+/* Input wrapper (neutral; no green glow) */
+.ls-inputwrap{
+  background: var(--white);
+  border-radius: 18px;
+  border: 1px solid rgba(0,0,0,.08);
+  box-shadow: var(--shadow-1);
+  padding: 6px 10px;
+}
+
+/* Enforce neutral style even when focused */
+.ls-input-neutral,
+.ls-input-neutral:focus-within{
+  box-shadow: var(--shadow-1) !important;
+  border-color: rgba(0,0,0,.08) !important;
+}
+
+/* Textarea: no colored highlight; subtle neutral focus for accessibility */
+.ls-textarea{
+  width: 100%;
+  max-height: 38vh;
+  min-height: 24px;
+  resize: none;
+  outline: none;
+  border: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  background: transparent;
+  color: var(--ink);
+}
+.ls-textarea:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,0,0,.08);
+  border-radius: 10px;
+}
+
+/* Send button */
+.ls-send{
+  inline-size: 56px;
+  block-size: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  border: 0;
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+
+/* ========== Responsive polish ========== */
+@media (min-width: 640px){
+  .ls-chat{ padding-block: 16px 18px; }
+  .ls-bubble-bot, .ls-bubble-user{ padding: 10px 12px; max-width: min(70%, 780px); }
+}
+
+/* Optionally widen container on very large screens */
+@media (min-width: 1280px){
+  :root{ --container-max: 1360px; }
+}
+
+/* ========== Scrollbar ========== */
+.custom-scroll::-webkit-scrollbar{ width: 10px; }
+.custom-scroll::-webkit-scrollbar-thumb{
+  background-color: rgba(0,0,0,.15);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.custom-scroll::-webkit-scrollbar-track{ background-color: transparent; }
+.custom-scroll{ scrollbar-width: thin; scrollbar-color: rgba(0,0,0,.25) transparent; }
+
+/* ========== Icon color (send) ========== */
+button > svg.force-wa-green,
+button svg.force-wa-green path{
+  color: var(--green) !important;
+  fill: var(--green) !important;
+}
+
+/* ========== Button focus/hover cleanup ========== */
+.send-btn, .send-btn *, .send-btn:before, .send-btn:after{
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  text-decoration: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.send-btn, .send-btn:hover, .send-btn:active, .send-btn:focus{
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+}
+.send-btn:hover, .send-btn:focus, .send-btn:active{
+  border: none !important; color: inherit !important;
+}
+.send-btn:focus-visible{
+  outline: none !important;
+  box-shadow: 0 0 0 6px rgba(37,211,102,.12) !important; /* soft, unobtrusive */
+}
+.send-btn:not(:disabled):hover{
+  transform: translateZ(0) scale(1.05);
+  box-shadow: var(--shadow-2) !important;
+}
+.send-btn ::selection{ background: transparent !important; color: inherit !important; }
+
+/* ========== Neutralize purple outlines globally for textarea ========== */
+.no-purple-focus,
+.no-purple-focus:focus,
+.no-purple-focus:hover,
+.no-purple-focus:active{
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* ========== Typing indicator ========== */
+.ls-typing{ display: inline-flex; gap: 4px; align-items: center; color: #6B7280; }
+.ls-typing .dot{
+  inline-size: 6px; block-size: 6px;
+  border-radius: var(--radius-pill);
+  background: #9CA3AF;
+  animation: ls-bounce 1s infinite ease-in-out;
+}
+.ls-typing .dot:nth-child(1){ animation-delay: -.2s; }
+.ls-typing .dot:nth-child(2){ animation-delay: -.1s; }
+@keyframes ls-bounce{
+  0%, 80%, 100%{ transform: translateY(0); opacity: .6; }
+  40%{ transform: translateY(-3px); opacity: 1; }
+}
