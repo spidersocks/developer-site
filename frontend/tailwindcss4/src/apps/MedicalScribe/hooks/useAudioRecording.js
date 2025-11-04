@@ -233,10 +233,8 @@ export const useAudioRecording = (
               const transcriptText = alt.Transcript;
               if (!transcriptText || !transcriptText.trim()) {
                 // Ignore empty finals to avoid flashing blank segments and 422s
-                if (!result.IsPartial) {
-                  return;
-                }
-    }
+                if (!result.IsPartial) return;
+              }
               const firstWord = alt.Items?.find((i) => i.Type === 'pronunciation');
               const currentSpeaker = firstWord ? firstWord.Speaker : null;
 
@@ -264,10 +262,19 @@ export const useAudioRecording = (
 
               newSegments.set(uiSegment.id, uiSegment);
 
+              // NEW: prefer server stamp for detected language, then SDK field, then UI fallback
+              const detectedLangFromServer =
+                data._detected_language ||
+                result.LanguageCode ||
+                (data.Transcript?.Results?.[0]?.LanguageCode ?? null);
+
               segmentsToPersist.push({
                 ui: uiSegment,
                 sequenceNumber: baseIndex + idx,
-                detectedLanguage: result.LanguageCode || activeConsultation.language || "en-US"
+                detectedLanguage:
+                  detectedLangFromServer ||
+                  activeConsultation.language ||
+                  "en-US",
               });
 
               interimTranscript = '';
