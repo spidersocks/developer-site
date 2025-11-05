@@ -192,7 +192,7 @@ export const useAudioRecording = (
     });
 
     try {
-      const url = `${BACKEND_WS_URL}/client-transcribe-gcp-v2?languages=yue-Hant-HK,cmn-Hant-TW,en-US`;
+      const url = `${BACKEND_WS_URL}?languages=yue-Hant-HK,cmn-Hant-TW,en-US`;
       console.info("[useAudioRecording] Opening WebSocket:", url);
 
       const ws = new WebSocket(url);
