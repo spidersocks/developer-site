@@ -192,10 +192,9 @@ export const useAudioRecording = (
     });
 
     try {
-      const url = `${BACKEND_WS_URL}?languages=yue-Hant-HK,cmn-Hant-TW,en-US`;
-      console.info("[useAudioRecording] Opening WebSocket:", url);
-
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(
+        `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
+      );
       websocketRef.current = ws;
 
       ws.onopen = () => {
@@ -207,9 +206,6 @@ export const useAudioRecording = (
       ws.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data?._engine) {
-            console.info("[useAudioRecording] Engine:", data._engine, "Detected:", data._detected_language || "(n/a)");
-          }
           const results = data.Transcript?.Results ?? [];
           if (!results.length) return;
 
@@ -230,10 +226,6 @@ export const useAudioRecording = (
               if (!alt) return;
 
               const transcriptText = alt.Transcript;
-              if (!transcriptText || !transcriptText.trim()) {
-                // Ignore empty finals to avoid flashing blank segments and 422s
-                if (!result.IsPartial) return;
-              }
               const firstWord = alt.Items?.find((i) => i.Type === 'pronunciation');
               const currentSpeaker = firstWord ? firstWord.Speaker : null;
 
@@ -243,15 +235,8 @@ export const useAudioRecording = (
                 return;
               }
 
-              // ---- Unique ID logic ----
-              let segmentId = result.ResultId;
-              if (!segmentId || newSegments.has(segmentId)) {
-                segmentId = `seg-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-              }
-              // ---- End unique ID logic ----
-
               const uiSegment = prepareSegmentForUi({
-                id: segmentId,
+                id: result.ResultId,
                 speaker: currentSpeaker,
                 text: transcriptText,
                 entities: Array.isArray(data.ComprehendEntities) ? data.ComprehendEntities : [],
@@ -261,20 +246,10 @@ export const useAudioRecording = (
 
               newSegments.set(uiSegment.id, uiSegment);
 
-              // NEW: prefer server stamp for detected language, then SDK field, then UI fallback
-              // CORRECTED: The google-normalized payload puts LanguageCode on the result object itself.
-              const detectedLangFromServer =
-                data._detected_language ||
-                result.LanguageCode ||
-                (data.Transcript?.Results?.[0]?.LanguageCode ?? null);
-
               segmentsToPersist.push({
                 ui: uiSegment,
                 sequenceNumber: baseIndex + idx,
-                detectedLanguage:
-                  detectedLangFromServer ||
-                  activeConsultation.language ||
-                  "en-US",
+                detectedLanguage: result.LanguageCode || activeConsultation.language || "en-US"
               });
 
               interimTranscript = '';
@@ -477,6 +452,7 @@ export const useAudioRecording = (
       const profile = activeConsultation.patientProfile || {};
       const patientInfo = {};
 
+      if (profile.name) patientInfo.name = profile.name;
       if (profile.sex) patientInfo.sex = profile.sex;
       if (profile.dateOfBirth) {
         // calculateAge returns number or null; prompt expects an age string/number

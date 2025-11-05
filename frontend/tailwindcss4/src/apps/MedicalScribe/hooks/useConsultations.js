@@ -81,14 +81,6 @@ const deserializePatientFromStorage = (raw, ownerUserId) => {
   };
 };
 
-const mergeSegmentMaps = (existingMap, incomingMap) => {
-  const out = new Map(existingMap ? Array.from(existingMap.entries()) : []);
-  for (const [id, seg] of incomingMap.entries()) {
-    if (!out.has(id)) out.set(id, seg);
-  }
-  return out;
-};
-
 /**
  * Map API segments -> UI shape and return as Map
  */
@@ -258,20 +250,13 @@ export const useConsultations = (ownerUserId = null) => {
                 includeEntities: false,
               });
               if (res.ok) {
-                const incoming = mapSegmentsToUiMap(consultationId, res.data);
+                const segmentMap = mapSegmentsToUiMap(consultationId, res.data);
                 setAppState((prev) => {
-                  const curr = prev.consultations.find((c) => c.id === consultationId);
-                  const currMap = curr?.transcriptSegments || new Map();
-                  const hasLocalNow = currMap.size > 0;
-
-                  // Only merge if we already have local (live) segments
-                  const nextMap = hasLocalNow ? mergeSegmentMaps(currMap, incoming) : incoming;
-
                   const updated = prev.consultations.map((c) =>
                     c.id === consultationId
                       ? {
                           ...c,
-                          transcriptSegments: nextMap,
+                          transcriptSegments: segmentMap,
                           transcriptLoaded: true,
                           transcriptLoading: false,
                         }
@@ -340,15 +325,11 @@ export const useConsultations = (ownerUserId = null) => {
                 includeEntities: true,
               });
               if (res.ok) {
-                const incoming = mapSegmentsToUiMap(consultationId, res.data);
+                const segmentMap = mapSegmentsToUiMap(consultationId, res.data);
                 setAppState((prev) => {
-                  const curr = prev.consultations.find((c) => c.id === consultationId);
-                  const currMap = curr?.transcriptSegments || new Map();
-                  // Always merge to avoid overwriting live segments
-                  const nextMap = mergeSegmentMaps(currMap, incoming);
                   const updated = prev.consultations.map((c) =>
                     c.id === consultationId
-                      ? { ...c, transcriptSegments: nextMap }
+                      ? { ...c, transcriptSegments: segmentMap }
                       : c
                   );
                   return { ...prev, consultations: updated };
