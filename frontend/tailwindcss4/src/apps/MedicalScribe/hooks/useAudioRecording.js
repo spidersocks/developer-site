@@ -262,6 +262,7 @@ export const useAudioRecording = (
               newSegments.set(uiSegment.id, uiSegment);
 
               // NEW: prefer server stamp for detected language, then SDK field, then UI fallback
+              // CORRECTED: The google-normalized payload puts LanguageCode on the result object itself.
               const detectedLangFromServer =
                 data._detected_language ||
                 result.LanguageCode ||
