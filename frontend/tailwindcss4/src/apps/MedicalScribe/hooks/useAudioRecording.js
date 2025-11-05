@@ -192,8 +192,7 @@ export const useAudioRecording = (
     });
 
     try {
-      // ... inside startSession(), before new WebSocket(...)
-      const url = `${BACKEND_WS_URL}?language_code=auto`;
+      const url = `${BACKEND_WS_URL}/client-transcribe-gcp-v2?languages=yue-Hant-HK,cmn-Hant-TW,en-US`;
       console.info("[useAudioRecording] Opening WebSocket:", url);
 
       const ws = new WebSocket(url);
