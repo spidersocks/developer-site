@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { TranscriptSegment } from "./TranscriptSegment";
 import { getFriendlySpeakerLabel } from "../../utils/helpers";
 import { LoadingAnimation } from "../shared/LoadingAnimation";
@@ -23,6 +23,44 @@ export const TranscriptPanel = ({
   // Show loader only when truly loading and not during an active/connecting session
   const shouldShowLoader =
     activeConsultation.transcriptLoading && !isActiveSession;
+
+  // --- Auto speaker role heuristic: first speaker is doctor, rest patient ---
+  useEffect(() => {
+    if (
+      !activeConsultation || 
+      !activeConsultation.transcriptSegments || 
+      activeConsultation.transcriptSegments.size === 0
+    ) {
+      return;
+    }
+
+    // Get all unique speakers from segments
+    const speakers = Array.from(activeConsultation.transcriptSegments.values())
+      .map(seg => seg.speaker)
+      .filter(Boolean);
+
+    const uniqueSpeakers = Array.from(new Set(speakers));
+    const currentRoles = activeConsultation.speakerRoles || {};
+
+    // Check if all unique speakers have a role already set
+    // Only run the heuristic if none are set
+    const anyRoleAssigned = uniqueSpeakers.some(s => !!currentRoles[s]);
+
+    if (!anyRoleAssigned && uniqueSpeakers.length > 0) {
+      // First speaker (ordered by first appearance) is doctor, rest are patient
+      const newRoles = {};
+      uniqueSpeakers.forEach((speaker, idx) => {
+        newRoles[speaker] = idx === 0 ? 'Clinician' : 'Patient';
+      });
+      updateConsultation(activeConsultationId, { speakerRoles: newRoles });
+    }
+  }, [
+    activeConsultation?.transcriptSegments,
+    activeConsultation?.speakerRoles,
+    activeConsultationId,
+    updateConsultation
+  ]);
+  // --- End heuristic ---
 
   return (
     <>
