@@ -192,8 +192,17 @@ export const useAudioRecording = (
     });
 
     try {
-      // ... inside startSession(), before new WebSocket(...)
-      const url = `${BACKEND_WS_URL}?language_code=auto`;
+      let urlBase = BACKEND_WS_URL;
+      const hasQuery = urlBase.includes("?");
+      if (urlBase.includes("client-transcribe-gcp-v2")) {
+        // v2 ignores language_code; pass languages list once
+        const langs = "en-US,yue-Hant-HK,zh-TW";
+        urlBase = `${urlBase}${hasQuery ? "&" : "?"}languages=${encodeURIComponent(langs)}`;
+      } else {
+        // v1/legacy paths expect language_code
+        urlBase = `${urlBase}${hasQuery ? "&" : "?"}language_code=auto`;
+      }
+      const url = urlBase;
       console.info("[useAudioRecording] Opening WebSocket:", url);
 
       const ws = new WebSocket(url);
