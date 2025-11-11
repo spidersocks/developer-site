@@ -193,7 +193,8 @@ export const useAudioRecording = (
 
     try {
       const ws = new WebSocket(
-        `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
+        `ws://localhost:8000/api/v1/transcribe/alibaba?language_code=${encodeURIComponent(activeConsultation.language)}`
+        // `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
       );
       websocketRef.current = ws;
 
