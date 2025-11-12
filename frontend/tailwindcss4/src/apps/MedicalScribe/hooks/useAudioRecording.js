@@ -194,7 +194,7 @@ export const useAudioRecording = (
     try {
       const ws = new WebSocket(
         `ws://localhost:8000/transcribe/alibaba`
-        // `${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
+        //`${BACKEND_WS_URL}?language_code=${encodeURIComponent(activeConsultation.language)}`
       );
       websocketRef.current = ws;
 
@@ -209,6 +209,15 @@ export const useAudioRecording = (
           const data = JSON.parse(event.data);
           const results = data.Transcript?.Results ?? [];
           if (!results.length) return;
+
+          console.log(
+            '[DEBUG WS] ResultIds:',
+            (data.Transcript?.Results ?? []).map(r => r.ResultId),
+            'IsPartial:',
+            (data.Transcript?.Results ?? []).map(r => r.IsPartial),
+            'Debug:',
+            data._debug || null
+          );
 
           const segmentsToPersist = [];
 
