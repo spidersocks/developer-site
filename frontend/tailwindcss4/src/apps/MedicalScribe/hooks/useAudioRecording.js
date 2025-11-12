@@ -40,7 +40,8 @@ export const useAudioRecording = (
         original_text: segment.text ?? "",
         translated_text: segment.translatedText ?? null,
         detected_language: detectedLanguage ?? null,
-        // Omit time fields and entities during debug to simplify
+        start_time_ms: segment.startTimeMs ?? null,
+        end_time_ms: segment.endTimeMs ?? null,
       };
 
       console.info("[useAudioRecording] Persisting segment payload", {
@@ -238,6 +239,8 @@ export const useAudioRecording = (
               const transcriptText = alt.Transcript;
               const firstWord = alt.Items?.find((i) => i.Type === 'pronunciation');
               const currentSpeaker = firstWord ? firstWord.Speaker : null;
+              const startTimeMs = result.StartTimeMs ?? null;
+              const endTimeMs = result.EndTimeMs ?? null;
 
               if (result.IsPartial) {
                 interimTranscript = transcriptText;
@@ -252,6 +255,8 @@ export const useAudioRecording = (
                 entities: Array.isArray(data.ComprehendEntities) ? data.ComprehendEntities : [],
                 translatedText: data.TranslatedText || null,
                 displayText: data.DisplayText || transcriptText,
+                startTimeMs,
+                endTimeMs,
               });
 
               newSegments.set(uiSegment.id, uiSegment);
