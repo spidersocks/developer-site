@@ -336,101 +336,7 @@ export const useAudioRecording = (
     updateConsultation(activeConsultationId, { sessionState: 'recording' });
   }, [activeConsultationId, updateConsultation]);
 
-  const stopSession = useCallback(async (closeSocket = true) => {
-    if (!activeConsultation) return;
-    if (activeConsultation.sessionState === 'stopped' || activeConsultation.sessionState === 'idle') {
-      return;
-    }
-
-    updateConsultation(activeConsultationId, { sessionState: 'stopped' });
-
-    if (microphoneStreamRef.current) {
-      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
-      microphoneStreamRef.current = null;
-    }
-    if (audioContextRef.current?.state !== 'closed') {
-      try { await audioContextRef.current?.close(); } catch {}
-    }
-
-    let finalized = false;
-
-    if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
-      try {
-        websocketRef.current.send(new ArrayBuffer(0));
-        await new Promise((r) => setTimeout(r, 700));
-        finalized = !activeConsultation.interimTranscript;
-      } catch {}
-      try { websocketRef.current?.close(); websocketRef.current = null; } catch {}
-    }
-
-    if (!finalized) {
-      await finalizeInterimSegment();
-    }
-
-    try {
-      // If there's any transcript segments, trigger note generation right away!
-      if (activeConsultation.transcriptSegments.size > 0) {
-        await handleGenerateNote();
-      }
-    } catch (err) {
-      console.error("[useAudioRecording] Note generation failed (patch order):", err);
-    }
-
-    // Safety net: if we persisted 0 (or suspiciously few) segments during the session, backfill all
-    try {
-      const localCount = activeConsultation.transcriptSegments.size;
-      console.info("[useAudioRecording] Stop session: persistedCount vs localCount", {
-        persistedCount: persistedCountRef.current,
-        localCount
-      });
-
-      if (localCount > 0) {
-        const res = await apiClient.listTranscriptSegments({
-          token: undefined,
-          consultationId: activeConsultationId,
-          signal: undefined
-        });
-        const serverCount = res.ok && Array.isArray(res.data) ? res.data.length : 0;
-        console.info("[useAudioRecording] Server segment count at stop", {
-          consultationId: activeConsultationId,
-          serverCount
-        });
-
-        if (serverCount < localCount) {
-          console.warn("[useAudioRecording] Detected missing server segments. Backfilling…", {
-            consultationId: activeConsultationId,
-            serverCount,
-            localCount
-          });
-          await persistAllSegments();
-        }
-      }
-    } catch (err) {
-      console.error("[useAudioRecording] Backfill check failed:", err);
-    }
-
-    // Fire-and-forget enrichment cache to speed up subsequent loads
-    try {
-      console.info("[useAudioRecording] Kicking off enrichment cache for consultation", {
-        consultationId: activeConsultationId
-      });
-      apiClient
-        .enrichTranscriptSegments({ consultationId: activeConsultationId, force: false })
-        .then((r) => {
-          console.info("[useAudioRecording] Enrichment cache request completed", {
-            consultationId: activeConsultationId,
-            status: r?.status,
-            ok: r?.ok
-          });
-        })
-        .catch((e) => {
-          console.warn("[useAudioRecording] Enrichment cache request failed", e);
-        });
-    } catch (e) {
-      console.warn("[useAudioRecording] Failed to start enrichment caching", e);
-    }
-  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments]);
-
+  // ----------- FIX: Move handleGenerateNote above stopSession -----------
   const handleGenerateNote = useCallback(async (noteTypeOverride) => {
     if (!activeConsultation) return;
     const rawSelectedType = noteTypeOverride || activeConsultation.noteType;
@@ -541,6 +447,102 @@ export const useAudioRecording = (
       }
     }
   }, [activeConsultation, activeConsultationId, updateConsultation, finalizeConsultationTimestamp]);
+  // ----------- END FIXED POSITION -----------
+
+  const stopSession = useCallback(async (closeSocket = true) => {
+    if (!activeConsultation) return;
+    if (activeConsultation.sessionState === 'stopped' || activeConsultation.sessionState === 'idle') {
+      return;
+    }
+
+    updateConsultation(activeConsultationId, { sessionState: 'stopped' });
+
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
+      microphoneStreamRef.current = null;
+    }
+    if (audioContextRef.current?.state !== 'closed') {
+      try { await audioContextRef.current?.close(); } catch {}
+    }
+
+    let finalized = false;
+
+    if (closeSocket && websocketRef.current?.readyState === WebSocket.OPEN) {
+      try {
+        websocketRef.current.send(new ArrayBuffer(0));
+        await new Promise((r) => setTimeout(r, 700));
+        finalized = !activeConsultation.interimTranscript;
+      } catch {}
+      try { websocketRef.current?.close(); websocketRef.current = null; } catch {}
+    }
+
+    if (!finalized) {
+      await finalizeInterimSegment();
+    }
+
+    // Generate note ONLY ONCE, right after segments are finalized
+    try {
+      if (activeConsultation.transcriptSegments.size > 0) {
+        await handleGenerateNote();
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Note generation failed (patch order):", err);
+    }
+
+    // Safety net: if we persisted 0 (or suspiciously few) segments during the session, backfill all
+    try {
+      const localCount = activeConsultation.transcriptSegments.size;
+      console.info("[useAudioRecording] Stop session: persistedCount vs localCount", {
+        persistedCount: persistedCountRef.current,
+        localCount
+      });
+
+      if (localCount > 0) {
+        const res = await apiClient.listTranscriptSegments({
+          token: undefined,
+          consultationId: activeConsultationId,
+          signal: undefined
+        });
+        const serverCount = res.ok && Array.isArray(res.data) ? res.data.length : 0;
+        console.info("[useAudioRecording] Server segment count at stop", {
+          consultationId: activeConsultationId,
+          serverCount
+        });
+
+        if (serverCount < localCount) {
+          console.warn("[useAudioRecording] Detected missing server segments. Backfilling…", {
+            consultationId: activeConsultationId,
+            serverCount,
+            localCount
+          });
+          await persistAllSegments();
+        }
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Backfill check failed:", err);
+    }
+
+    // Fire-and-forget enrichment cache to speed up subsequent loads
+    try {
+      console.info("[useAudioRecording] Kicking off enrichment cache for consultation", {
+        consultationId: activeConsultationId
+      });
+      apiClient
+        .enrichTranscriptSegments({ consultationId: activeConsultationId, force: false })
+        .then((r) => {
+          console.info("[useAudioRecording] Enrichment cache request completed", {
+            consultationId: activeConsultationId,
+            status: r?.status,
+            ok: r?.ok
+          });
+        })
+        .catch((e) => {
+          console.warn("[useAudioRecording] Enrichment cache request failed", e);
+        });
+    } catch (e) {
+      console.warn("[useAudioRecording] Failed to start enrichment caching", e);
+    }
+  }, [activeConsultation, activeConsultationId, updateConsultation, finalizeInterimSegment, persistAllSegments, handleGenerateNote]);
 
   // Optional dev debug
   const debugTranscriptSegments = useCallback(() => {}, []);
