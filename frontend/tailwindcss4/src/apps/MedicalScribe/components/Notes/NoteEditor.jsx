@@ -990,6 +990,22 @@ export const NoteEditor = ({
           if (!items || (Array.isArray(items) && items.length === 0)) {
             return null;
           }
+          
+          // FIX: Check if an object-type section (like Objective) contains only "None" values.
+          const isObjectNone =
+            typeof items === "object" &&
+            !Array.isArray(items) &&
+            items !== null &&
+            Object.values(items).every((v) => v === "None");
+
+          if (isObjectNone) {
+            return (
+              <div key={section}>
+                <h3>{section}</h3>
+                <p className={styles.noneText}>None</p>
+              </div>
+            );
+          }
 
           return (
             <div key={section}>
