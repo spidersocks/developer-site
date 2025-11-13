@@ -243,9 +243,6 @@ export default function MedicalScribeApp() {
   // Prioritize note generation as soon as session stops
   const handleStopAndGenerate = async () => {
     await stopSession();
-    if (activeConsultation && activeConsultation.transcriptSegments.size > 0) {
-      await handleGenerateNote();
-    }
     if (ENABLE_BACKGROUND_SYNC) {
       try {
         await syncService.flushAll("post-generate");
