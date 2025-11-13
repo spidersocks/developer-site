@@ -367,6 +367,15 @@ export const useAudioRecording = (
       await finalizeInterimSegment();
     }
 
+    try {
+      // If there's any transcript segments, trigger note generation right away!
+      if (activeConsultation.transcriptSegments.size > 0) {
+        await handleGenerateNote();
+      }
+    } catch (err) {
+      console.error("[useAudioRecording] Note generation failed (patch order):", err);
+    }
+
     // Safety net: if we persisted 0 (or suspiciously few) segments during the session, backfill all
     try {
       const localCount = activeConsultation.transcriptSegments.size;

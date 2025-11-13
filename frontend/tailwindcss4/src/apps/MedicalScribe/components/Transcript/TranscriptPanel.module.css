@@ -2,11 +2,13 @@
 .inTranscriptControls {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: center;  /* This already centers horizontally */
+  justify-content: center;  /* Add this to center vertically */
   gap: 1rem;
   padding: 2rem 1rem;
   border-bottom: 1px solid var(--border-color);
   background-color: var(--bg-panel);
+  min-height: 200px;  /* Add minimum height for better centering */
 }
 
 /* Language selector */
