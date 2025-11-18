@@ -51,9 +51,8 @@ export default function Resume() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Summary</h2>
           <p>
-            Applied Data Scientist (MADS @ Michigan) with end‑to‑end ML
-            experience and product mindset. Strengths in feature engineering,
-            interactive applications, and LLM‑based pipelines.
+            Applied Data Scientist (MADS @ Michigan) with end‑to‑end ML experience and a product mindset.
+            Strengths in feature engineering, interactive apps, and LLM pipelines for real‑world use.
           </p>
         </section>
 
@@ -72,10 +71,10 @@ export default function Resume() {
                 StethoscribeAI — Real‑time Medical Scribe:
               </a>
             </strong>{" "}
-            Live transcription of clinician–patient conversations, medical entity extraction, and structured
-            clinical notes; supports English/Cantonese/Mandarin.{" "}
+            Live transcription of clinician–patient conversations, medical entity extraction, and structured notes;
+            supports English, Cantonese, and Mandarin.{" "}
             <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
-              Stack: React, FastAPI, WebSockets, AWS Transcribe, AWS Translate, Comprehend Medical, AWS Bedrock (Mistral 70B).
+              Stack: React, FastAPI, WebSockets, AWS Transcribe/Translate, Comprehend Medical, AWS Bedrock (Mistral 70B).
             </span>
           </p>
 
@@ -90,8 +89,8 @@ export default function Resume() {
                 News vs. Podcasts Analysis:
               </a>
             </strong>{" "}
-            BERTopic topic modeling, LLM‑based stance (Mistral, CoS), and sentiment (VADER/TextBlob) over 25K+ articles/transcripts,
-            with interactive dashboards comparing podcasts vs public news.{" "}
+            BERTopic topic modeling, LLM‑based stance (Mistral, CoS), and sentiment (VADER/TextBlob) over 25K+ articles/transcripts,
+            with interactive dashboards comparing podcasts and public news.{" "}
             <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
               Stack: Python, BERTopic, sentence‑transformers, FastAPI, Plotly/Recharts.
             </span>
@@ -108,8 +107,8 @@ export default function Resume() {
                 800m Performance Calculator:
               </a>
             </strong>{" "}
-            FastAPI + React app using linear regression to predict race times from training splits; 84% of test predictions
-            within ±1s on test data; widely used by Hong Kong athletes.{" "}
+            FastAPI + React app using linear regression to predict race times from training splits;
+            84% predictions within ±1s on test data; widely used by Hong Kong athletes.{" "}
             <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
               Stack: FastAPI, React, scikit‑learn.
             </span>
@@ -126,33 +125,22 @@ export default function Resume() {
                 VGC Team Recommender:
               </a>
             </strong>{" "}
-            Multi‑label XGBoost for teammate recommendation from a restricted core; example‑based F1 0.78 (+23% vs baseline).{" "}
+            Multi‑label XGBoost for teammate recommendation from a restricted core;
+            example‑based F1 0.78 (+23% vs baseline).{" "}
             <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
               Stack: XGBoost, scikit‑learn, FastAPI, Joblib.
             </span>
           </p>
-
-          <p>
-            <strong>Enron Chatbot:</strong> LangChain/Streamlit system integrating Enron
-            emails and stock data for cited, conversational analysis.{" "}
-            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
-              Stack: LangChain, RAG, Streamlit, OpenAI Agents SDK.
-            </span>
-          </p>
         </section>
 
-        {/* Very concise Technical Skills */}
+        {/* Technical Skills */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Technical Skills</h2>
-
           <p>
-            <strong>Machine Learning:</strong> XGBoost, Random Forest; clustering, PCA; evaluation (F1 micro/macro, ROC‑AUC).{" "}
-            <strong>NLP:</strong> BERTopic; transformers (sentence‑transformers, Hugging Face); LLM prompting/pipelines.{" "}
-            <strong>Data &amp; Backend:</strong> Python (pandas, NumPy, scikit‑learn), FastAPI; WebSockets.{" "}
-            <strong>Frontend &amp; Vis:</strong> React, Plotly, D3.js, Altair.{" "}
-            <strong>Databases:</strong> SQL (PostgreSQL, SQLite).{" "}
-            <strong>Programming Languages:</strong> Python, Java, JavaScript/TypeScript.{" "}
-            <strong>Languages:</strong> English (Native), Mandarin (Advanced), Cantonese (Limited Working).
+            <strong>ML:</strong> XGBoost, Random Forest; clustering, PCA, F1/AUC.{" "}
+            <strong>NLP:</strong> Transformers, BERTopic, LLM pipelines.{" "}
+            <strong>Data & Apps:</strong> Python, FastAPI, React, Plotly, SQL, WebSockets.{" "}
+            <strong>Languages:</strong> English (Native), Mandarin (Advanced), Cantonese (Limited Working).
           </p>
         </section>
 
@@ -163,14 +151,15 @@ export default function Resume() {
           <div className={styles.entry}>
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
-                CS & Mathematics Tutor
-                <span className={styles.company}> · All Round Education Academy</span>
+                Freelance LLM Engineer
+                <span className={styles.company}> · Little Scholars Creative Workshop</span>
               </h3>
-              <p className={styles.inlineDates}>Sep 2022 — Jul 2023</p>
+              <p className={styles.inlineDates}>Oct 2025 — Nov 2025</p>
             </div>
             <ul>
               <li>
-                Mentored IB/A‑Level students on Python/Java projects; taught advanced math and OOP.
+                Built and deployed WhatsApp RAG assistant using AWS Bedrock (Llama 3), FastAPI & WhatsApp Cloud API; 
+                integrated DynamoDB/S3 retrieval and custom safety filters.
               </li>
             </ul>
           </div>
@@ -178,14 +167,29 @@ export default function Resume() {
           <div className={styles.entry}>
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
-                Teacher | TFA Corps Member
-                <span className={styles.company}> · Alliance MIT (Teach For America)</span>
+                CS & Mathematics Tutor
+                <span className={styles.company}> · All Round Education Academy</span>
               </h3>
-              <p className={styles.inlineDates}>Jun 2020 — Jun 2022</p>
+              <p className={styles.inlineDates}>Sep 2022 — Jul 2023</p>
             </div>
             <ul>
               <li>
-                Designed 10‑week JS curriculum; 97% programming pass and 193.5% reading growth
+                Mentored IB/A‑Level students on Python/Java projects; taught advanced math and OOP.
+              </li>
+            </ul>
+          </div>
+
+          <div className={styles.entry}>
+            <div className={styles.roleHeader}>
+              <h3 className={styles.role}>
+                Teacher | TFA Corps Member
+                <span className={styles.company}> · Alliance MIT (Teach For America)</span>
+              </h3>
+              <p className={styles.inlineDates}>Jun 2020 — Jun 2022</p>
+            </div>
+            <ul>
+              <li>
+                Designed 10‑week JavaScript curriculum; 97% pass rate and 193.5% student reading growth.
               </li>
             </ul>
           </div>
@@ -197,25 +201,23 @@ export default function Resume() {
 
           <div className={styles.roleHeader}>
             <p>
-              <strong>Master of Applied Data Science</strong> · University of
-              Michigan
+              <strong>Master of Applied Data Science</strong> · University of Michigan
             </p>
-            <p className={styles.inlineDates}>May 2023 — Aug 2025</p>
+            <p className={styles.inlineDates}>May 2023 — Aug 2025</p>
           </div>
 
           <div className={styles.roleHeader}>
             <p>
-              <strong>M.Ed., Urban Education & Leadership</strong> · Loyola
-              Marymount University
+              <strong>M.Ed., Urban Education & Leadership</strong> · Loyola Marymount University
             </p>
-            <p className={styles.inlineDates}>Sep 2021 — Jul 2022</p>
+            <p className={styles.inlineDates}>Sep 2021 — Jul 2022</p>
           </div>
 
           <div className={styles.roleHeader}>
             <p>
-              <strong>B.A., Communication</strong> · UCLA
+              <strong>B.A., Communication</strong> · UCLA
             </p>
-            <p className={styles.inlineDates}>Sep 2016 — Jul 2020</p>
+            <p className={styles.inlineDates}>Sep 2016 — Jul 2020</p>
           </div>
         </section>
       </main>

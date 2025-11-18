@@ -10,13 +10,13 @@
   max-width: 900px;
   margin: auto;
   padding: 18px 16px;
-  line-height: 1.4;
+  line-height: 1.3; /* tightened from 1.4 */
   box-sizing: border-box;
 }
 
 .section p {
-  margin-top: 0.25rem;
-  margin-bottom: 0.4rem;
+  margin-top: 0.1rem; /* compact paragraphs */
+  margin-bottom: 0.25rem;
 }
 
 .headerSection {
@@ -36,17 +36,19 @@
   font-size: 1rem;
   color: #444;
 }
+
 .contact a {
   color: #222;
   text-decoration: none;
 }
+
 .contact a:hover {
   text-decoration: underline;
 }
 
-/* section spacing */
+/* section block spacing */
 .section {
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .sectionTitle {
@@ -57,19 +59,27 @@
   font-weight: bold;
 }
 
+/* create more space BELOW the dividing line for first bullet/paragraph */
+.sectionTitle + p,
+.sectionTitle + div,
+.sectionTitle + ul {
+  margin-top: 0.6rem; /* moves first element in section slightly down */
+}
+
 .section.projects p {
   margin: 0 0 9px 0;
 }
 
+/* Experience entry spacing compacted */
 .entry {
-  margin-bottom: 9px;
+  margin-bottom: 4px; /* reduced */
 }
 
 .roleHeader {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 2px;
+  margin-bottom: 0; /* removed vertical gap */
 }
 
 .role {
@@ -89,8 +99,9 @@
   margin: 0;
 }
 
+/* list tuning */
 ul {
-  margin: 2px 0 0 0; 
+  margin: 1px 0 0 0;
   padding-left: 0;
   list-style: none;
 }
@@ -101,6 +112,23 @@ li {
   font-size: 1rem;
 }
 
+/* between subheading and bullet tightening */
+.entry ul {
+  margin-top: 0.05rem; /* almost touching for compactness */
+}
+
+/* tighten spacing specifically in Education section */
+.section:last-of-type .roleHeader {
+  margin-bottom: 0; /* no unnecessary vertical gap */
+}
+
+.section:last-of-type .roleHeader + p,
+.section:last-of-type .roleHeader + .inlineDates {
+  margin-top: 0.05rem;
+  margin-bottom: 0.2rem;
+}
+
+/* buttons */
 .downloadBtn {
   position: absolute;
   top: 1rem;
@@ -127,7 +155,7 @@ li {
   }
 }
 
-/* do not show download button if somebody prints the page */
+/* print adjustments */
 @media print {
   .downloadBtn {
     display: none !important;
@@ -153,6 +181,7 @@ li {
   text-decoration: none;
   font-weight: bold;
 }
+
 .projectTitleLink:hover {
   text-decoration: underline;
 }
