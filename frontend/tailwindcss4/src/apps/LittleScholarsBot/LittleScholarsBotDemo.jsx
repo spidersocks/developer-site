@@ -3,6 +3,12 @@ import "./little-scholars.css";
 
 const API_BASE_URL = "https://unified-backend.fly.dev";
 
+// Optional Basic Auth via build-time env vars (Vite-style)
+const BRIDGE_USER = import.meta.env.VITE_BRIDGE_USERNAME;
+const BRIDGE_PASS = import.meta.env.VITE_BRIDGE_PASSWORD;
+const AUTH_HEADER =
+  BRIDGE_USER && BRIDGE_PASS ? "Basic " + btoa(`${BRIDGE_USER}:${BRIDGE_PASS}`) : null;
+
 const WA_BG = "#efeae2";
 const WA_USER = "#d9fdd3";
 const WA_BOT = "#ffffff";
@@ -89,11 +95,21 @@ export default function LittleScholarsBotDemo() {
     try {
       const res = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(AUTH_HEADER ? { Authorization: AUTH_HEADER } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(
+            "Unauthorized (401). Missing or invalid BRIDGE credentials. Check VITE_BRIDGE_USERNAME/VITE_BRIDGE_PASSWORD."
+          );
+        }
+        throw new Error(`HTTP error! Status: ${res.status}`);
+      }
 
       const data = await res.json();
 
@@ -107,7 +123,11 @@ export default function LittleScholarsBotDemo() {
       setInputMessage("");
     } catch (err) {
       console.error("API Error:", err);
-      setError("Failed to connect to the backend or process the request.");
+      setError(
+        err?.message?.includes("Unauthorized")
+          ? err.message
+          : "Failed to connect to the backend or process the request."
+      );
       setChatHistory((prev) =>
         prev.length && prev[prev.length - 1]?.role === "user" ? prev.slice(0, -1) : prev
       );
