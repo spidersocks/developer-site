@@ -14,8 +14,7 @@ export default defineConfig({
         calculatorZh: 'calculator-zh.html',
         poke: 'poke-team-predictor.html',
         podcast: 'podcast-project.html',
-        medicalScribe: 'medical-scribe.html',
-        littleScholarsBot: 'little-scholars-bot.html' // <-- add this
+        littleScholarsBot: 'little-scholars-bot.html'
       }
     }
   }

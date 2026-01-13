@@ -41,14 +41,6 @@
       "destination": "/podcast-project.html"
     },
     {
-      "source": "/medical-scribe",
-      "destination": "/medical-scribe.html"
-    },
-    {
-      "source": "/medical-scribe/:path*",
-      "destination": "/medical-scribe.html"
-    },
-    {
       "source": "/little-scholars-bot",
       "destination": "/little-scholars-bot.html"
     },

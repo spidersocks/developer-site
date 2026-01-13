@@ -34,7 +34,7 @@ const projects = [
     title: "StethoScribe",
     description:
       "A real-time, AI-powered medical scribe for generating clinical notes from conversations using AWS Transcribe and Bedrock.",
-    link: "/medical-scribe",
+    link: "https://scribecentral.io",
     badge: "BETA",
     date: "September 2025",
     preview: "/stethoscribe_preview.jpg",
@@ -44,38 +44,42 @@ const projects = [
 export default function Home() {
   return (
     <div className={styles.homeRoot}>
+      {/* Header Sidebar */}
       <Header />
 
       {/* Main Content */}
       <main className={styles.mainContent}>
         <div className={styles.mainContentContainer}>
           <div className={styles.projects}>
-            {[...projects].reverse().map((project, index) => (
-              <a
-                href={project.link}
-                className={styles.projectCard}
-                key={project.title}
-                aria-label={`View ${project.title}`}
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                {project.preview && (
-                  <img
-                    src={project.preview}
-                    alt={`Preview of ${project.title}`}
-                    className={styles.projectPreviewImg}
-                    loading="lazy"
-                  />
-                )}
-                <div className={styles.projectTitle}>
-                  {project.title}
-                  {project.badge && (
-                    <span className={styles.badge}>{project.badge}</span>
+            {[...projects].reverse().map((project, index) => {
+              const isExternal = project.link.startsWith("http");
+              return (
+                <a
+                  key={project.title}
+                  href={project.link}
+                  className={styles.projectCard}
+                  {...(isExternal
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : {})}
+                >
+                  {project.preview && (
+                    <img
+                      src={project.preview}
+                      alt={`Preview of ${project.title}`}
+                      className={styles.projectPreviewImg}
+                    />
                   )}
-                </div>
-                <div className={styles.projectDate}>{project.date}</div>
-                <div className={styles.projectDesc}>{project.description}</div>
-              </a>
-            ))}
+                  <div className={styles.projectTitle}>
+                    {project.title}
+                    {project.badge && (
+                      <span className={styles.badge}>{project.badge}</span>
+                    )}
+                  </div>
+                  <div className={styles.projectDate}>{project.date}</div>
+                  <div className={styles.projectDesc}>{project.description}</div>
+                </a>
+              );
+            })}
           </div>
         </div>
       </main>
