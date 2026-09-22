@@ -10,7 +10,7 @@ const projects = [
     link: "/en/800m-calculator",
     badge: "Tool",
     date: "May 2025",
-    preview: "/800m_preview.jpg",
+    preview: "/projects/800m/preview.jpg",
   },
   {
     title: "Pokémon VGC Teammate Predictor",
@@ -19,7 +19,7 @@ const projects = [
     link: "/poke-team-predictor",
     badge: "Tool",
     date: "June 2025",
-    preview: "/pokemon_preview.jpg",
+    preview: "/projects/pokemon/preview.jpg",
   },
   {
     title: "Podcasting the News",
@@ -28,7 +28,7 @@ const projects = [
     link: "/podcast-project",
     badge: "Research", 
     date: "August 2025",
-    preview: "/collage_preview.png",
+    preview: "/projects/podcast/collage_preview.png",
   },
   {
     title: "StethoScribe",
@@ -37,7 +37,7 @@ const projects = [
     link: "https://scribecentral.io",
     badge: "BETA",
     date: "September 2025",
-    preview: "/stethoscribe_preview.jpg",
+    preview: "/projects/stethoscribe/preview.jpg",
   },
 ];
 

@@ -147,7 +147,7 @@ export default function LittleScholarsBotDemo() {
           <div className="ls-header-left">
             <div className="ls-avatar">
               <img
-                src="/little_scholars.png"
+                src="/projects/little-scholars/logo.png"
                 alt="Little Scholars"
                 className="w-full h-full object-cover"
                 onError={(e) => {

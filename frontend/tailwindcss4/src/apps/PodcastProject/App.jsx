@@ -608,7 +608,7 @@ function DashboardPage() {
         </div>
 
         {/* Collage! */}
-        <img src="https://seanfontaine.dev/collage.png" alt="Project collage" loading="lazy" />
+        <img src="/projects/podcast/collage.png" alt="Project collage" loading="lazy" />
 
         <ReactMarkdown components={mdComponents} rehypePlugins={[rehypeRaw]}>
           {mdIntroPart1}
@@ -634,7 +634,7 @@ function DashboardPage() {
         </ReactMarkdown>
 
         <img
-          src="https://seanfontaine.dev/iptc_media_topics_flowchart.jpg"
+          src="/projects/podcast/iptc_media_topics_flowchart.jpg"
           alt="Excerpt of the IPTC Media Topics taxonomy"
           loading="lazy"
         />

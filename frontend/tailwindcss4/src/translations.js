@@ -6,7 +6,7 @@ const translations = {
     title: "800m Training & Race Calculator",
     metaTitle: "800m Training Calculator | Predict Race Splits & Times",
     metaDescription: "Free 800m calculator to predict 800 meter race times and recommended splits from your training. Ideal for runners, athletes, and coaches.",
-    metaImage: "https://www.seanfontaine.dev/og-800m.png",
+    metaImage: "https://www.seanfontaine.dev/projects/800m/preview.jpg",
     metaUrl: "https://www.seanfontaine.dev/800m-calculator",
 
     // UI elements
@@ -209,7 +209,7 @@ const translations = {
     title: "800米訓練與比賽計算器",
     metaTitle: "800米訓練計算器｜預測比賽分段與成績",
     metaDescription: "免費800米計算器，根據訓練成績預測比賽時間和建議分段。適合跑手、運動員及教練使用。",
-    metaImage: "https://www.seanfontaine.dev/og-800m.png",
+    metaImage: "https://www.seanfontaine.dev/projects/800m/preview.jpg",
     metaUrl: "https://www.seanfontaine.dev/800m-calculator",
 
     // UI elements

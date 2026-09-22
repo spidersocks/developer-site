@@ -5,6 +5,111 @@
       "source": "/800m-calculator",
       "destination": "/en/800m-calculator",
       "permanent": true
+    },
+    {
+      "source": "/800m_preview.jpg",
+      "destination": "/projects/800m/preview.jpg",
+      "permanent": true
+    },
+    {
+      "source": "/og-800m.png",
+      "destination": "/projects/800m/preview.jpg",
+      "permanent": true
+    },
+    {
+      "source": "/pokemon_preview.jpg",
+      "destination": "/projects/pokemon/preview.jpg",
+      "permanent": true
+    },
+    {
+      "source": "/pokemon-16x16.png",
+      "destination": "/projects/pokemon/favicon-16x16.png",
+      "permanent": true
+    },
+    {
+      "source": "/pokemon-32x32.png",
+      "destination": "/projects/pokemon/favicon-32x32.png",
+      "permanent": true
+    },
+    {
+      "source": "/pokemon-apple-touch.png",
+      "destination": "/projects/pokemon/apple-touch-icon.png",
+      "permanent": true
+    },
+    {
+      "source": "/pokemon-apple-touch-icon.png",
+      "destination": "/projects/pokemon/apple-touch-icon.png",
+      "permanent": true
+    },
+    {
+      "source": "/stethoscribe_preview.jpg",
+      "destination": "/projects/stethoscribe/preview.jpg",
+      "permanent": true
+    },
+    {
+      "source": "/stethoscribe.png",
+      "destination": "/projects/stethoscribe/logo.png",
+      "permanent": true
+    },
+    {
+      "source": "/stethoscribe_icon.png",
+      "destination": "/projects/stethoscribe/icon.png",
+      "permanent": true
+    },
+    {
+      "source": "/stethoscribe-16x16.png",
+      "destination": "/projects/stethoscribe/favicon-16x16.png",
+      "permanent": true
+    },
+    {
+      "source": "/stethoscribe-32x32.png",
+      "destination": "/projects/stethoscribe/favicon-32x32.png",
+      "permanent": true
+    },
+    {
+      "source": "/stethoscribe-apple-touch-icon.png",
+      "destination": "/projects/stethoscribe/apple-touch-icon.png",
+      "permanent": true
+    },
+    {
+      "source": "/collage.png",
+      "destination": "/projects/podcast/collage.png",
+      "permanent": true
+    },
+    {
+      "source": "/collage_preview.png",
+      "destination": "/projects/podcast/collage_preview.png",
+      "permanent": true
+    },
+    {
+      "source": "/iptc_media_topics_flowchart.jpg",
+      "destination": "/projects/podcast/iptc_media_topics_flowchart.jpg",
+      "permanent": true
+    },
+    {
+      "source": "/podcast_preview.jpg",
+      "destination": "/projects/podcast/podcast_preview.jpg",
+      "permanent": true
+    },
+    {
+      "source": "/2408.04649.pdf",
+      "destination": "/projects/podcast/2408.04649.pdf",
+      "permanent": true
+    },
+    {
+      "source": "/little_scholars.png",
+      "destination": "/projects/little-scholars/logo.png",
+      "permanent": true
+    },
+    {
+      "source": "/little_scholars_icon.png",
+      "destination": "/projects/little-scholars/icon.png",
+      "permanent": true
+    },
+    {
+      "source": "/send_icon.png",
+      "destination": "/projects/little-scholars/send_icon.png",
+      "permanent": true
     }
   ],
   "rewrites": [
