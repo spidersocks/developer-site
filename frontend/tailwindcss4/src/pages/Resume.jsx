@@ -51,97 +51,43 @@ export default function Resume() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Summary</h2>
           <p>
-            Applied Data Scientist (MADS @ Michigan) with end‑to‑end ML experience and a product mindset.
-            Strengths in feature engineering, interactive apps, and LLM pipelines for real‑world use.
+            PhD candidate in Computing at the Hong Kong Polytechnic University.
+            Computational research on the relationship between exercise and sleep,
+            with prior work in applied data science, education, and elite athletics.
           </p>
         </section>
 
-        {/* Selected Projects*/}
-        <section className={`${styles.section} ${styles.projects}`}>
-          <h2 className={styles.sectionTitle}>Selected Projects</h2>
-
-          <p>
-            <strong>
-              <a
-                href="https://www.seanfontaine.dev/stethoscribe"
-                className={styles.projectTitleLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                StethoscribeAI — Real‑time Medical Scribe:
-              </a>
-            </strong>{" "}
-            Live transcription of clinician–patient conversations, medical entity extraction, and structured notes;
-            supports English, Cantonese, and Mandarin.{" "}
-            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
-              Stack: React, FastAPI, WebSockets, AWS Transcribe/Translate, Comprehend Medical, AWS Bedrock (Mistral 70B).
-            </span>
-          </p>
-
-          <p>
-            <strong>
-              <a
-                href="https://www.seanfontaine.dev/podcast-project"
-                className={styles.projectTitleLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                News vs. Podcasts Analysis:
-              </a>
-            </strong>{" "}
-            BERTopic topic modeling, LLM‑based stance (Mistral, CoS), and sentiment (VADER/TextBlob) over 25K+ articles/transcripts,
-            with interactive dashboards comparing podcasts and public news.{" "}
-            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
-              Stack: Python, BERTopic, sentence‑transformers, FastAPI, Plotly/Recharts.
-            </span>
-          </p>
-
-          <p>
-            <strong>
-              <a
-                href="https://www.seanfontaine.dev/800m-calculator"
-                className={styles.projectTitleLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                800m Performance Calculator:
-              </a>
-            </strong>{" "}
-            FastAPI + React app using linear regression to predict race times from training splits;
-            84% predictions within ±1s on test data; widely used by Hong Kong athletes.{" "}
-            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
-              Stack: FastAPI, React, scikit‑learn.
-            </span>
-          </p>
-
-          <p>
-            <strong>
-              <a
-                href="https://www.seanfontaine.dev/poke-team-predictor"
-                className={styles.projectTitleLink}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                VGC Team Recommender:
-              </a>
-            </strong>{" "}
-            Multi‑label XGBoost for teammate recommendation from a restricted core;
-            example‑based F1 0.78 (+23% vs baseline).{" "}
-            <span style={{ fontSize: "0.95em", fontStyle: "italic", color: "#666" }}>
-              Stack: XGBoost, scikit‑learn, FastAPI, Joblib.
-            </span>
-          </p>
-        </section>
-
-        {/* Technical Skills */}
+        {/* Education */}
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Technical Skills</h2>
-          <p>
-            <strong>ML:</strong> XGBoost, Random Forest; clustering, PCA, F1/AUC.{" "}
-            <strong>NLP:</strong> Transformers, BERTopic, LLM pipelines.{" "}
-            <strong>Data & Apps:</strong> Python, FastAPI, React, Plotly, SQL, WebSockets.{" "}
-            <strong>Languages:</strong> English (Native), Mandarin (Advanced), Cantonese (Limited Working).
-          </p>
+          <h2 className={styles.sectionTitle}>Education</h2>
+
+          <div className={styles.roleHeader}>
+            <p>
+              <strong>PhD, Computing</strong> · The Hong Kong Polytechnic University
+            </p>
+            <p className={styles.inlineDates}>Sep 2026 — Sep 2029</p>
+          </div>
+
+          <div className={styles.roleHeader}>
+            <p>
+              <strong>M.S., Applied Data Science</strong> · University of Michigan
+            </p>
+            <p className={styles.inlineDates}>May 2023 — Aug 2025</p>
+          </div>
+
+          <div className={styles.roleHeader}>
+            <p>
+              <strong>M.Ed., Urban Education & Leadership</strong> · Loyola Marymount University
+            </p>
+            <p className={styles.inlineDates}>Jun 2020 — Aug 2022</p>
+          </div>
+
+          <div className={styles.roleHeader}>
+            <p>
+              <strong>B.A., Communication</strong> · University of California, Los Angeles
+            </p>
+            <p className={styles.inlineDates}>Sep 2016 — Jun 2020</p>
+          </div>
         </section>
 
         {/* Experience */}
@@ -151,15 +97,15 @@ export default function Resume() {
           <div className={styles.entry}>
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
-                Freelance LLM Engineer
-                <span className={styles.company}> · Little Scholars Creative Workshop</span>
+                Full-Stack Developer
+                <span className={styles.company}> · DreamTune Limited</span>
               </h3>
-              <p className={styles.inlineDates}>Oct 2025 — Nov 2025</p>
+              <p className={styles.inlineDates}>Jan 2026 — Aug 2026</p>
             </div>
             <ul>
               <li>
-                Built and deployed WhatsApp RAG assistant using AWS Bedrock (Llama 3), FastAPI & WhatsApp Cloud API; 
-                integrated DynamoDB/S3 retrieval and custom safety filters.
+                Built Clozzz, a personalized sleep-audio app (Flutter, FastAPI, PostgreSQL, GCP),
+                including recommendations, encrypted streaming, and offline sync. Also led UI, web, and scientific video (100K+ views).
               </li>
             </ul>
           </div>
@@ -167,14 +113,15 @@ export default function Resume() {
           <div className={styles.entry}>
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
-                CS & Mathematics Tutor
-                <span className={styles.company}> · All Round Education Academy</span>
+                Freelance LLM Engineer
+                <span className={styles.company}> · Little Scholars Creative Workshop</span>
               </h3>
-              <p className={styles.inlineDates}>Sep 2022 — Jul 2023</p>
+              <p className={styles.inlineDates}>Oct 2025 — Dec 2025</p>
             </div>
             <ul>
               <li>
-                Mentored IB/A‑Level students on Python/Java projects; taught advanced math and OOP.
+                Shipped a production WhatsApp RAG assistant (AWS Bedrock, Llama 3 70B) with safety filters
+                and deterministic routing for scheduling and severe-weather queries.
               </li>
             </ul>
           </div>
@@ -182,42 +129,48 @@ export default function Resume() {
           <div className={styles.entry}>
             <div className={styles.roleHeader}>
               <h3 className={styles.role}>
-                Teacher | TFA Corps Member
-                <span className={styles.company}> · Alliance MIT (Teach For America)</span>
+                Athlete
+                <span className={styles.company}> · Hong Kong Athletics Team</span>
               </h3>
-              <p className={styles.inlineDates}>Jun 2020 — Jun 2022</p>
+              <p className={styles.inlineDates}>Apr 2023 — Jun 2025</p>
             </div>
             <ul>
               <li>
-                Designed 10‑week JavaScript curriculum; 97% pass rate and 193.5% student reading growth.
+                Represented Hong Kong in the 800m and 1500m. Three Hong Kong records (800m twice; 4×800m relay)
+                and two-time Hong Kong 800m champion, concurrent with graduate study.
               </li>
             </ul>
           </div>
-        </section>
 
-        {/* Education */}
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Education</h2>
-
-          <div className={styles.roleHeader}>
-            <p>
-              <strong>Master of Applied Data Science</strong> · University of Michigan
-            </p>
-            <p className={styles.inlineDates}>May 2023 — Aug 2025</p>
+          <div className={styles.entry}>
+            <div className={styles.roleHeader}>
+              <h3 className={styles.role}>
+                Teacher | TFA Corps Member
+                <span className={styles.company}> · Alliance MIT (Teach For America)</span>
+              </h3>
+              <p className={styles.inlineDates}>Jun 2020 — Jun 2022</p>
+            </div>
+            <ul>
+              <li>
+                Full-time computer science, English, and history teacher. Designed a 10-week JavaScript curriculum;
+                97% pass rate and 193.5% average student reading growth.
+              </li>
+            </ul>
           </div>
 
-          <div className={styles.roleHeader}>
-            <p>
-              <strong>M.Ed., Urban Education & Leadership</strong> · Loyola Marymount University
-            </p>
-            <p className={styles.inlineDates}>Sep 2021 — Jul 2022</p>
-          </div>
-
-          <div className={styles.roleHeader}>
-            <p>
-              <strong>B.A., Communication</strong> · UCLA
-            </p>
-            <p className={styles.inlineDates}>Sep 2016 — Jul 2020</p>
+          <div className={styles.entry}>
+            <div className={styles.roleHeader}>
+              <h3 className={styles.role}>
+                Research Assistant
+                <span className={styles.company}> · UCLA Emergence of Communication Lab</span>
+              </h3>
+              <p className={styles.inlineDates}>Sep 2019 — Jul 2020</p>
+            </div>
+            <ul>
+              <li>
+                Prepared and labeled infant vocal recordings for TalkBank, using Praat and EAF to segment and annotate speech audio.
+              </li>
+            </ul>
           </div>
         </section>
       </main>
