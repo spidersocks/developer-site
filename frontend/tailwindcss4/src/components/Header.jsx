@@ -103,7 +103,7 @@ export default function Header() {
               <InstagramIcon />
             </a>
             <a
-              href="mailto:sfontaine20@ucla.edu"
+              href="mailto:sean-hm.fontaine@connect.polyu.hk"
               aria-label="Email"
             >
               <MailIcon />
@@ -140,7 +140,7 @@ export default function Header() {
               <InstagramIcon />
             </a>
             <a
-              href="mailto:sfontaine20@ucla.edu"
+              href="mailto:sean-hm.fontaine@connect.polyu.hk"
               aria-label="Email"
             >
               <MailIcon />

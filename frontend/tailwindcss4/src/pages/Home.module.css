@@ -60,25 +60,58 @@
 }
 
 .projectTitle {
-  font-size: 1.18rem;
-  font-weight: 700;
   margin-bottom: 0.52em;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.7em;
+  gap: 0.4rem 0.55rem;
+}
+
+.titleText {
+  font-size: 1.18rem;
+  font-weight: 700;
+  line-height: 1.25;
+  min-width: 0;
 }
 
 /* pill badge stylings */
 .badge {
   background: var(--accent-fade);
   color: var(--accent);
-  margin-left: 0.6em;
-  font-size: 0.85em;
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
   border-radius: 999px;
-  padding: 0.18em 0.9em;
+  padding: 0.22em 0.7em;
   display: inline-block;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.badge[data-kind="Tool"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge[data-kind="Research"] {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.badge[data-kind="BETA"] {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.badge[data-kind="App"] {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.badge[data-kind="Video"] {
+  background: #ffe4e6;
+  color: #be123c;
 }
 
 .projectDesc {
@@ -113,8 +146,16 @@
   .mainContentContainer {
     padding: 0 1rem;
   }
+  .projectCard {
+    padding: 1.1rem 1rem;
+  }
   .projectPreviewImg {
     height: 150px;
+  }
+  .projectTitle {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
   }
 }
 

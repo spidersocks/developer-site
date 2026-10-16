@@ -93,9 +93,11 @@ export default function Home() {
                     />
                   )}
                   <div className={styles.projectTitle}>
-                    {project.title}
+                    <span className={styles.titleText}>{project.title}</span>
                     {project.badge && (
-                      <span className={styles.badge}>{project.badge}</span>
+                      <span className={styles.badge} data-kind={project.badge}>
+                        {project.badge}
+                      </span>
                     )}
                   </div>
                   <div className={styles.projectDate}>{project.date}</div>
