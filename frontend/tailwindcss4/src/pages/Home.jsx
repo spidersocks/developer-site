@@ -34,7 +34,7 @@ const projects = [
     title: "StethoScribe",
     description:
       "A real-time, AI-powered medical scribe for generating clinical notes from conversations using AWS Transcribe and Bedrock.",
-    link: "https://scribecentral.io",
+    link: "/stethoscribe",
     badge: "BETA",
     date: "September 2025",
     preview: "/projects/stethoscribe/preview.jpg",

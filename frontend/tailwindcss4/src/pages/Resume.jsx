@@ -63,7 +63,7 @@ export default function Resume() {
           <p>
             <strong>
               <a
-                href="https://www.seanfontaine.dev/medical-scribe"
+                href="https://www.seanfontaine.dev/stethoscribe"
                 className={styles.projectTitleLink}
                 target="_blank"
                 rel="noopener noreferrer"

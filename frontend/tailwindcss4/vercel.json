@@ -110,6 +110,16 @@
       "source": "/send_icon.png",
       "destination": "/projects/little-scholars/send_icon.png",
       "permanent": true
+    },
+    {
+      "source": "/medical-scribe",
+      "destination": "/stethoscribe",
+      "permanent": false
+    },
+    {
+      "source": "/medical-scribe/:path*",
+      "destination": "/stethoscribe/:path*",
+      "permanent": false
     }
   ],
   "rewrites": [
@@ -152,6 +162,18 @@
     {
       "source": "/little-scholars-bot/:path*",
       "destination": "/little-scholars-bot.html"
+    },
+    {
+      "source": "/stethoscribe",
+      "destination": "https://scribecentral.vercel.app/stethoscribe"
+    },
+    {
+      "source": "/stethoscribe/",
+      "destination": "https://scribecentral.vercel.app/stethoscribe"
+    },
+    {
+      "source": "/stethoscribe/:path*",
+      "destination": "https://scribecentral.vercel.app/stethoscribe/:path*"
     },
 
     {

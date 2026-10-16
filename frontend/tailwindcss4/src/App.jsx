@@ -58,7 +58,7 @@ export default function App() {
           <Route path="/poke-team-predictor" element={<PokeTeamPredictorApp />} />
           {/* Podcast project and all subroutes */}
           <Route path="/podcast-project/*" element={<PodcastProjectApp />} />
-          {/* Medical scribe demo (public) */}
+          {/* Stethoscribe is served at /stethoscribe by a vercel.json rewrite */}
           {/* Catch all for not found components */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
