@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
 import EightHundredCalculatorApp from "./apps/EightHundredCalculator/App";
@@ -8,7 +8,48 @@ import { Analytics } from "@vercel/analytics/react";
 import About from "./pages/About";
 import Resume from "./pages/Resume";
 // Import the new component
-import LittleScholarsBotDemo from "./apps/LittleScholarsBot/LittleScholarsBotDemo"; 
+import LittleScholarsBotDemo from "./apps/LittleScholarsBot/LittleScholarsBotDemo";
+
+const STETHOSCRIBE_HEALTH_URL = "https://medical-scribe-1j17.onrender.com/healthz";
+let stethoscribePingSent = false;
+
+function scheduleStethoscribePing() {
+  if (stethoscribePingSent) return () => {};
+
+  const send = () => {
+    if (stethoscribePingSent) return;
+    stethoscribePingSent = true;
+    fetch(STETHOSCRIBE_HEALTH_URL, {
+      cache: "no-store",
+      priority: "low",
+    }).catch(() => {});
+  };
+
+  let idleId = 0;
+  let timeoutId = 0;
+
+  const scheduleIdle = () => {
+    if (typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(send, { timeout: 5000 });
+      return;
+    }
+    timeoutId = window.setTimeout(send, 2000);
+  };
+
+  if (document.readyState === "complete") {
+    scheduleIdle();
+  } else {
+    window.addEventListener("load", scheduleIdle, { once: true });
+  }
+
+  return () => {
+    window.removeEventListener("load", scheduleIdle);
+    if (idleId && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(idleId);
+    }
+    if (timeoutId) window.clearTimeout(timeoutId);
+  };
+} 
 
 // Class-based Error Boundary (per React docs)
 class ErrorBoundary extends React.Component {
@@ -36,6 +77,8 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  useEffect(() => scheduleStethoscribePing(), []);
+
   return (
     <BrowserRouter>
       <ErrorBoundary fallback={<div style={{ color: "#dc2626" }}>Couldn’t load this page.</div>}>
