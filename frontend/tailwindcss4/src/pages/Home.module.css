@@ -55,6 +55,10 @@
   background: #f0f4fa;
 }
 
+.projectPreviewImgBottom {
+  object-position: bottom;
+}
+
 .projectTitle {
   font-size: 1.18rem;
   font-weight: 700;

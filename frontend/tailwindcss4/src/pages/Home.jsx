@@ -39,6 +39,25 @@ const projects = [
     date: "September 2025",
     preview: "/projects/stethoscribe/preview.jpg",
   },
+  {
+    title: "Clozzz",
+    description:
+      "Check out Clozzz, an app I designed and built that serves personalized lab-tested sleep music developed by the DreamTune team.",
+    link: "https://www.clozzz.com",
+    badge: "App",
+    date: "May 2026",
+    preview: "/projects/clozzz/preview.png",
+  },
+  {
+    title: "Clozzz Sleep Series",
+    description:
+      "YouTube Channel posting a new video weekly on the science of sleep! 100k views and counting...",
+    link: "https://www.youtube.com/@clozzz_app",
+    badge: "Video",
+    date: "July 2026",
+    preview: "/projects/clozzz-sleep-series/preview.png",
+    previewPosition: "bottom",
+  },
 ];
 
 export default function Home() {
@@ -66,7 +85,11 @@ export default function Home() {
                     <img
                       src={project.preview}
                       alt={`Preview of ${project.title}`}
-                      className={styles.projectPreviewImg}
+                      className={`${styles.projectPreviewImg}${
+                        project.previewPosition === "bottom"
+                          ? ` ${styles.projectPreviewImgBottom}`
+                          : ""
+                      }`}
                     />
                   )}
                   <div className={styles.projectTitle}>
