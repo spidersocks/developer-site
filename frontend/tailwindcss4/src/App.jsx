@@ -9,6 +9,8 @@ import About from "./pages/About";
 import Resume from "./pages/Resume";
 // Import the new component
 import LittleScholarsBotDemo from "./apps/LittleScholarsBot/LittleScholarsBotDemo";
+import BrightNestBotDemo from "./apps/BrightNestBot/BrightNestBotDemo";
+import PlazaHome from "./pages/homeLab/Home2";
 
 const STETHOSCRIBE_HEALTH_URL = "https://medical-scribe-1j17.onrender.com/healthz";
 let stethoscribePingSent = false;
@@ -85,6 +87,13 @@ export default function App() {
         <Routes>
           {/* Homepage */}
           <Route path="/" element={<Home />} />
+          <Route path="/home" element={<PlazaHome />} />
+          {/* Old plaza redesign experiments → canonical home */}
+          <Route path="/home1" element={<Navigate to="/home" replace />} />
+          <Route path="/home2" element={<Navigate to="/home" replace />} />
+          <Route path="/home3" element={<Navigate to="/home" replace />} />
+          <Route path="/home4" element={<Navigate to="/home" replace />} />
+          <Route path="/home5" element={<Navigate to="/home" replace />} />
           {/* About page */}
           <Route path="/about" element={<About />} />
           {/* Resume */}
@@ -92,6 +101,9 @@ export default function App() {
           
           {/* NEW ROUTE: Little Scholars Bot Demo */}
           <Route path="/little-scholars-bot" element={<LittleScholarsBotDemo />} />
+          {/* BrightNest COMP6708 A3 Demo (MPA + Vercel rewrite is primary) */}
+          <Route path="/COMP6708_A3_Demo" element={<BrightNestBotDemo />} />
+          <Route path="/COMP6708_A3_Demo/*" element={<BrightNestBotDemo />} />
           
           {/* 800m Calculator (with language support) */}
           <Route path="/800m-calculator" element={<EightHundredCalculatorApp lang="en" />} />

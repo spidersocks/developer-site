@@ -164,6 +164,14 @@
       "destination": "/little-scholars-bot.html"
     },
     {
+      "source": "/COMP6708_A3_Demo",
+      "destination": "/comp6708-a3-demo.html"
+    },
+    {
+      "source": "/COMP6708_A3_Demo/:path*",
+      "destination": "/comp6708-a3-demo.html"
+    },
+    {
       "source": "/stethoscribe",
       "destination": "https://scribecentral.vercel.app/stethoscribe"
     },
