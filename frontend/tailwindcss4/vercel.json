@@ -172,6 +172,14 @@
       "destination": "/comp6708-a3-demo.html"
     },
     {
+      "source": "/brightnest-api",
+      "destination": "http://47.242.157.72:8000/"
+    },
+    {
+      "source": "/brightnest-api/:path*",
+      "destination": "http://47.242.157.72:8000/:path*"
+    },
+    {
       "source": "/stethoscribe",
       "destination": "https://scribecentral.vercel.app/stethoscribe"
     },

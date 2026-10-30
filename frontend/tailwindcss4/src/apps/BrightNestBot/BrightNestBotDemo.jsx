@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import WaMarkdown from "./WaMarkdown.jsx";
 import "./brightnest.css";
 
+// Prefer same-origin `/brightnest-api` (Vercel rewrite → SAE) so HTTPS pages
+// are not blocked by mixed content when talking to the HTTP EIP.
 const API_BASE = (
   import.meta.env.VITE_BRIGHTNEST_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  "http://47.242.157.72:8000"
+  "/brightnest-api"
 ).replace(/\/$/, "");
 
 const LOGO_SRC = "/projects/brightnest/logo.png";
