@@ -4,17 +4,13 @@
   --ink: #23455c;
   --sky: #8ec8f8;
   --foam: #f4fbff;
-  /* 32×32 PNGs only — huge .cur files rendered at native size in Chromium */
-  /* Duplicate url fallback (no auto/default) so the system white arrow never stacks */
-  --wii-cursor: url("/plaza/wii-pointer.png") 10 2, url("/plaza/wii-pointer.png") 10 2;
-  --wii-hand-open: url("/plaza/wii-hand-open.png") 16 17, url("/plaza/wii-hand-open.png") 16 17;
-  --wii-hand-grab: url("/plaza/wii-hand-grab.png") 16 18, url("/plaza/wii-hand-grab.png") 16 18;
   --wii-hover: #00c4ff;
   min-height: 100vh;
   padding: 20px 14px 72px;
   color: var(--ink);
   font-family: "Nunito", sans-serif;
-  cursor: var(--wii-cursor);
+  /* 32×32 PNG only — 96×96 .cur exceeds Chrome’s 128px limit after Windows DPI scaling and is rejected. */
+  cursor: url("/plaza/wii-pointer.png") 10 2, auto;
   overflow-x: clip;
   background:
     repeating-linear-gradient(
@@ -25,16 +21,18 @@
     linear-gradient(180deg, #b9e4ff 0%, #7ec4f0 45%, #a8d8f5 100%);
 }
 
+/* Beat Tailwind/global `cursor: pointer` on links & buttons */
 .page *,
 .page a,
-.page button {
-  cursor: inherit;
+.page button,
+.page [role="button"] {
+  cursor: inherit !important;
 }
 
-/* While dragging the timeline, force open hand everywhere (no system arrow) */
+/* While dragging the timeline, force closed grip everywhere */
 .pageGrabbing,
 .pageGrabbing * {
-  cursor: var(--wii-hand-open) !important;
+  cursor: url("/plaza/wii-hand-grab.png") 16 18, auto !important;
 }
 
 /* Wii channel-style hover — same treatment for every clickable tile */
@@ -126,7 +124,8 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7), 0 8px 0 rgba(70, 130, 170, 0.18);
 }
 
-/* Bottom-anchored fixed height — leaves air above the hair */
+/* Bottom-anchored fixed height — leaves air above the hair.
+   Header overflow:hidden clips hover scale so it never escapes the banner. */
 .heroCutout {
   position: absolute;
   left: -28px;
@@ -140,8 +139,11 @@
   object-fit: cover;
   object-position: center top;
   filter: drop-shadow(0 6px 8px rgba(30, 80, 120, 0.25));
-  pointer-events: none;
+  pointer-events: auto;
   user-select: none;
+  transform-origin: bottom left;
+  transition: transform 0.28s ease;
+  will-change: transform;
 }
 
 .headerContent {
@@ -154,6 +156,12 @@
   padding-left: 128px;
   min-height: 0;
   justify-content: space-between;
+  /* Let hover reach the cutout through empty padding; re-enable on controls */
+  pointer-events: none;
+}
+
+.headerContent > * {
+  pointer-events: auto;
 }
 
 .brandRow {
@@ -192,19 +200,31 @@
   white-space: nowrap;
   background: linear-gradient(#7fe8ff, #3db4ef 48%, #2a96d4 52%, #8ef0ff);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 3px 0 rgba(30, 90, 130, 0.25);
+  transform-origin: center;
+  transition: transform 0.28s ease;
+  will-change: transform;
+}
+
+/* Sticky mobile dock — portaled to document.body so header overflow can't clip it */
+.mobileNavDock {
+  display: none;
 }
 
 .hamburger {
-  display: none;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   border: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   color: #fff;
   background: linear-gradient(#7fe8ff, #3db4ef 48%, #2a96d4 52%, #8ef0ff);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 3px 0 rgba(30, 90, 130, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 3px 0 rgba(30, 90, 130, 0.25),
+    0 10px 22px rgba(40, 90, 130, 0.22);
 }
 
 .hamburgerBars {
@@ -250,46 +270,46 @@
   transform: translateY(-5px) rotate(-45deg);
 }
 
-/* Fixed overlay — escapes header overflow so the cutout can stay clipped */
 .mobileMenu {
-  position: fixed;
-  z-index: 80;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: min(260px, calc(100vw - 40px));
+  width: min(270px, calc(100vw - 28px));
+  max-height: min(72vh, calc(100dvh - 5.5rem));
   margin: 0;
-  padding: 10px;
+  padding: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(232, 245, 252, 0.94));
-  box-shadow: inset 0 0 0 2px #fff, 0 10px 24px rgba(40, 90, 130, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(232, 245, 252, 0.96));
+  box-shadow: inset 0 0 0 2px #fff, 0 12px 28px rgba(40, 90, 130, 0.28);
 }
 
-.mobileLink {
-  display: block;
-  padding: 12px 14px;
-  border-radius: 12px;
+.mobileMenuLabel {
+  margin: 8px 4px 2px;
+  padding: 0 4px;
   font-family: "Fredoka", sans-serif;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 700;
-  color: #1f74b8;
-  background: linear-gradient(#fff, #e8f4fb);
-  box-shadow: inset 0 0 0 1px #fff, 0 2px 0 #8fb9d2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #4d7890;
 }
 
-.mobileLink:active {
-  transform: scale(0.98);
+.mobileMenuLabel:first-child {
+  margin-top: 0;
 }
 
-.mobileSocials {
+.mobileIconRow {
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
-  margin-top: 8px;
-  padding-top: 8px;
+  padding: 2px 0 6px;
 }
 
-.mobileSocials a {
+.mobileIconBtn {
   display: grid;
   place-items: center;
   width: 44px;
@@ -300,7 +320,12 @@
   box-shadow: inset 0 0 0 1px #fff, 0 2px 0 #8fb9d2;
 }
 
+.mobileIconBtn:active {
+  transform: scale(0.96);
+}
+
 .brand h1 {
+  display: inline-block;
   font-family: "Fredoka", sans-serif;
   font-size: clamp(2.2rem, 5vw, 3.1rem);
   font-weight: 700;
@@ -309,6 +334,9 @@
   text-shadow:
     0 2px 0 #1d5f86,
     0 4px 0 rgba(0, 0, 0, 0.12);
+  transform-origin: left center;
+  transition: transform 0.28s ease;
+  will-change: transform;
 }
 
 .brand h1 span {
@@ -326,32 +354,81 @@
 }
 
 .marquee {
+  position: relative;
   width: 100%;
   overflow: hidden;
   border-radius: 999px;
   background: linear-gradient(#fff, #e8f3fa);
   box-shadow: inset 0 0 0 2px #fff, 0 2px 0 rgba(30, 90, 130, 0.12);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: inherit;
 }
 
-.marqueeTrack {
+.marqueeDragging {
+  cursor: inherit;
+}
+
+/* One natural item cycle — sized off-screen so we know how many repeats fill the viewport */
+.marqueeMeasure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
   display: flex;
+  flex-wrap: nowrap;
   width: max-content;
-  animation: aeroTick 28s linear infinite;
-}
-
-.marqueeTrack p {
-  display: flex;
-  align-items: center;
   white-space: nowrap;
   padding: 8px 0;
 }
 
-.marqueeTrack span {
+.marqueeTrack {
+  display: flex;
+  flex-wrap: nowrap;
+  width: max-content;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Seamless cruise: --loop-w is one padded set (always >= viewport width) */
+.marqueeTrackCss {
+  animation: marqueeCruise var(--marquee-duration, 28s) linear infinite;
+}
+
+@keyframes marqueeCruise {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(calc(-1 * var(--loop-w, 50%)), 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marqueeTrackCss {
+    animation: none;
+  }
+}
+
+.marqueeSet {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  white-space: nowrap;
+  padding: 8px 0;
+  margin: 0;
+  gap: 0;
+}
+
+.marqueeTrack span,
+.marqueeSet span,
+.marqueeMeasure span {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding-right: 24px;
   font-size: 14px;
+  flex: 0 0 auto;
 }
 
 .marqueeDot {
@@ -363,15 +440,6 @@
   background: linear-gradient(135deg, #7fd0ff, #2b86c0);
   box-shadow: 0 1px 0 rgba(30, 90, 130, 0.25);
   flex: 0 0 auto;
-}
-
-@keyframes aeroTick {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
 }
 
 .grid {
@@ -409,6 +477,30 @@
   box-shadow: 0 8px 18px rgba(50, 110, 150, 0.12), inset 0 0 0 1px rgba(140, 190, 220, 0.35);
 }
 
+/* Let the Mii peek slightly past the card on hover */
+.welcome {
+  overflow: visible;
+}
+
+/* Shadows/hover scale need to escape the card; round the header so the top stays soft */
+.moreProjects,
+.featured {
+  overflow: visible;
+  position: relative;
+}
+
+/* Lift featured above “More projects” while hovering so the cyan ring isn’t buried */
+.featured:has(a:hover),
+.featured:has(a:focus-visible) {
+  z-index: 5;
+}
+
+.moreProjects > .cardHead,
+.featured > .cardHead,
+.welcome > .cardHead {
+  border-radius: 14px 14px 0 0;
+}
+
 .cardHead,
 .navTab {
   padding: 7px 12px;
@@ -437,6 +529,7 @@
   width: 100%;
   height: auto;
   max-height: none;
+  flex: 0 0 auto;
   object-fit: cover;
   object-position: top center;
   border-radius: 6px;
@@ -493,8 +586,11 @@
   display: block;
   margin-bottom: 2px;
   image-rendering: auto;
-  pointer-events: none;
+  pointer-events: auto;
   user-select: none;
+  transform-origin: bottom center;
+  transition: transform 0.28s ease;
+  will-change: transform;
 }
 
 .cardBody p {
@@ -515,7 +611,19 @@
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  overflow: hidden;
+  /* visible so the cyan wiiHover ring/scale isn’t clipped */
+  overflow: visible;
+}
+
+/* Featured is already wide — keep the hover ring tight, not a big balloon */
+.featureCard.wiiHover {
+  border-width: 3px !important;
+}
+
+.featureCard.wiiHover:hover,
+.featureCard.wiiHover:focus-visible {
+  transform: scale(1.012);
+  box-shadow: 0 0 0 1px rgba(0, 196, 255, 0.22), 0 8px 16px rgba(0, 140, 200, 0.14);
 }
 
 .featureCard > div {
@@ -558,6 +666,7 @@
   right: 12px;
   width: 42px;
   height: auto;
+  pointer-events: none;
 }
 
 .projectRow {
@@ -570,7 +679,7 @@
   box-sizing: border-box;
 }
 
-.projectRow a {
+.projectCard {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -581,19 +690,34 @@
   box-shadow: inset 0 0 0 1px #fff, 0 2px 0 rgba(80, 130, 170, 0.15);
 }
 
-.projectRow img {
+.projectCard img {
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: 8px;
 }
 
-.projectRow strong {
+.projectCard strong {
   font-size: 11px;
   text-align: center;
   line-height: 1.25;
   font-weight: 700;
   color: #24556e;
+}
+
+/* Desktop: no carousel scale */
+.projectCardOn,
+.projectCardOff {
+  opacity: 1;
+  transform: none;
+}
+
+.projectCarousel {
+  display: none;
+}
+
+.projectDots {
+  display: none;
 }
 
 .counterBody {
@@ -611,15 +735,53 @@
   display: block;
 }
 
-.counterBody span {
-  padding: 4px 10px;
+.odometer {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 4px 6px;
   border: 2px solid #0f2d4a;
   border-radius: 6px;
   color: #9cff6b;
   font-family: ui-monospace, monospace;
-  letter-spacing: 0.14em;
-  background: #163a73;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.35) 0%,
+      transparent 28%,
+      transparent 72%,
+      rgba(0, 0, 0, 0.4) 100%
+    ),
+    #163a73;
   box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.45);
+}
+
+.odometerDigit {
+  position: relative;
+  display: block;
+  width: 0.72em;
+  height: 1em;
+  overflow: hidden;
+  text-align: center;
+  border-right: 1px solid rgba(9, 28, 55, 0.55);
+}
+
+.odometerDigit:last-child {
+  border-right: 0;
+}
+
+.odometerReel {
+  display: block;
+  will-change: transform;
+}
+
+.odometerGlyph {
+  display: block;
+  height: 1em;
+  line-height: 1em;
+  text-align: center;
 }
 
 .updates {
@@ -642,15 +804,15 @@
   scrollbar-width: thin;
   /* Temporary ceiling until layout sync runs — prevents flash of full list */
   max-height: 220px;
-  /* Pointer while hovering; open hand while dragging */
-  cursor: var(--wii-cursor);
+  /* Open hand on hover; closed fist while dragging */
+  cursor: url("/plaza/wii-hand-open.png") 16 17, auto !important;
   touch-action: none;
   user-select: none;
 }
 
 .timelineGrabbing,
 .timelineGrabbing * {
-  cursor: var(--wii-hand-open) !important;
+  cursor: url("/plaza/wii-hand-grab.png") 16 18, auto !important;
 }
 
 .timelineGrabbing {
@@ -711,7 +873,7 @@
 
 @media (max-width: 960px) {
   .page {
-    padding: 14px 12px 56px;
+    padding: 14px 12px 96px;
   }
 
   .shell {
@@ -723,31 +885,60 @@
     padding: 12px 14px;
   }
 
+  .clock,
+  .headerActions {
+    display: none;
+  }
+
   .grid {
     display: flex;
     flex-direction: column;
+    align-items: stretch; /* override desktop align-items:start so cards share one width */
     gap: 14px;
     margin-top: 14px;
     width: 100%;
     min-width: 0;
   }
 
-  /* Reading order: story first, then media, then resume/contact */
-  .center {
+  /* Flatten columns so card order can be set for mobile reading flow */
+  .left,
+  .center,
+  .right {
+    display: contents;
+  }
+
+  /* Contact + Resume live in the sticky menu only on mobile */
+  .resumeCard,
+  .contactCard {
+    display: none !important;
+  }
+
+  .welcome {
     order: 1;
   }
 
-  .right {
+  .featured {
     order: 2;
   }
 
-  .left {
+  .moreProjects {
     order: 3;
   }
 
-  .hamburger {
-    display: grid;
-    place-items: center;
+  .updates {
+    order: 4;
+  }
+
+  .seanTv {
+    order: 5;
+  }
+
+  .counterCard {
+    display: none !important;
+  }
+
+  .dailyWisdom {
+    order: 6;
   }
 
   .heroCutout {
@@ -766,7 +957,12 @@
 
   .headerContent {
     padding-left: 120px;
+    padding-right: 4px;
     gap: 12px;
+  }
+
+  .brandRow {
+    padding-right: 8px;
   }
 
   .brand h1 {
@@ -778,29 +974,54 @@
     touch-action: pan-y;
   }
 
+  /* Compact resume CTA — no full page preview on phones */
   .resumeLink {
     flex-direction: row !important;
     align-items: center;
+    justify-content: space-between;
     text-align: left;
     gap: 10px !important;
+    margin: 10px !important;
+    padding: 12px 14px !important;
   }
 
   .resumePreview {
-    width: 72px !important;
-    height: 96px !important;
-    flex: 0 0 auto;
-    object-fit: cover;
-    object-position: top center;
+    display: none !important;
   }
 
   .resumeCta {
     flex: 1;
     min-width: 0;
-    font-size: 15px;
+    font-size: 16px;
+  }
+
+  /* Same full width for every mobile widget */
+  .welcome,
+  .contactCard,
+  .featured,
+  .resumeCard,
+  .moreProjects,
+  .updates,
+  .seanTv,
+  .counterCard,
+  .dailyWisdom {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+    box-sizing: border-box;
+  }
+
+  .contactBtn {
+    min-height: 48px;
   }
 
   .cardBody {
     align-items: flex-end;
+  }
+
+  /* About: keep copy vertically centered beside the Mii */
+  .welcome .cardBody {
+    align-items: center;
   }
 
   .welcomeMii {
@@ -809,23 +1030,128 @@
   }
 
   .projectRow {
-    display: flex;
-    gap: 10px;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    padding: 10px;
-    padding-bottom: 8px;
+    display: none;
   }
 
-  .projectRow a {
-    flex: 0 0 min(42vw, 148px);
-    width: min(42vw, 148px);
-    max-width: min(42vw, 148px);
-    scroll-snap-align: start;
+  .projectCarousel {
+    --project-card-w: min(72vw, 240px);
+    --project-gap: 12px;
+    --project-i: 0;
+    --project-dx: 0px;
+    display: block;
+    width: 100%;
+    padding: 4px 0 2px;
+  }
+
+  .projectViewport {
+    overflow: hidden;
+    width: 100%;
+    /* Room for scale + drop shadow; dots pull up and sit on top of it */
+    padding: 12px 0 28px;
+    margin-bottom: -12px;
+    cursor: inherit;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .projectTrack {
+    display: flex;
+    gap: var(--project-gap);
+    width: max-content;
+    padding-left: calc((100% - var(--project-card-w)) / 2);
+    padding-right: calc((100% - var(--project-card-w)) / 2);
+    will-change: transform;
+    transform: translate3d(
+      calc(-1 * var(--project-i) * (var(--project-card-w) + var(--project-gap)) + var(--project-dx)),
+      0,
+      0
+    );
+    transition: transform 780ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .projectTrackInstant {
+    transition: none !important;
+  }
+
+  /* During wrap re-seat, freeze card chrome too — prevents the blink */
+  .projectCarouselFrozen .projectCard,
+  .projectCarouselFrozen .projectCard.projectCardOn,
+  .projectCarouselFrozen .projectCard.projectCardOff {
+    transition: none !important;
+  }
+
+  .projectCard {
+    flex: 0 0 var(--project-card-w);
+    width: var(--project-card-w);
+    max-width: var(--project-card-w);
+    box-sizing: border-box;
+    will-change: transform, opacity;
+    transform-origin: center center;
+    transition:
+      transform 780ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      opacity 780ms cubic-bezier(0.22, 0.61, 0.36, 1),
+      box-shadow 780ms ease,
+      filter 780ms ease;
+  }
+
+  /* Active = bright + larger; others clearly faded */
+  .projectCard.projectCardOn {
+    opacity: 1;
+    transform: scale(1.06);
+    box-shadow: inset 0 0 0 1px #fff, 0 6px 14px rgba(40, 100, 140, 0.22);
+    z-index: 1;
+  }
+
+  .projectCard.projectCardOff {
+    opacity: 0.38;
+    transform: scale(0.86);
+    filter: saturate(0.85);
+  }
+
+  .projectCard strong {
+    font-size: 12px;
+  }
+
+  .projectDots {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin: 0 auto 6px;
+    padding: 6px 10px;
+    width: fit-content;
+    background: none;
+    box-shadow: none;
+  }
+
+  .projectDot,
+  .projectDotOn {
+    display: block;
+    border: 0;
+    padding: 0;
+    border-radius: 50%;
+    cursor: inherit;
+    transition:
+      transform 0.28s ease,
+      background 0.28s ease,
+      opacity 0.28s ease;
+  }
+
+  .projectDot {
+    width: 5px;
+    height: 5px;
+    opacity: 0.35;
+    background: #8eb4c8;
+  }
+
+  .projectDotOn {
+    width: 5px;
+    height: 5px;
+    opacity: 0.9;
+    background: #3aa0dc;
+    transform: scale(1.35);
   }
 
   .featureCard {
@@ -846,14 +1172,17 @@
     padding-right: 40px;
   }
 
+  .featureCard p {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
   .newGif {
     width: 34px;
     top: 8px;
     right: 8px;
-  }
-
-  .contactBtn {
-    min-height: 48px;
   }
 
   .wiiHover:hover,
@@ -862,9 +1191,14 @@
   }
 }
 
+.seanTv {
+  min-width: 0;
+  max-width: 100%;
+}
+
 @media (max-width: 640px) {
   .page {
-    padding: 12px 10px 52px;
+    padding: 12px 10px 100px;
   }
 
   .shell {
@@ -896,18 +1230,8 @@
     margin-bottom: 2px;
   }
 
-  .clock {
-    min-width: 0;
-    padding: 5px 10px;
-    font-size: 12px;
-  }
-
-  .hamburger {
-    width: 38px;
-    height: 38px;
-  }
-
-  .marqueeTrack span {
+  .marqueeTrack span,
+  .marqueeSet span {
     font-size: 12px;
     padding-right: 16px;
   }
@@ -919,6 +1243,10 @@
     padding: 10px 12px;
   }
 
+  .welcome .cardBody {
+    align-items: center;
+  }
+
   .cardBody p {
     font-size: 14px;
     line-height: 1.4;
@@ -928,12 +1256,8 @@
     width: 56px;
   }
 
-  .projectRow a {
-    flex-basis: 46%;
-  }
-
-  .projectRow strong {
-    font-size: 12px;
+  .projectCarousel {
+    --project-card-w: min(78vw, 220px);
   }
 
   .newGif {
@@ -955,6 +1279,24 @@
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .heroCutout:hover {
+    transform: scale(1.05);
+  }
+
+  .welcomeMii:hover {
+    transform: scale(1.06);
+  }
+
+  .brand h1:hover {
+    transform: scale(1.04);
+  }
+
+  .clock:hover {
+    transform: scale(1.06);
+  }
+}
+
 @media (hover: none) and (pointer: coarse) {
   .wiiHover:hover,
   .wiiHover:focus-visible,
@@ -968,6 +1310,11 @@
   .wiiHoverSm:active {
     transform: scale(0.98);
     border-color: var(--wii-hover) !important;
+  }
+
+  .heroCutout,
+  .welcomeMii {
+    pointer-events: none;
   }
 
   .timelineList {

@@ -1,13 +1,10 @@
 import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Home from "./pages/Home";
 import EightHundredCalculatorApp from "./apps/EightHundredCalculator/App";
 import PokeTeamPredictorApp from "./apps/PokeTeamPredictor/App";
 import PodcastProjectApp from "./apps/PodcastProject/App";
 import { Analytics } from "@vercel/analytics/react";
-import About from "./pages/About";
 import Resume from "./pages/Resume";
-// Import the new component
 import LittleScholarsBotDemo from "./apps/LittleScholarsBot/LittleScholarsBotDemo";
 import BrightNestBotDemo from "./apps/BrightNestBot/BrightNestBotDemo";
 import PlazaHome from "./pages/homeLab/Home2";
@@ -85,17 +82,16 @@ export default function App() {
     <BrowserRouter>
       <ErrorBoundary fallback={<div style={{ color: "#dc2626" }}>Couldn’t load this page.</div>}>
         <Routes>
-          {/* Homepage */}
-          <Route path="/" element={<Home />} />
-          <Route path="/home" element={<PlazaHome />} />
-          {/* Old plaza redesign experiments → canonical home */}
-          <Route path="/home1" element={<Navigate to="/home" replace />} />
-          <Route path="/home2" element={<Navigate to="/home" replace />} />
-          <Route path="/home3" element={<Navigate to="/home" replace />} />
-          <Route path="/home4" element={<Navigate to="/home" replace />} />
-          <Route path="/home5" element={<Navigate to="/home" replace />} />
-          {/* About page */}
-          <Route path="/about" element={<About />} />
+          {/* Soft Aero plaza is the site home */}
+          <Route path="/" element={<PlazaHome />} />
+          {/* Legacy URLs */}
+          <Route path="/home" element={<Navigate to="/" replace />} />
+          <Route path="/home1" element={<Navigate to="/" replace />} />
+          <Route path="/home2" element={<Navigate to="/" replace />} />
+          <Route path="/home3" element={<Navigate to="/" replace />} />
+          <Route path="/home4" element={<Navigate to="/" replace />} />
+          <Route path="/home5" element={<Navigate to="/" replace />} />
+          <Route path="/about" element={<Navigate to="/#about" replace />} />
           {/* Resume */}
           <Route path="/resume" element={<Resume />} />
           

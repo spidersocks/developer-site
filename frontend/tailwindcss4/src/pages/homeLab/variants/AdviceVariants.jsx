@@ -2,13 +2,13 @@ import { TIP_TOPICS, dailyTip } from "./adviceShared";
 import styles from "./AdviceVariants.module.css";
 
 /** Quiet gif tip cards (production) */
-export function AdviceGifCards({ compact = false } = {}) {
+export function AdviceGifCards({ compact = false, className = "" } = {}) {
   return (
     <section
-      className={`${styles.card} ${styles.quirk} ${compact ? styles.compact : ""}`}
-      aria-label="Daily tips"
+      className={`${styles.card} ${styles.quirk} ${compact ? styles.compact : ""}${className ? ` ${className}` : ""}`}
+      aria-label="Daily wisdom"
     >
-      <div className={styles.quirkHead}>Tip of the day</div>
+      <div className={styles.quirkHead}>Daily wisdom</div>
       <div className={`${styles.body} ${styles.gifGrid}`}>
         {TIP_TOPICS.map((topic) => (
           <div key={topic.id} className={styles.gifCard}>

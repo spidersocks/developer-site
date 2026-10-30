@@ -6,7 +6,6 @@ export const VIDEO_CHANNELS = [
   {
     id: "sleep",
     label: "Sleep",
-    gif: "/plaza/tip-sleep.gif",
     videos: sleepVideos.filter((v) => v.kind === "youtube"),
     playlistId: PLAYLIST_ID,
     salt: 3,
@@ -14,7 +13,6 @@ export const VIDEO_CHANNELS = [
   {
     id: "run",
     label: "Running",
-    gif: "/plaza/tip-run.gif",
     videos: runningVideos.filter((v) => v.kind === "youtube" && !v.vertical),
     playlistId: RUNNING_PLAYLIST_ID,
     salt: 7,
@@ -31,13 +29,20 @@ export function thumbUrl(videoId) {
 }
 
 export function embedUrl(video, playlistId, autoplay = false) {
+  // controls=0: YouTube's chrome is huge in a sidebar player and often sticks
+  // on screen; we use a light custom overlay instead. iv_load_policy=3 hides cards.
   const params = new URLSearchParams({
     rel: "0",
     modestbranding: "1",
+    controls: "0",
+    iv_load_policy: "3",
+    playsinline: "1",
+    disablekb: "1",
+    fs: "0",
   });
   if (playlistId) params.set("list", playlistId);
   if (autoplay) {
     params.set("autoplay", "1");
   }
-  return `https://www.youtube.com/embed/${video.id}?${params.toString()}`;
+  return `https://www.youtube-nocookie.com/embed/${video.id}?${params.toString()}`;
 }

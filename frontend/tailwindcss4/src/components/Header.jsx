@@ -84,8 +84,8 @@ export default function Header() {
 
         {/* Center: Nav (desktop only) */}
         <nav className={styles.navCenter}>
-          <Link to="/about" className={styles.navLink}>About</Link>
-          <Link to="/projects" className={styles.navLink}>Projects</Link>
+          <Link to="/#about" className={styles.navLink}>About</Link>
+          <Link to="/#work" className={styles.navLink}>Projects</Link>
           <Link to="/resume" className={styles.navLink}>Resume</Link>
         </nav>
 
@@ -124,8 +124,8 @@ export default function Header() {
       {/* Mobile dropdown menu */}
       {menuOpen && (
         <div className={styles.mobileMenu}>
-          <Link to="/about" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>About</Link>
-          <Link to="/projects" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>Projects</Link>
+          <Link to="/#about" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>About</Link>
+          <Link to="/#work" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>Projects</Link>
           <Link to="/resume" className={styles.mobileLink} onClick={() => setMenuOpen(false)}>Resume</Link>
 
           {/* Mobile socials */}

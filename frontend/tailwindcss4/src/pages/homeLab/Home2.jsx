@@ -1,14 +1,18 @@
 import { useLayoutEffect, useEffect, useRef, useState } from "react";
-import { openProps, profile, projects } from "./projects";
+import { openProps, projects } from "./projects";
 import { lifeEvents } from "./life";
-import { clockText, formatCounter } from "./shared/plazaMeta";
+import { clockText } from "./shared/plazaMeta";
+import { AnalogCounter } from "./shared/AnalogCounter";
 import { useVisitorCount } from "./shared/useVisitorCount";
 import { AdviceGifCards } from "./variants/AdviceVariants";
 import { VideoMini } from "./variants/VideoVariants";
+import MobileChrome from "./MobileChrome";
+import MarqueePill from "./MarqueePill";
+import ProjectStrip from "./ProjectStrip";
 import styles from "./Home2.module.css";
 
 const MARQUEE = [
-  "Welcome",
+  "About",
   "PhD Computing · Hong Kong Polytechnic University",
   "Exercise and sleep research",
   "Selected projects",
@@ -107,22 +111,12 @@ function VisitorIcon() {
   );
 }
 
-const MOBILE_NAV = [
-  { label: "Welcome", href: "#welcome" },
-  { label: "Projects", href: "#work" },
-  { label: "Timeline", href: "#timeline" },
-  { label: "Resume", href: "/resume" },
-  { label: "Contact", href: "#contact" },
-  { label: "About", href: "/about" },
-];
-
 export default function Home2() {
   const [time, setTime] = useState(() => clockText(new Date()));
   const [timelineMax, setTimelineMax] = useState(null);
   const [resumeHeight, setResumeHeight] = useState(null);
   const [timelineGrabbing, setTimelineGrabbing] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const count = useVisitorCount();
+  const { count, justCounted } = useVisitorCount();
   const logRef = useRef(null);
   const leftRef = useRef(null);
   const centerRef = useRef(null);
@@ -130,75 +124,12 @@ export default function Home2() {
   const updatesRef = useRef(null);
   const resumeImgRef = useRef(null);
   const timelineDragRef = useRef(null);
-  const menuRef = useRef(null);
-  const hamburgerRef = useRef(null);
-  const [menuPos, setMenuPos] = useState(null);
   const featured = projects[0];
   const rest = projects.slice(1);
-
-  const toggleMenu = () => {
-    setMenuOpen((open) => {
-      if (open) {
-        setMenuPos(null);
-        return false;
-      }
-      const btn = hamburgerRef.current;
-      if (btn) {
-        const r = btn.getBoundingClientRect();
-        setMenuPos({
-          top: Math.round(r.bottom + 8),
-          right: Math.round(window.innerWidth - r.right),
-        });
-      }
-      return true;
-    });
-  };
 
   useEffect(() => {
     const id = setInterval(() => setTime(clockText(new Date())), 1000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const close = () => {
-      setMenuOpen(false);
-      setMenuPos(null);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") close();
-    };
-    const onPointer = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) close();
-    };
-    const onReposition = () => {
-      const btn = hamburgerRef.current;
-      if (!btn) return;
-      const r = btn.getBoundingClientRect();
-      setMenuPos({
-        top: Math.round(r.bottom + 8),
-        right: Math.round(window.innerWidth - r.right),
-      });
-    };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onReposition);
-    window.addEventListener("scroll", onReposition, true);
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("touchstart", onPointer, { passive: true });
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", onReposition);
-      window.removeEventListener("scroll", onReposition, true);
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("touchstart", onPointer);
-    };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 961px)");
-    const close = () => setMenuOpen(false);
-    mq.addEventListener("change", close);
-    return () => mq.removeEventListener("change", close);
   }, []);
 
   // Pin timeline + resume bottoms to the center column so all three
@@ -224,7 +155,6 @@ export default function Home2() {
 
         const targetH = center.offsetHeight;
 
-        // Right: timeline list fills remaining height (scrolls internally)
         const aboveTimeline =
           list.getBoundingClientRect().top - right.getBoundingClientRect().top;
         const timelineNext = Math.floor(targetH - aboveTimeline);
@@ -233,23 +163,11 @@ export default function Home2() {
           : null;
         setTimelineMax((prev) => (prev === timelineCapped ? prev : timelineCapped));
 
-        // Left: show more/less of the resume preview so the column bottom
-        // matches center. object-fit:cover + top — crops, does not stretch.
+        // Height of everything in the left column except the preview image
+        // (order-independent: Contact can sit above Resume).
         const leftExtras = left.offsetHeight - resumeImg.offsetHeight;
-        let resumeNext = Math.floor(targetH - leftExtras);
-        const boxW = resumeImg.clientWidth || resumeImg.offsetWidth;
-        if (resumeImg.naturalWidth > 0 && boxW > 0) {
-          const naturalH = Math.round(
-            (boxW * resumeImg.naturalHeight) / resumeImg.naturalWidth
-          );
-          // Prefer cropping the page; allow mild zoom-in (side crop) if the
-          // column still needs a few extra pixels to meet the baseline.
-          resumeNext = Math.min(resumeNext, Math.round(naturalH * 1.2));
-        }
-        const resumeCapped = Number.isFinite(resumeNext)
-          ? Math.max(96, resumeNext)
-          : null;
-        setResumeHeight((prev) => (prev === resumeCapped ? prev : resumeCapped));
+        const resumeNext = Math.max(96, Math.round(targetH - leftExtras));
+        setResumeHeight((prev) => (prev === resumeNext ? prev : resumeNext));
       });
     };
 
@@ -285,7 +203,6 @@ export default function Home2() {
     if (list) list.scrollTop = list.scrollHeight;
   }, [timelineMax]);
 
-  // Timeline: pointer on hover; open hand while dragging.
   useEffect(() => {
     if (!timelineGrabbing) return undefined;
     const onMove = (e) => {
@@ -310,7 +227,6 @@ export default function Home2() {
 
   const onTimelinePointerDown = (e) => {
     if (e.button !== 0) return;
-    // Touch / coarse pointers: keep native pan-y scrolling
     if (
       e.pointerType === "touch" ||
       window.matchMedia("(hover: none) and (pointer: coarse)").matches
@@ -319,7 +235,6 @@ export default function Home2() {
     }
     const list = logRef.current;
     if (!list) return;
-    // Leave native scrollbar alone (right edge)
     const rect = list.getBoundingClientRect();
     if (e.clientX > rect.right - 14) return;
     timelineDragRef.current = {
@@ -334,6 +249,7 @@ export default function Home2() {
     <div
       className={`${styles.page}${timelineGrabbing ? ` ${styles.pageGrabbing}` : ""}`}
     >
+      <MobileChrome contacts={CONTACTS} />
       <div className={styles.shell}>
         <header className={styles.header}>
           <img
@@ -351,87 +267,38 @@ export default function Home2() {
                   Sean <span>Fontaine</span>
                 </h1>
               </div>
-              <div className={styles.headerActions} ref={menuRef}>
+              <div className={styles.headerActions}>
                 <span className={styles.clock} aria-label="Current time">
                   {time}
                 </span>
-                <button
-                  ref={hamburgerRef}
-                  type="button"
-                  className={`${styles.hamburger}${menuOpen ? ` ${styles.hamburgerOpen}` : ""}`}
-                  aria-label={menuOpen ? "Close menu" : "Open menu"}
-                  aria-expanded={menuOpen}
-                  aria-controls="soft-aero-mobile-nav"
-                  onClick={toggleMenu}
-                >
-                  <span className={styles.hamburgerBars} aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                </button>
-                {menuOpen && menuPos ? (
-                  <nav
-                    id="soft-aero-mobile-nav"
-                    className={styles.mobileMenu}
-                    aria-label="Site"
-                    style={{ top: menuPos.top, right: menuPos.right }}
-                  >
-                    {MOBILE_NAV.map((item) => (
-                      <a
-                        key={item.href}
-                        className={styles.mobileLink}
-                        href={item.href}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setMenuPos(null);
-                        }}
-                      >
-                        {item.label}
-                      </a>
-                    ))}
-                    <div className={styles.mobileSocials}>
-                      {CONTACTS.map(({ id, label, href, Icon, external }) => (
-                        <a
-                          key={id}
-                          href={href}
-                          aria-label={label}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setMenuPos(null);
-                          }}
-                          {...(external
-                            ? { target: "_blank", rel: "noopener noreferrer" }
-                            : {})}
-                        >
-                          <Icon />
-                        </a>
-                      ))}
-                    </div>
-                  </nav>
-                ) : null}
               </div>
             </div>
-            <div className={styles.marquee}>
-              <div className={styles.marqueeTrack}>
-                {[0, 1].map((copy) => (
-                  <p key={copy}>
-                    {MARQUEE.map((text) => (
-                      <span key={`${copy}-${text}`}>
-                        <i className={styles.marqueeDot} aria-hidden="true" />
-                        {text}
-                      </span>
-                    ))}
-                  </p>
-                ))}
-              </div>
-            </div>
+            <MarqueePill items={MARQUEE} />
           </div>
         </header>
 
         <div className={styles.grid}>
           <aside className={styles.left} ref={leftRef}>
-            <div className={styles.navCard}>
+            <div className={`${styles.navCard} ${styles.contactCard}`} id="contact">
+              <div className={styles.navTab}>Contact</div>
+              <div className={styles.contactRow}>
+                {CONTACTS.map(({ id, label, href, Icon, external }) => (
+                  <a
+                    key={id}
+                    className={`${styles.contactBtn} ${styles.wiiHoverSm}`}
+                    href={href}
+                    aria-label={label}
+                    {...(external
+                      ? { target: "_blank", rel: "noopener noreferrer" }
+                      : {})}
+                  >
+                    <Icon />
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div className={`${styles.navCard} ${styles.resumeCard}`} id="resume">
               <div className={styles.navTab}>Resume</div>
               <a
                 className={`${styles.resumeLink} ${styles.wiiHover}`}
@@ -453,31 +320,12 @@ export default function Home2() {
               </a>
             </div>
 
-            <div className={styles.navCard} id="contact">
-              <div className={styles.navTab}>Contact</div>
-              <div className={styles.contactRow}>
-                {CONTACTS.map(({ id, label, href, Icon, external }) => (
-                  <a
-                    key={id}
-                    className={`${styles.contactBtn} ${styles.wiiHoverSm}`}
-                    href={href}
-                    aria-label={label}
-                    {...(external
-                      ? { target: "_blank", rel: "noopener noreferrer" }
-                      : {})}
-                  >
-                    <Icon />
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <AdviceGifCards />
+            <AdviceGifCards className={styles.dailyWisdom} />
           </aside>
 
           <main className={styles.center} ref={centerRef}>
-            <section className={styles.welcome} id="welcome">
-              <div className={styles.cardHead}>Welcome</div>
+            <section className={styles.welcome} id="about">
+              <div className={styles.cardHead}>About</div>
               <div className={styles.cardBody}>
                 <p>
                   Hi, I&apos;m Sean — PhD candidate in Computing at Hong Kong Polytechnic
@@ -509,25 +357,13 @@ export default function Home2() {
                   </em>
                   <p>{featured.description}</p>
                 </div>
-                <img className={styles.newGif} src="/plaza/new.gif" alt="New" />
+                <img className={styles.newGif} src="/plaza/new.webp" alt="New" />
               </a>
             </section>
 
             <section className={styles.moreProjects}>
               <div className={styles.cardHead}>More projects</div>
-              <div className={styles.projectRow}>
-                {rest.map((project) => (
-                  <a
-                    key={project.title}
-                    className={styles.wiiHover}
-                    href={project.link}
-                    {...openProps(project.link)}
-                  >
-                    <img src={project.preview} alt="" />
-                    <strong>{project.short || project.title}</strong>
-                  </a>
-                ))}
-              </div>
+              <ProjectStrip projects={rest} />
             </section>
           </main>
 
@@ -536,11 +372,13 @@ export default function Home2() {
               <div className={styles.cardHead}>Visitors</div>
               <div className={styles.counterBody}>
                 <VisitorIcon />
-                <span>{count == null ? "------" : formatCounter(count)}</span>
+                <AnalogCounter value={count} justCounted={justCounted} />
               </div>
             </div>
 
-            <VideoMini compact />
+            <div className={styles.seanTv} id="sean-tv">
+              <VideoMini compact />
+            </div>
 
             <div className={styles.updates} id="timeline" ref={updatesRef}>
               <div className={styles.cardHead}>Timeline</div>
@@ -567,7 +405,6 @@ export default function Home2() {
             </div>
           </aside>
         </div>
-
       </div>
       <footer className={styles.footer}>
         <p>© {new Date().getFullYear()} Sean Fontaine</p>

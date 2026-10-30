@@ -1,10 +1,3 @@
-export const profile = {
-  name: "Sean Fontaine",
-  line: "PhD candidate in Computing at Hong Kong Polytechnic University.",
-  research: "I study how exercise and sleep relate.",
-  photo: "/sean_fontaine.jpg",
-};
-
 export const projects = [
   {
     title: "Clozzz Sleep Series",
