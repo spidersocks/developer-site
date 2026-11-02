@@ -424,6 +424,20 @@ export default function BrightNestBotDemo() {
   const rag = trace?.rag;
   // Only real RAG hits — never fall back to fact citations
   const hits = Array.isArray(rag?.hits) ? rag.hits : [];
+  const routingDebug = trace?.routing?.debug || {};
+  const arbiter = routingDebug.arbiter || null;
+  const arbiterOverride = routingDebug.arbiter_override || null;
+  const adaptStep = steps.find((s) => s.id === "adapt");
+  const arbiterStep = steps.find((s) => s.id === "intent_arbiter");
+  const gapStep = steps.find((s) => s.id === "gap_polish");
+  const llmTouched = Boolean(
+    arbiter ||
+      arbiterOverride ||
+      adaptStep ||
+      arbiterStep ||
+      gapStep ||
+      String(trace?.provider || "").includes("+llm")
+  );
 
   const turnKey = `${trace?.latency_ms ?? "idle"}-${route ?? "none"}-${chatHistory.length}`;
   const factOpen = isFactRoute(route);
@@ -437,6 +451,13 @@ export default function BrightNestBotDemo() {
   const memoryTurns = Math.max(trace?.history?.turns_loaded ?? 0, Math.max(0, userTurns - 1));
   const memoryDisplayTurns = Math.max(memoryTurns, userTurns > 0 ? userTurns : 0);
   const memoryOpen = memoryDisplayTurns >= 1;
+  const llmOpen =
+    llmTouched &&
+    (Boolean(arbiterOverride) ||
+      adaptStep?.status === "done" ||
+      gapStep?.status === "done" ||
+      arbiter?.action === "rag" ||
+      arbiter?.action === "reroute");
 
   const activePanel = factOpen
     ? "facts"
@@ -450,9 +471,11 @@ export default function BrightNestBotDemo() {
             ? "admin_messages"
             : adminTodoOpen
               ? "admin_todo"
-              : memoryOpen && !route
-                ? "memory"
-                : null;
+              : llmOpen
+                ? "llm"
+                : memoryOpen && !route
+                  ? "memory"
+                  : null;
 
   const dialogue = trace?.booking;
   const cancelTrace = trace?.cancel;
@@ -676,15 +699,23 @@ export default function BrightNestBotDemo() {
           <div className="bn-route-card">
             <div className="bn-route-main">
               <span className={`bn-pill bn-pill-${meta.tone}`}>{meta.label}</span>
+              {llmTouched ? (
+                <span className="bn-pill bn-pill-llm" title="Cheap DashScope review / polish ran">
+                  qwen-turbo review
+                </span>
+              ) : null}
               {trace?.latency_ms != null && <span className="bn-latency">{trace.latency_ms} ms</span>}
               {isLoading && <span className="bn-running">running…</span>}
             </div>
             {steps.length > 0 && (
               <ol className="bn-step-rail" aria-label="Pipeline steps">
                 {steps.map((s) => {
+                  const isLlm =
+                    s.id === "intent_arbiter" || s.id === "adapt" || s.id === "gap_polish";
                   const isActive =
                     s.status === "done" &&
-                    (s.id === "facts" ||
+                    (isLlm ||
+                      s.id === "facts" ||
                       (factOpen && /fee|teacher|trial|weather|pickup|makeup|sibling|allerg|payment|location|pets/i.test(s.label || "")) ||
                       (hoursOpen && /hours|date|holiday|weather/i.test(s.id + s.label)) ||
                       (ragOpen && s.id === "rag") ||
@@ -694,7 +725,7 @@ export default function BrightNestBotDemo() {
                   return (
                     <li
                       key={s.id}
-                      className={`bn-step-chip bn-step-${s.status || "idle"}${isActive ? " bn-step-active" : ""}`}
+                      className={`bn-step-chip bn-step-${s.status || "idle"}${isLlm ? " bn-step-llm" : ""}${isActive ? " bn-step-active" : ""}`}
                       title={s.detail}
                     >
                       <span>{s.label}</span>
@@ -704,9 +735,97 @@ export default function BrightNestBotDemo() {
               </ol>
             )}
             <p className="bn-hint">
-              Active path is highlighted below. Dimmed panels stayed idle for this turn.
+              Amber chips are the cheap LLM referee / rewrite. Dimmed panels stayed idle for this
+              turn.
             </p>
           </div>
+
+          <Reveal
+            key={`llm-${turnKey}`}
+            title="Cheap LLM review"
+            summary={
+              llmTouched
+                ? [
+                    arbiterOverride
+                      ? `reroute ${arbiterOverride.from} → ${arbiterOverride.to}`
+                      : arbiter?.action
+                        ? `intent ${arbiter.action}`
+                        : null,
+                    adaptStep?.status === "done" ? "fact polish" : null,
+                    gapStep?.status === "done" ? "gap polish" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "qwen-turbo touched this turn"
+                : "Idle — turbo referee / polish when DashScope is live"
+            }
+            defaultOpen={llmOpen}
+            active={activePanel === "llm"}
+            dimmed={Boolean(activePanel) && activePanel !== "llm" && !llmTouched}
+          >
+            {!llmTouched ? (
+              <p className="bn-empty">
+                After regex/prototype routing, a small DashScope model can keep, send to RAG, or
+                polish a fixed fact card so the parent reply matches the question.
+              </p>
+            ) : (
+              <>
+                <p className="bn-note">
+                  Demo “weaker LLM” path — fast <code>qwen-turbo</code> review, not the main RAG
+                  generator. Fail-open if the call times out.
+                </p>
+                <ul className="bn-fact-list">
+                  <li>
+                    <span>Provider</span>
+                    <code>{trace?.provider || "—"}</code>
+                  </li>
+                  {arbiter ? (
+                    <li>
+                      <span>Intent action</span>
+                      <code>
+                        {arbiter.action || "keep"}
+                        {arbiter.reason ? ` · ${arbiter.reason}` : ""}
+                      </code>
+                    </li>
+                  ) : null}
+                  {arbiterOverride ? (
+                    <li>
+                      <span>Override</span>
+                      <code>
+                        {arbiterOverride.from} → {arbiterOverride.to}
+                      </code>
+                    </li>
+                  ) : null}
+                  {adaptStep ? (
+                    <li>
+                      <span>Fact adapt</span>
+                      <code>
+                        {adaptStep.status}
+                        {adaptStep.detail ? ` · ${adaptStep.detail}` : ""}
+                      </code>
+                    </li>
+                  ) : null}
+                  {gapStep ? (
+                    <li>
+                      <span>Gap polish</span>
+                      <code>
+                        {gapStep.status}
+                        {gapStep.detail ? ` · ${gapStep.detail}` : ""}
+                      </code>
+                    </li>
+                  ) : null}
+                  {arbiterStep && !arbiter ? (
+                    <li>
+                      <span>Intent step</span>
+                      <code>
+                        {arbiterStep.status}
+                        {arbiterStep.detail ? ` · ${arbiterStep.detail}` : ""}
+                      </code>
+                    </li>
+                  ) : null}
+                </ul>
+              </>
+            )}
+          </Reveal>
 
           <Reveal
             key={`facts-${turnKey}`}
