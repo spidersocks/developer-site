@@ -83,9 +83,12 @@ function routeMeta(route) {
 
 function sheetWhen(iso) {
   if (!iso) return "—";
+  const raw = String(iso).trim();
+  // Already staff-facing stamps from the CSV (e.g. "2 Nov 2026, 2:26 pm")
+  if (/[A-Za-z]/.test(raw) && !raw.includes("T")) return raw;
   try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return raw;
     return d.toLocaleString([], {
       month: "short",
       day: "numeric",
@@ -93,7 +96,7 @@ function sheetWhen(iso) {
       minute: "2-digit",
     });
   } catch {
-    return String(iso).slice(0, 16);
+    return raw;
   }
 }
 
@@ -101,6 +104,61 @@ function clip(text, n = 72) {
   const s = (text || "").trim();
   if (s.length <= n) return s;
   return `${s.slice(0, n - 1)}…`;
+}
+
+function initials(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const REASON_LABELS = {
+  knowledge_gap: "Missing centre information",
+  unknown_programme: "Asked about a programme we don't offer",
+  no_retrieval: "No matching centre materials found",
+  weak_retrieval: "Only a weak match in centre materials",
+  off_topic_retrieval: "Centre materials didn't match the question",
+  weak_extractive: "Auto-answer looked incomplete — please confirm",
+  model_no_answer: "Assistant couldn't answer from centre materials",
+  model_admin_gap: "Needs a staff decision or private record",
+  generic_fallback: "Only a generic reply was available",
+};
+
+const CATEGORY_LABELS = {
+  safety: "Child safety / medical concern",
+  angry: "Upset parent / complaint",
+  hard_conflict: "Refund or withdrawal request",
+  ask_human: "Asked to speak with staff",
+  general: "General follow-up",
+};
+
+const PRIORITY_LABELS = {
+  urgent: "Urgent",
+  high: "High",
+  normal: "Normal",
+};
+
+function reasonLabel(reason) {
+  const raw = (reason || "").trim();
+  if (!raw) return "Needs staff follow-up";
+  return REASON_LABELS[raw] || raw;
+}
+
+function categoryLabel(category, fallback) {
+  if (fallback) return fallback;
+  const raw = (category || "").trim();
+  if (!raw) return CATEGORY_LABELS.general;
+  return CATEGORY_LABELS[raw] || raw.replace(/_/g, " ");
+}
+
+function priorityLabel(priority, fallback) {
+  if (fallback) return fallback;
+  const raw = (priority || "normal").trim().toLowerCase();
+  return PRIORITY_LABELS[raw] || raw;
 }
 
 function Reveal({ title, summary, defaultOpen = false, children }) {
@@ -135,6 +193,7 @@ export default function BrightNestBotDemo() {
   const [adminTodos, setAdminTodos] = useState([]);
   const [staffMessages, setStaffMessages] = useState([]);
   const [rightView, setRightView] = useState("system"); // system | staff
+  const [staffTab, setStaffTab] = useState("sheet"); // sheet | mail
   const [selectedMsgId, setSelectedMsgId] = useState(null);
 
   const chatWindowRef = useRef(null);
@@ -242,6 +301,7 @@ export default function BrightNestBotDemo() {
       setStaffMessages([]);
       setSelectedMsgId(null);
       setRightView("system");
+      setStaffTab("sheet");
       localStorage.removeItem("bn_bot_session_id");
       setSessionLabel(shortSessionLabel());
       refreshAdminTodos();
@@ -294,14 +354,20 @@ export default function BrightNestBotDemo() {
       const hitTodo = Boolean(data.trace?.admin_todo);
       const hitBoss =
         Boolean(data.trace?.staff_message) || data.trace?.route === "staff_escalation";
-      if (hitTodo) refreshAdminTodos();
+      if (hitTodo) {
+        refreshAdminTodos();
+        setStaffTab("sheet");
+        setRightView("staff");
+      }
       if (hitBoss) {
         refreshStaffMessages();
         if (data.trace?.staff_message?.id) {
           setSelectedMsgId(data.trace.staff_message.id);
         }
+        // Last write wins when both fire in one turn
+        setStaffTab("mail");
+        setRightView("staff");
       }
-      if (hitTodo || hitBoss) setRightView("staff");
       // Keep form identity in sync when dialogue resolves a child
       const resolvedChild =
         data.trace?.booking?.child_name || data.trace?.cancel?.child_name;
@@ -596,199 +662,298 @@ export default function BrightNestBotDemo() {
           </div>
 
           {rightView === "staff" ? (
-            <div className="bn-staff-desk">
-              {/* Google Sheets–style admin to-do */}
-              <div className="bn-sheet-widget">
-                <div className="bn-sheet-menubar">
-                  <div className="bn-sheet-doc">
-                    <span className="bn-sheet-icon" aria-hidden="true" />
-                    <div>
-                      <strong>admin_todos</strong>
-                      <small>Research queue · parents never see this</small>
-                    </div>
-                  </div>
-                  <span className="bn-sheet-count">
-                    {adminTodos.length} open
-                  </span>
+            <div className="bn-browser">
+              <div className="bn-browser-chrome">
+                <div className="bn-browser-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
                 </div>
-                <div className="bn-sheet-formula">
-                  <span className="bn-sheet-fx">fx</span>
-                  <code>admin_todos.csv</code>
-                  <span className="bn-sheet-hint">Edit “Info needed”, tick Status when done</span>
-                </div>
-                <div className="bn-sheet-scroll">
-                  <table className="bn-sheet-grid">
-                    <thead>
-                      <tr>
-                        <th className="bn-sheet-corner" />
-                        {sheetCols.map((c) => (
-                          <th key={c}>{c}</th>
-                        ))}
-                      </tr>
-                      <tr className="bn-sheet-labels">
-                        <th />
-                        <th>Status</th>
-                        <th>Parent</th>
-                        <th>Child</th>
-                        <th>Question</th>
-                        <th>Info needed</th>
-                        <th>Reason</th>
-                        <th>When</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adminTodos.length === 0 ? (
-                        <tr>
-                          <td className="bn-sheet-rownum">1</td>
-                          <td colSpan={7} className="bn-sheet-empty">
-                            No open to-dos — quiet flags appear when RAG can’t answer.
-                          </td>
-                        </tr>
-                      ) : (
-                        adminTodos.map((t, i) => (
-                          <tr key={t.id}>
-                            <td className="bn-sheet-rownum">{i + 1}</td>
-                            <td className="bn-sheet-check">
-                              <input
-                                type="checkbox"
-                                title="Mark done"
-                                aria-label={`Mark ${t.id} done`}
-                                onChange={() => markTodoDone(t.id)}
-                              />
-                            </td>
-                            <td title={t.phone || ""}>{t.parent_name || t.phone || "—"}</td>
-                            <td>{t.child_name || "—"}</td>
-                            <td className="bn-sheet-q" title={t.question}>
-                              {clip(t.question, 90)}
-                            </td>
-                            <td className="bn-sheet-edit">
-                              <input
-                                type="text"
-                                defaultValue={t.info_needed || ""}
-                                key={`${t.id}-${t.info_needed || ""}`}
-                                placeholder="What staff should look up…"
-                                onBlur={(e) => {
-                                  const next = e.target.value.trim();
-                                  if (next !== (t.info_needed || "").trim()) {
-                                    patchTodoField(t.id, { info_needed: next });
-                                  }
-                                }}
-                              />
-                            </td>
-                            <td>
-                              <code>{t.reason || "—"}</code>
-                            </td>
-                            <td>{sheetWhen(t.created_at)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                <div className="bn-browser-tabs" role="tablist" aria-label="Staff apps">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={staffTab === "sheet"}
+                    className={`bn-browser-tab ${staffTab === "sheet" ? "active" : ""}`}
+                    onClick={() => setStaffTab("sheet")}
+                  >
+                    <span className="bn-tab-ico bn-tab-ico-sheet" aria-hidden="true" />
+                    <span className="bn-browser-tab-label">Follow-up sheet</span>
+                    {adminTodos.length > 0 && (
+                      <span className="bn-tab-count">{adminTodos.length}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={staffTab === "mail"}
+                    className={`bn-browser-tab ${staffTab === "mail" ? "active" : ""}`}
+                    onClick={() => setStaffTab("mail")}
+                  >
+                    <span className="bn-tab-ico bn-tab-ico-mail" aria-hidden="true" />
+                    <span className="bn-browser-tab-label">Staff inbox</span>
+                    {staffMessages.length > 0 && (
+                      <span className="bn-tab-count">{staffMessages.length}</span>
+                    )}
+                  </button>
                 </div>
               </div>
+              <div className="bn-browser-url">
+                <span className="bn-browser-lock" aria-hidden="true" />
+                <code>
+                  {staffTab === "sheet"
+                    ? "sheets.local/Follow-up sheet"
+                    : "mail.local/Staff inbox"}
+                </code>
+              </div>
 
-              {/* Gmail-style boss inbox */}
-              <div className="bn-inbox-widget">
-                <div className="bn-inbox-bar">
-                  <div>
-                    <strong>Inbox</strong>
-                    <span> · centre boss</span>
+              <div className="bn-browser-page">
+                {staffTab === "sheet" ? (
+                  <div className="bn-sheet-widget">
+                    <div className="bn-sheet-menubar">
+                      <div className="bn-sheet-doc">
+                        <span className="bn-sheet-icon" aria-hidden="true" />
+                        <div>
+                          <strong>Follow-up sheet</strong>
+                          <small>Internal staff notes · parents never see this</small>
+                        </div>
+                      </div>
+                      <span className="bn-sheet-count">{adminTodos.length} open</span>
+                    </div>
+                    <div className="bn-sheet-formula">
+                      <span className="bn-sheet-fx">fx</span>
+                      <code>Follow-up sheet</code>
+                      <span className="bn-sheet-hint">
+                        Edit “What to follow up”, tick done when handled
+                      </span>
+                    </div>
+                    <div className="bn-sheet-scroll">
+                      <table className="bn-sheet-grid">
+                        <thead>
+                          <tr>
+                            <th className="bn-sheet-corner" />
+                            {sheetCols.map((c) => (
+                              <th key={c}>{c}</th>
+                            ))}
+                          </tr>
+                          <tr className="bn-sheet-labels">
+                            <th />
+                            <th>Done?</th>
+                            <th>Parent</th>
+                            <th>Child</th>
+                            <th>Parent question</th>
+                            <th>What to follow up</th>
+                            <th>Why flagged</th>
+                            <th>Logged at</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adminTodos.length === 0 ? (
+                            <tr>
+                              <td className="bn-sheet-rownum">1</td>
+                              <td colSpan={7} className="bn-sheet-empty">
+                                No open follow-ups. New rows appear when the assistant
+                                couldn’t answer from centre materials.
+                              </td>
+                            </tr>
+                          ) : (
+                            adminTodos.map((t, i) => (
+                              <tr key={t.id}>
+                                <td className="bn-sheet-rownum">{i + 1}</td>
+                                <td className="bn-sheet-check">
+                                  <input
+                                    type="checkbox"
+                                    title="Mark done"
+                                    aria-label={`Mark follow-up for ${t.parent_name || t.id} done`}
+                                    onChange={() => markTodoDone(t.id)}
+                                  />
+                                </td>
+                                <td title={t.phone || ""}>
+                                  {t.parent_name || t.phone || "—"}
+                                </td>
+                                <td>{t.child_name || "—"}</td>
+                                <td className="bn-sheet-q" title={t.question}>
+                                  {clip(t.question, 90)}
+                                </td>
+                                <td className="bn-sheet-edit">
+                                  <input
+                                    type="text"
+                                    defaultValue={t.info_needed || ""}
+                                    key={`${t.id}-${t.info_needed || ""}`}
+                                    placeholder="What should staff do next…"
+                                    onBlur={(e) => {
+                                      const next = e.target.value.trim();
+                                      if (next !== (t.info_needed || "").trim()) {
+                                        patchTodoField(t.id, { info_needed: next });
+                                      }
+                                    }}
+                                  />
+                                </td>
+                                <td title={reasonLabel(t.reason)}>
+                                  {clip(reasonLabel(t.reason), 42)}
+                                </td>
+                                <td>{t.created_at || sheetWhen(t.created_at)}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <span className="bn-inbox-unread">
-                    {staffMessages.length} open
-                  </span>
-                </div>
-                <div className="bn-inbox-body">
-                  <div className="bn-inbox-list" role="listbox" aria-label="Staff messages">
-                    {staffMessages.length === 0 ? (
-                      <p className="bn-inbox-empty">
-                        No hand-off notices. Escalations (angry parent, ask for human, safety)
-                        land here.
-                      </p>
-                    ) : (
-                      staffMessages.map((m) => {
-                        const active = selectedMsg?.id === m.id;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            role="option"
-                            aria-selected={active}
-                            className={`bn-inbox-row ${active ? "active" : ""}`}
-                            onClick={() => setSelectedMsgId(m.id)}
-                          >
-                            <span
-                              className={`bn-prio bn-prio-${m.priority || "normal"}`}
-                            >
-                              {(m.priority || "normal").slice(0, 1).toUpperCase()}
-                            </span>
-                            <span className="bn-inbox-row-main">
-                              <strong>
-                                {m.parent_name || m.phone || "Unknown parent"}
-                              </strong>
-                              <em>{m.category || "general"}</em>
-                              <span>{clip(m.summary_for_boss || m.parent_message, 64)}</span>
-                            </span>
-                            <time>{sheetWhen(m.created_at)}</time>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                  <div className="bn-inbox-read">
-                    {!selectedMsg ? (
-                      <p className="bn-inbox-empty">Select a message to read.</p>
-                    ) : (
-                      <>
-                        <div className="bn-inbox-read-head">
-                          <h3>{selectedMsg.summary_for_boss || "Staff notice"}</h3>
-                          <div className="bn-inbox-meta">
-                            <span
-                              className={`bn-prio-pill bn-prio-${selectedMsg.priority || "normal"}`}
-                            >
-                              {(selectedMsg.priority || "normal").toUpperCase()}
-                            </span>
-                            <span>{selectedMsg.category || "general"}</span>
-                            <code>{selectedMsg.id}</code>
-                          </div>
-                          <p>
-                            From{" "}
-                            <strong>
-                              {selectedMsg.parent_name || selectedMsg.phone || "Unknown"}
-                            </strong>
-                            {selectedMsg.child_name ? ` · ${selectedMsg.child_name}` : ""}
-                            {selectedMsg.phone ? (
-                              <>
-                                {" "}
-                                · <code>{selectedMsg.phone}</code>
-                              </>
-                            ) : null}
+                ) : (
+                  <div className="bn-mail">
+                    <header className="bn-mail-top">
+                      <div className="bn-mail-brand">
+                        <span className="bn-mail-logo" aria-hidden="true">
+                          M
+                        </span>
+                        <strong>Mail</strong>
+                      </div>
+                      <div className="bn-mail-search" aria-hidden="true">
+                        Search mail
+                      </div>
+                      <span className="bn-mail-badge">
+                        {staffMessages.length} unread
+                      </span>
+                    </header>
+                    <div className="bn-mail-layout">
+                      <nav className="bn-mail-nav" aria-label="Folders">
+                        <button type="button" className="active">
+                          Inbox
+                          {staffMessages.length > 0 && (
+                            <em>{staffMessages.length}</em>
+                          )}
+                        </button>
+                        <button type="button" disabled>
+                          Starred
+                        </button>
+                        <button type="button" disabled>
+                          Sent
+                        </button>
+                      </nav>
+                      <div className="bn-mail-list" role="listbox" aria-label="Inbox">
+                        {staffMessages.length === 0 ? (
+                          <p className="bn-mail-empty">
+                            Inbox is empty. New mail arrives when a parent asks for a
+                            staff member, is upset, or raises a safety concern.
                           </p>
-                          <time>{sheetWhen(selectedMsg.created_at)}</time>
-                        </div>
-                        <div className="bn-inbox-read-body">
-                          <h4>Parent said</h4>
-                          <p>{selectedMsg.parent_message || "—"}</p>
-                          {selectedMsg.bot_reply ? (
-                            <>
-                              <h4>Bot promised</h4>
-                              <p>{selectedMsg.bot_reply}</p>
-                            </>
-                          ) : null}
-                        </div>
-                        <div className="bn-inbox-actions">
-                          <button
-                            type="button"
-                            className="bn-inbox-ack"
-                            onClick={() => ackStaffMessage(selectedMsg.id)}
-                          >
-                            Acknowledge
-                          </button>
-                        </div>
-                      </>
-                    )}
+                        ) : (
+                          staffMessages.map((m) => {
+                            const active = selectedMsg?.id === m.id;
+                            const from = m.parent_name || m.phone || "Unknown parent";
+                            const subject =
+                              m.summary_for_boss ||
+                              categoryLabel(m.category, m.category_label);
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                className={`bn-mail-row ${active ? "active" : ""} ${
+                                  (m.priority || "") === "urgent" || m.priority === "high"
+                                    ? "important"
+                                    : ""
+                                }`}
+                                onClick={() => setSelectedMsgId(m.id)}
+                              >
+                                <span className="bn-mail-avatar" aria-hidden="true">
+                                  {initials(from)}
+                                </span>
+                                <span className="bn-mail-row-body">
+                                  <span className="bn-mail-row-line1">
+                                    <span className="bn-mail-from">{from}</span>
+                                    <time className="bn-mail-when">
+                                      {m.created_at || sheetWhen(m.created_at)}
+                                    </time>
+                                  </span>
+                                  <span className="bn-mail-subj">{subject}</span>
+                                  <span className="bn-mail-snip">
+                                    {clip(m.parent_message || "", 88)}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      <article className="bn-mail-read">
+                        {!selectedMsg ? (
+                          <p className="bn-mail-empty">
+                            Select a conversation to read it.
+                          </p>
+                        ) : (
+                          <>
+                            <h2 className="bn-mail-subject">
+                              {selectedMsg.summary_for_boss ||
+                                categoryLabel(
+                                  selectedMsg.category,
+                                  selectedMsg.category_label
+                                )}
+                            </h2>
+                            <div className="bn-mail-from-block">
+                              <span className="bn-mail-avatar lg" aria-hidden="true">
+                                {initials(
+                                  selectedMsg.parent_name || selectedMsg.phone || "?"
+                                )}
+                              </span>
+                              <div className="bn-mail-from-meta">
+                                <div className="bn-mail-from-top">
+                                  <strong>
+                                    {selectedMsg.parent_name ||
+                                      selectedMsg.phone ||
+                                      "Unknown"}
+                                  </strong>
+                                  <time>
+                                    {selectedMsg.created_at ||
+                                      sheetWhen(selectedMsg.created_at)}
+                                  </time>
+                                </div>
+                                <div className="bn-mail-from-sub">
+                                  to Centre desk
+                                  {selectedMsg.phone ? (
+                                    <span> · {selectedMsg.phone}</span>
+                                  ) : null}
+                                  {selectedMsg.child_name
+                                    ? ` · Child: ${selectedMsg.child_name}`
+                                    : ""}
+                                  {" · "}
+                                  {priorityLabel(
+                                    selectedMsg.priority,
+                                    selectedMsg.priority_label
+                                  )}
+                                  {" · "}
+                                  {categoryLabel(
+                                    selectedMsg.category,
+                                    selectedMsg.category_label
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="bn-mail-body">
+                              <p>{selectedMsg.parent_message || "—"}</p>
+                              {selectedMsg.bot_reply ? (
+                                <blockquote>
+                                  <strong>What we already told the parent</strong>
+                                  <p>{selectedMsg.bot_reply}</p>
+                                </blockquote>
+                              ) : null}
+                            </div>
+                            <div className="bn-mail-actions">
+                              <button
+                                type="button"
+                                className="bn-mail-ack"
+                                onClick={() => ackStaffMessage(selectedMsg.id)}
+                              >
+                                Mark as handled
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </article>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           ) : (
