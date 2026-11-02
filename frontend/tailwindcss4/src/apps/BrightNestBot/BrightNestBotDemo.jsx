@@ -350,10 +350,17 @@ export default function BrightNestBotDemo() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSessionLabel(shortSessionLabel());
-      setTrace(data.trace || null);
-      const hitTodo = Boolean(data.trace?.admin_todo);
+      const nextTrace = data.trace ? { ...data.trace } : {};
+      if (!nextTrace.staff_message && data.debug?.staff_message) {
+        nextTrace.staff_message = data.debug.staff_message;
+      }
+      if (!nextTrace.admin_todo && data.debug?.admin_todo) {
+        nextTrace.admin_todo = data.debug.admin_todo;
+      }
+      setTrace(Object.keys(nextTrace).length ? nextTrace : null);
+      const hitTodo = Boolean(nextTrace.admin_todo);
       const hitBoss =
-        Boolean(data.trace?.staff_message) || data.trace?.route === "staff_escalation";
+        Boolean(nextTrace.staff_message) || nextTrace.route === "staff_escalation";
       if (hitTodo) {
         refreshAdminTodos();
         setStaffTab("sheet");
@@ -361,8 +368,8 @@ export default function BrightNestBotDemo() {
       }
       if (hitBoss) {
         refreshStaffMessages();
-        if (data.trace?.staff_message?.id) {
-          setSelectedMsgId(data.trace.staff_message.id);
+        if (nextTrace.staff_message?.id) {
+          setSelectedMsgId(nextTrace.staff_message.id);
         }
         // Last write wins when both fire in one turn
         setStaffTab("mail");
@@ -702,30 +709,61 @@ export default function BrightNestBotDemo() {
                 <span className="bn-browser-lock" aria-hidden="true" />
                 <code>
                   {staffTab === "sheet"
-                    ? "sheets.local/Follow-up sheet"
-                    : "mail.local/Staff inbox"}
+                    ? "docs.google.com/spreadsheets/d/brightnest-followups"
+                    : "mail.google.com/mail/u/0/#inbox"}
                 </code>
               </div>
 
               <div className="bn-browser-page">
                 {staffTab === "sheet" ? (
                   <div className="bn-sheet-widget">
-                    <div className="bn-sheet-menubar">
+                    <div className="bn-sheet-titlebar">
                       <div className="bn-sheet-doc">
                         <span className="bn-sheet-icon" aria-hidden="true" />
                         <div>
-                          <strong>Follow-up sheet</strong>
-                          <small>Internal staff notes · parents never see this</small>
+                          <input
+                            className="bn-sheet-title"
+                            readOnly
+                            value="BrightNest — Follow-up sheet"
+                            aria-label="Spreadsheet title"
+                          />
+                          <small>Saved to Drive · Parents never see this</small>
                         </div>
                       </div>
-                      <span className="bn-sheet-count">{adminTodos.length} open</span>
+                      <div className="bn-sheet-share">
+                        <span className="bn-sheet-count">{adminTodos.length} open</span>
+                        <button type="button" className="bn-sheet-share-btn" disabled>
+                          Share
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bn-sheet-menuline" aria-hidden="true">
+                      {["File", "Edit", "View", "Insert", "Format", "Data", "Tools", "Extensions", "Help"].map(
+                        (m) => (
+                          <span key={m}>{m}</span>
+                        )
+                      )}
+                    </div>
+                    <div className="bn-sheet-toolbar" aria-hidden="true">
+                      <span className="bn-sheet-tool">100%</span>
+                      <span className="bn-sheet-tool-sep" />
+                      <span className="bn-sheet-tool">$</span>
+                      <span className="bn-sheet-tool">%</span>
+                      <span className="bn-sheet-tool-sep" />
+                      <span className="bn-sheet-tool bn-sheet-tool-bold">B</span>
+                      <span className="bn-sheet-tool">I</span>
+                      <span className="bn-sheet-tool">
+                        <u>U</u>
+                      </span>
                     </div>
                     <div className="bn-sheet-formula">
+                      <span className="bn-sheet-namebox">A1</span>
                       <span className="bn-sheet-fx">fx</span>
-                      <code>Follow-up sheet</code>
-                      <span className="bn-sheet-hint">
-                        Edit “What to follow up”, tick done when handled
-                      </span>
+                      <code>
+                        {adminTodos[0]
+                          ? clip(adminTodos[0].info_needed || adminTodos[0].question || "", 64)
+                          : "Follow-up sheet"}
+                      </code>
                     </div>
                     <div className="bn-sheet-scroll">
                       <table className="bn-sheet-grid">
@@ -799,17 +837,27 @@ export default function BrightNestBotDemo() {
                         </tbody>
                       </table>
                     </div>
+                    <div className="bn-sheet-tabs" aria-hidden="true">
+                      <button type="button" className="active">
+                        Follow-ups
+                      </button>
+                      <button type="button" disabled>
+                        +
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="bn-mail">
                     <header className="bn-mail-top">
+                      <button type="button" className="bn-mail-menu" aria-hidden="true">
+                        ☰
+                      </button>
                       <div className="bn-mail-brand">
-                        <span className="bn-mail-logo" aria-hidden="true">
-                          M
-                        </span>
-                        <strong>Mail</strong>
+                        <span className="bn-mail-logo" aria-hidden="true" />
+                        <strong>Gmail</strong>
                       </div>
                       <div className="bn-mail-search" aria-hidden="true">
+                        <span className="bn-mail-search-ico">⌕</span>
                         Search mail
                       </div>
                       <span className="bn-mail-badge">
@@ -818,8 +866,11 @@ export default function BrightNestBotDemo() {
                     </header>
                     <div className="bn-mail-layout">
                       <nav className="bn-mail-nav" aria-label="Folders">
+                        <button type="button" className="bn-mail-compose" disabled>
+                          Compose
+                        </button>
                         <button type="button" className="active">
-                          Inbox
+                          <span>Inbox</span>
                           {staffMessages.length > 0 && (
                             <em>{staffMessages.length}</em>
                           )}
@@ -828,14 +879,24 @@ export default function BrightNestBotDemo() {
                           Starred
                         </button>
                         <button type="button" disabled>
+                          Snoozed
+                        </button>
+                        <button type="button" disabled>
                           Sent
+                        </button>
+                        <button type="button" disabled>
+                          Drafts
                         </button>
                       </nav>
                       <div className="bn-mail-list" role="listbox" aria-label="Inbox">
+                        <div className="bn-mail-list-toolbar" aria-hidden="true">
+                          <span className="bn-mail-check-all" />
+                          <span>Primary</span>
+                        </div>
                         {staffMessages.length === 0 ? (
                           <p className="bn-mail-empty">
-                            Inbox is empty. New mail arrives when a parent asks for a
-                            staff member, is upset, or raises a safety concern.
+                            Your Primary tab is empty. New mail arrives when a parent
+                            asks for staff, is upset, or raises a safety concern.
                           </p>
                         ) : (
                           staffMessages.map((m) => {
@@ -844,34 +905,35 @@ export default function BrightNestBotDemo() {
                             const subject =
                               m.summary_for_boss ||
                               categoryLabel(m.category, m.category_label);
+                            const snip = clip(
+                              m.email_body || m.parent_message || "",
+                              88
+                            );
                             return (
                               <button
                                 key={m.id}
                                 type="button"
                                 role="option"
                                 aria-selected={active}
-                                className={`bn-mail-row ${active ? "active" : ""} ${
+                                className={`bn-mail-row unread ${active ? "active" : ""} ${
                                   (m.priority || "") === "urgent" || m.priority === "high"
                                     ? "important"
                                     : ""
                                 }`}
                                 onClick={() => setSelectedMsgId(m.id)}
                               >
-                                <span className="bn-mail-avatar" aria-hidden="true">
-                                  {initials(from)}
+                                <span className="bn-mail-row-checks" aria-hidden="true">
+                                  <span className="bn-mail-box" />
+                                  <span className="bn-mail-star">☆</span>
                                 </span>
-                                <span className="bn-mail-row-body">
-                                  <span className="bn-mail-row-line1">
-                                    <span className="bn-mail-from">{from}</span>
-                                    <time className="bn-mail-when">
-                                      {m.created_at || sheetWhen(m.created_at)}
-                                    </time>
-                                  </span>
+                                <span className="bn-mail-row-from">{from}</span>
+                                <span className="bn-mail-row-main">
                                   <span className="bn-mail-subj">{subject}</span>
-                                  <span className="bn-mail-snip">
-                                    {clip(m.parent_message || "", 88)}
-                                  </span>
+                                  <span className="bn-mail-snip"> — {snip}</span>
                                 </span>
+                                <time className="bn-mail-when">
+                                  {m.created_at || sheetWhen(m.created_at)}
+                                </time>
                               </button>
                             );
                           })
@@ -879,11 +941,31 @@ export default function BrightNestBotDemo() {
                       </div>
                       <article className="bn-mail-read">
                         {!selectedMsg ? (
-                          <p className="bn-mail-empty">
-                            Select a conversation to read it.
+                          <p className="bn-mail-empty bn-mail-empty-read">
+                            No conversations selected
                           </p>
                         ) : (
                           <>
+                            <div className="bn-mail-read-toolbar">
+                              <button
+                                type="button"
+                                className="bn-mail-ack"
+                                onClick={() => ackStaffMessage(selectedMsg.id)}
+                              >
+                                Archive / handled
+                              </button>
+                              <span className="bn-mail-read-meta">
+                                {priorityLabel(
+                                  selectedMsg.priority,
+                                  selectedMsg.priority_label
+                                )}
+                                {" · "}
+                                {categoryLabel(
+                                  selectedMsg.category,
+                                  selectedMsg.category_label
+                                )}
+                              </span>
+                            </div>
                             <h2 className="bn-mail-subject">
                               {selectedMsg.summary_for_boss ||
                                 categoryLabel(
@@ -902,7 +984,7 @@ export default function BrightNestBotDemo() {
                                   <strong>
                                     {selectedMsg.parent_name ||
                                       selectedMsg.phone ||
-                                      "Unknown"}
+                                      "BrightNest chatbot"}
                                   </strong>
                                   <time>
                                     {selectedMsg.created_at ||
@@ -910,43 +992,30 @@ export default function BrightNestBotDemo() {
                                   </time>
                                 </div>
                                 <div className="bn-mail-from-sub">
-                                  to Centre desk
+                                  to me
                                   {selectedMsg.phone ? (
                                     <span> · {selectedMsg.phone}</span>
                                   ) : null}
                                   {selectedMsg.child_name
                                     ? ` · Child: ${selectedMsg.child_name}`
                                     : ""}
-                                  {" · "}
-                                  {priorityLabel(
-                                    selectedMsg.priority,
-                                    selectedMsg.priority_label
-                                  )}
-                                  {" · "}
-                                  {categoryLabel(
-                                    selectedMsg.category,
-                                    selectedMsg.category_label
-                                  )}
                                 </div>
                               </div>
                             </div>
                             <div className="bn-mail-body">
-                              <p>{selectedMsg.parent_message || "—"}</p>
-                              {selectedMsg.bot_reply ? (
-                                <blockquote>
-                                  <strong>What we already told the parent</strong>
-                                  <p>{selectedMsg.bot_reply}</p>
-                                </blockquote>
-                              ) : null}
-                            </div>
-                            <div className="bn-mail-actions">
-                              <button
-                                type="button"
-                                className="bn-mail-ack"
-                                onClick={() => ackStaffMessage(selectedMsg.id)}
-                              >
-                                Mark as handled
-                              </button>
+                              {selectedMsg.email_body ? (
+                                <pre className="bn-mail-email">{selectedMsg.email_body}</pre>
+                              ) : (
+                                <>
+                                  <p>{selectedMsg.parent_message || "—"}</p>
+                                  {selectedMsg.bot_reply ? (
+                                    <blockquote>
+                                      <strong>What we already told the parent</strong>
+                                      <p>{selectedMsg.bot_reply}</p>
+                                    </blockquote>
+                                  ) : null}
+                                </>
+                              )}
                             </div>
                           </>
                         )}
