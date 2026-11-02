@@ -331,7 +331,15 @@ export default function BrightNestBotDemo() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSessionLabel(shortSessionLabel());
-      setTrace(data.trace || null);
+      const nextTrace = data.trace ? { ...data.trace } : {};
+      // Inspector reads provider / booking / cancel from trace — backfill from top-level
+      if (!nextTrace.provider && data.provider) nextTrace.provider = data.provider;
+      if (!nextTrace.answer_provider && data.provider) {
+        nextTrace.answer_provider = data.provider;
+      }
+      if (!nextTrace.booking && data.debug?.dialogue) nextTrace.booking = data.debug.dialogue;
+      if (!nextTrace.cancel && data.debug?.cancel) nextTrace.cancel = data.debug.cancel;
+      setTrace(Object.keys(nextTrace).length ? nextTrace : null);
       setLastCitations(data.citations || []);
       if (data.slots?.length) setLastSlots(data.slots);
       else if (data.trace?.route !== "booking_tool" && data.trace?.route !== "booking_dialogue") {
@@ -427,17 +435,25 @@ export default function BrightNestBotDemo() {
   const routingDebug = trace?.routing?.debug || {};
   const arbiter = routingDebug.arbiter || null;
   const arbiterOverride = routingDebug.arbiter_override || null;
+  const llmMeta = trace?.llm || {};
+  const answerProvider =
+    trace?.answer_provider || trace?.provider || llmMeta.answer_provider || null;
   const adaptStep = steps.find((s) => s.id === "adapt");
   const arbiterStep = steps.find((s) => s.id === "intent_arbiter");
   const gapStep = steps.find((s) => s.id === "gap_polish");
-  const llmTouched = Boolean(
-    arbiter ||
-      arbiterOverride ||
-      adaptStep ||
-      arbiterStep ||
-      gapStep ||
-      String(trace?.provider || "").includes("+llm")
+  const cancelPickStep = steps.find((s) => s.id === "cancel_pick");
+  const bookingParseStep = steps.find((s) => s.id === "booking_parse");
+  const cheapDone = (s) => s && (s.status === "done" || s.status === "error");
+  const cheapCalled = Boolean(
+    llmMeta.cheap_called ||
+      arbiter?.called ||
+      cheapDone(arbiterStep) ||
+      cheapDone(gapStep) ||
+      cheapDone(cancelPickStep) ||
+      cheapDone(bookingParseStep)
   );
+  const mainRewriteDone = adaptStep?.status === "done";
+  const llmTouched = cheapCalled || mainRewriteDone || Boolean(arbiterOverride);
 
   const turnKey = `${trace?.latency_ms ?? "idle"}-${route ?? "none"}-${chatHistory.length}`;
   const factOpen = isFactRoute(route);
@@ -454,10 +470,11 @@ export default function BrightNestBotDemo() {
   const llmOpen =
     llmTouched &&
     (Boolean(arbiterOverride) ||
-      adaptStep?.status === "done" ||
+      mainRewriteDone ||
       gapStep?.status === "done" ||
-      arbiter?.action === "rag" ||
-      arbiter?.action === "reroute");
+      cancelPickStep?.status === "done" ||
+      bookingParseStep?.status === "done" ||
+      (arbiter?.called && (arbiter?.action === "rag" || arbiter?.action === "reroute")));
 
   const activePanel = factOpen
     ? "facts"
@@ -699,9 +716,25 @@ export default function BrightNestBotDemo() {
           <div className="bn-route-card">
             <div className="bn-route-main">
               <span className={`bn-pill bn-pill-${meta.tone}`}>{meta.label}</span>
-              {llmTouched ? (
-                <span className="bn-pill bn-pill-llm" title="Cheap DashScope review / polish ran">
-                  cheap LLM review
+              {answerProvider ? (
+                <span
+                  className="bn-pill bn-pill-provider"
+                  title="Where the parent-facing answer came from"
+                >
+                  {answerProvider}
+                </span>
+              ) : null}
+              {cheapCalled ? (
+                <span className="bn-pill bn-pill-llm" title="Short-prompt DashScope referee ran">
+                  cheap LLM
+                </span>
+              ) : null}
+              {mainRewriteDone ? (
+                <span
+                  className="bn-pill bn-pill-main-llm"
+                  title="Main model rewrote a fixed fact card"
+                >
+                  main rewrite
                 </span>
               ) : null}
               {trace?.latency_ms != null && <span className="bn-latency">{trace.latency_ms} ms</span>}
@@ -710,11 +743,16 @@ export default function BrightNestBotDemo() {
             {steps.length > 0 && (
               <ol className="bn-step-rail" aria-label="Pipeline steps">
                 {steps.map((s) => {
-                  const isLlm =
-                    s.id === "intent_arbiter" || s.id === "adapt" || s.id === "gap_polish";
+                  const isCheap =
+                    s.id === "intent_arbiter" ||
+                    s.id === "gap_polish" ||
+                    s.id === "cancel_pick" ||
+                    s.id === "booking_parse";
+                  const isMainLlm = s.id === "adapt";
                   const isActive =
                     s.status === "done" &&
-                    (isLlm ||
+                    (isCheap ||
+                      isMainLlm ||
                       s.id === "facts" ||
                       (factOpen && /fee|teacher|trial|weather|pickup|makeup|sibling|allerg|payment|location|pets/i.test(s.label || "")) ||
                       (hoursOpen && /hours|date|holiday|weather/i.test(s.id + s.label)) ||
@@ -725,7 +763,7 @@ export default function BrightNestBotDemo() {
                   return (
                     <li
                       key={s.id}
-                      className={`bn-step-chip bn-step-${s.status || "idle"}${isLlm ? " bn-step-llm" : ""}${isActive ? " bn-step-active" : ""}`}
+                      className={`bn-step-chip bn-step-${s.status || "idle"}${isCheap ? " bn-step-llm" : ""}${isMainLlm ? " bn-step-main-llm" : ""}${isActive ? " bn-step-active" : ""}`}
                       title={s.detail}
                     >
                       <span>{s.label}</span>
@@ -735,28 +773,33 @@ export default function BrightNestBotDemo() {
               </ol>
             )}
             <p className="bn-hint">
-              Amber chips are the cheap LLM referee / rewrite. Dimmed panels stayed idle for this
-              turn.
+              Amber = short-prompt referee. Teal-outline = main model fact rewrite. Dimmed panels
+              stayed idle.
             </p>
           </div>
 
           <Reveal
             key={`llm-${turnKey}`}
-            title="Cheap LLM review"
+            title="LLM path (demo)"
             summary={
               llmTouched
                 ? [
+                    answerProvider ? `source ${answerProvider}` : null,
+                    cheapCalled
+                      ? `cheap ${llmMeta.cheap_model || arbiter?.model || "review"}`
+                      : null,
+                    mainRewriteDone
+                      ? `rewrite ${llmMeta.main_model || "main"}`
+                      : null,
                     arbiterOverride
-                      ? `reroute ${arbiterOverride.from} → ${arbiterOverride.to}`
-                      : arbiter?.action
+                      ? `${arbiterOverride.from} → ${arbiterOverride.to}`
+                      : arbiter?.called
                         ? `intent ${arbiter.action}`
                         : null,
-                    adaptStep?.status === "done" ? "fact polish" : null,
-                    gapStep?.status === "done" ? "gap polish" : null,
                   ]
                     .filter(Boolean)
-                    .join(" · ") || "cheap LLM touched this turn"
-                : "Idle — cheap referee / polish when DashScope is live"
+                    .join(" · ") || "LLM touched this turn"
+                : "Idle — referee / rewrite when DashScope is live"
             }
             defaultOpen={llmOpen}
             active={activePanel === "llm"}
@@ -764,27 +807,45 @@ export default function BrightNestBotDemo() {
           >
             {!llmTouched ? (
               <p className="bn-empty">
-                After regex/prototype routing, a cheap DashScope model can keep, send to RAG, or
-                polish a fixed fact card so the parent reply matches the question.
+                Short-prompt calls review intent, cancel picks, and gap wording. Separately, the
+                main model can rewrite a fixed fact card so the reply matches the parent question.
               </p>
             ) : (
               <>
                 <p className="bn-note">
-                  Demo “weaker LLM” path — short-prompt intent review / fact polish (same workspace
-                  model as RAG when MaaS only exposes one). Fail-open if the call times out.
+                  On this MaaS workspace both paths may use the same model name — the difference is
+                  the job (short JSON referee vs longer fact rewrite). Fail-open if a cheap call
+                  times out.
                 </p>
                 <ul className="bn-fact-list">
                   <li>
-                    <span>Provider</span>
-                    <code>{trace?.provider || "—"}</code>
+                    <span>Answer source</span>
+                    <code>{answerProvider || "—"}</code>
                   </li>
-                  {arbiter ? (
+                  <li>
+                    <span>Main model</span>
+                    <code>{llmMeta.main_model || "—"}</code>
+                  </li>
+                  <li>
+                    <span>Cheap model</span>
+                    <code>
+                      {cheapCalled
+                        ? llmMeta.cheap_model || arbiter?.model || "called"
+                        : "not called"}
+                    </code>
+                  </li>
+                  {arbiter?.called ? (
                     <li>
-                      <span>Intent action</span>
+                      <span>Intent review</span>
                       <code>
                         {arbiter.action || "keep"}
                         {arbiter.reason ? ` · ${arbiter.reason}` : ""}
                       </code>
+                    </li>
+                  ) : arbiterStep?.status === "skipped" ? (
+                    <li>
+                      <span>Intent review</span>
+                      <code>skipped · {arbiter?.reason || "not needed"}</code>
                     </li>
                   ) : null}
                   {arbiterOverride ? (
@@ -797,7 +858,7 @@ export default function BrightNestBotDemo() {
                   ) : null}
                   {adaptStep ? (
                     <li>
-                      <span>Fact adapt</span>
+                      <span>Fact rewrite</span>
                       <code>
                         {adaptStep.status}
                         {adaptStep.detail ? ` · ${adaptStep.detail}` : ""}
@@ -813,12 +874,21 @@ export default function BrightNestBotDemo() {
                       </code>
                     </li>
                   ) : null}
-                  {arbiterStep && !arbiter ? (
+                  {cancelPickStep ? (
                     <li>
-                      <span>Intent step</span>
+                      <span>Cancel pick</span>
                       <code>
-                        {arbiterStep.status}
-                        {arbiterStep.detail ? ` · ${arbiterStep.detail}` : ""}
+                        {cancelPickStep.status}
+                        {cancelPickStep.detail ? ` · ${cancelPickStep.detail}` : ""}
+                      </code>
+                    </li>
+                  ) : null}
+                  {bookingParseStep ? (
+                    <li>
+                      <span>Booking parse</span>
+                      <code>
+                        {bookingParseStep.status}
+                        {bookingParseStep.detail ? ` · ${bookingParseStep.detail}` : ""}
                       </code>
                     </li>
                   ) : null}
@@ -845,6 +915,10 @@ export default function BrightNestBotDemo() {
                   <li>
                     <span>Route</span>
                     <code>{route}</code>
+                  </li>
+                  <li>
+                    <span>Answer source</span>
+                    <code>{answerProvider || "centre_facts"}</code>
                   </li>
                   <li>
                     <span>Process</span>
