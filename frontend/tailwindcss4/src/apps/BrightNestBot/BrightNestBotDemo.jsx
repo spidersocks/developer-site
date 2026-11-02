@@ -12,25 +12,49 @@ const API_BASE = (
 
 const LOGO_SRC = "/projects/brightnest/logo.png";
 
+/** Ordered ~90s live-talk path, then deeper probes */
 const DEMO_PROBES = [
-  { label: "Hours", text: "What are your opening hours?" },
+  { label: "1 · Hours", text: "What are your opening hours?" },
+  { label: "2 · Phonics fee", text: "How much is phonics?" },
+  { label: "3 · Trial first?", text: "If my kid has not attended before, does he need to book a trial assessment first?" },
+  { label: "4 · Trial slots", text: "Show trial class availability" },
+  { label: "5 · Book Jason", text: "Can I book a class for Jason next week?" },
+  { label: "6 · Talk to staff", text: "Can I speak to a real person please? This is urgent about my child's safety." },
+  { label: "Teachers", text: "Tell me about your teachers" },
+  { label: "Sibling %", text: "Do you have a sibling discount?" },
+  { label: "Makeup", text: "What is your make-up class policy?" },
+  { label: "Peanut allergy", text: "Peanut allergy policy?" },
+  { label: "FPS pay", text: "How do I pay? What is your FPS ID?" },
+  { label: "Location", text: "Where are you located?" },
   { label: "Tomorrow", text: "tomorrow?" },
   { label: "Christmas", text: "Are you open on Christmas Day?" },
-  { label: "Phonics fee", text: "How much is phonics?" },
-  { label: "Teachers", text: "Tell me about your teachers" },
-  { label: "Location", text: "Where are you located?" },
-  { label: "Trial slots", text: "Show trial class availability" },
   { label: "Phonics seats", text: "Show phonics availability" },
-  { label: "Math seats", text: "Show early math availability" },
-  { label: "Avery slots", text: "Show Avery open slots for trial" },
-  { label: "Jordan slots", text: "Show Jordan open slots for phonics" },
-  { label: "Book Jason", text: "Can I book a class for Jason next week?" },
   { label: "Cancel class", text: "Can I cancel Jason's class next Tuesday?" },
   { label: "Unknown ask", text: "Does BrightNest offer scuba diving for toddlers?" },
   { label: "Private 1:1", text: "How much is private English tuition?" },
-  { label: "Talk to staff", text: "Can I speak to a real person please?" },
   { label: "Angry parent", text: "This is unacceptable — I'm furious about today's class!" },
 ];
+
+const FACT_ROUTE_META = {
+  fees: { label: "Centre facts · Fees", tone: "facts" },
+  trial_info: { label: "Centre facts · Trial policy", tone: "facts" },
+  teachers: { label: "Centre facts · Teachers", tone: "facts" },
+  pickup: { label: "Centre facts · Pickup", tone: "facts" },
+  makeup: { label: "Centre facts · Make-up", tone: "facts" },
+  sibling: { label: "Centre facts · Sibling discount", tone: "facts" },
+  waiting: { label: "Centre facts · Waiting list", tone: "facts" },
+  location: { label: "Centre facts · Location", tone: "facts" },
+  allergy: { label: "Centre facts · Allergy", tone: "facts" },
+  illness: { label: "Centre facts · Illness", tone: "facts" },
+  payment: { label: "Centre facts · Payment", tone: "facts" },
+  pets_policy: { label: "Centre facts · Pets policy", tone: "facts" },
+  severe_weather: { label: "Centre facts · Severe weather", tone: "facts" },
+  unsupported_facility: { label: "Centre facts · Not offered", tone: "facts" },
+  greeting: { label: "Greeting", tone: "idle" },
+  thanks: { label: "Thanks", tone: "idle" },
+  confused: { label: "Clarify", tone: "idle" },
+  off_domain: { label: "Out of scope", tone: "idle" },
+};
 
 function getOrCreateSessionId() {
   let id = localStorage.getItem("bn_bot_session_id");
@@ -57,35 +81,89 @@ function scoreLabel(score) {
 }
 
 function routeMeta(route) {
-  if (route === "deterministic_opening_hours") {
+  if (!route) return { label: "Waiting for a query", tone: "idle" };
+  if (route === "deterministic_opening_hours" || route === "opening_hours") {
     return { label: "Opening-hours engine", tone: "hours" };
   }
-  if (route === "booking_dialogue") {
-    return { label: "Booking dialogue", tone: "book" };
-  }
-  if (route === "cancel_dialogue") {
-    return { label: "Cancel dialogue", tone: "book" };
-  }
-  if (route === "booking_tool") {
-    return { label: "Booking tool", tone: "book" };
-  }
-  if (route === "rag") {
-    return { label: "RAG retrieve → generate", tone: "rag" };
-  }
+  if (route === "booking_dialogue") return { label: "Booking dialogue", tone: "book" };
+  if (route === "cancel_dialogue") return { label: "Cancel dialogue", tone: "book" };
+  if (route === "booking_tool") return { label: "Booking tool", tone: "book" };
+  if (route === "rag") return { label: "RAG retrieve → generate", tone: "rag" };
   if (route === "staff_escalation") {
     return { label: "Staff escalation → boss inbox", tone: "book" };
   }
   if (route === "unknown_programme") {
     return { label: "Unknown programme (quiet admin flag)", tone: "rag" };
   }
-  return { label: "Waiting for a query", tone: "idle" };
+  if (FACT_ROUTE_META[route]) return FACT_ROUTE_META[route];
+  return { label: route, tone: "idle" };
 }
 
-function Reveal({ title, summary, defaultOpen = false, children }) {
+function isFactRoute(route) {
+  return Boolean(FACT_ROUTE_META[route]?.tone === "facts");
+}
+
+function fingerprintQuestion(q) {
+  return String(q || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function dedupeByQuestion(items, key = "question") {
+  const seen = new Set();
+  const out = [];
+  for (const item of items || []) {
+    const fp = fingerprintQuestion(item?.[key] || item?.parent_message);
+    if (!fp || seen.has(fp)) continue;
+    seen.add(fp);
+    out.push(item);
+  }
+  return out;
+}
+
+function slotMatchKey(slot) {
+  if (!slot) return "";
+  const start = String(slot.slot_start || slot.slot_display || "");
+  const teacher = String(slot.teacher_name || slot.teacher_id || "").toLowerCase();
+  return `${start}|${teacher}`;
+}
+
+function sessionMatchesSlot(session, slot) {
+  if (!session || !slot) return false;
+  const slotStart = String(slot.slot_start || "");
+  const sessStart = String(session.slot_start || "");
+  if (slotStart && sessStart && (slotStart === sessStart || sessStart.includes(slotStart.slice(0, 16)))) {
+    return true;
+  }
+  const tSlot = String(slot.teacher_name || "").toLowerCase();
+  const tSess = String(session.teacher_name || "").toLowerCase();
+  const timeHint = String(slot.slot_display || "").split(", ").pop();
+  const sessTime = String(session.slot_display || "").split(", ").pop();
+  if (tSlot && tSess && tSlot === tSess && timeHint && sessTime && timeHint === sessTime) {
+    return true;
+  }
+  return false;
+}
+
+function Reveal({
+  title,
+  summary,
+  defaultOpen = false,
+  active = false,
+  dimmed = false,
+  children,
+}) {
   return (
-    <details className="bn-reveal" defaultOpen={defaultOpen}>
+    <details
+      className={`bn-reveal${active ? " bn-reveal-active" : ""}${dimmed ? " bn-reveal-dim" : ""}`}
+      defaultOpen={defaultOpen}
+    >
       <summary>
-        <span className="bn-reveal-title">{title}</span>
+        <span className="bn-reveal-title">
+          {active ? <span className="bn-active-dot" aria-hidden /> : null}
+          {title}
+        </span>
         {summary ? <span className="bn-reveal-summary">{summary}</span> : null}
       </summary>
       <div className="bn-reveal-body">{children}</div>
@@ -105,16 +183,20 @@ export default function BrightNestBotDemo() {
   const [phone, setPhone] = useState("+852 9000 0000");
   const [lastBooking, setLastBooking] = useState(null);
   const [pendingSlot, setPendingSlot] = useState(null);
+  const [lastSlots, setLastSlots] = useState([]);
   const [sessionLabel, setSessionLabel] = useState(() => shortSessionLabel());
   const [trace, setTrace] = useState(null);
+  const [lastCitations, setLastCitations] = useState([]);
   const [apiOnline, setApiOnline] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [scheduleTeacherId, setScheduleTeacherId] = useState("all");
   const [adminTodos, setAdminTodos] = useState([]);
   const [staffMessages, setStaffMessages] = useState([]);
+  const [adminScope, setAdminScope] = useState("session"); // session | all
 
   const chatWindowRef = useRef(null);
   const textAreaRef = useRef(null);
+  const registerRef = useRef(null);
 
   useEffect(() => {
     const setVh = () => {
@@ -197,6 +279,8 @@ export default function BrightNestBotDemo() {
       setError(null);
       setLastBooking(null);
       setPendingSlot(null);
+      setLastSlots([]);
+      setLastCitations([]);
       setTrace(null);
       setAdminTodos([]);
       setStaffMessages([]);
@@ -212,7 +296,6 @@ export default function BrightNestBotDemo() {
         .catch(() => {})
         .finally(finish);
     } else {
-      // Still clear admin to-dos for a clean demo even without a session id
       fetch(`${API_BASE}/chat/history/${encodeURIComponent("demo-reset")}`, {
         method: "DELETE",
       })
@@ -249,9 +332,16 @@ export default function BrightNestBotDemo() {
       const data = await res.json();
       setSessionLabel(shortSessionLabel());
       setTrace(data.trace || null);
+      setLastCitations(data.citations || []);
+      if (data.slots?.length) setLastSlots(data.slots);
+      else if (data.trace?.route !== "booking_tool" && data.trace?.route !== "booking_dialogue") {
+        setLastSlots([]);
+      }
       if (data.trace?.admin_todo) refreshAdminTodos();
       if (data.trace?.staff_message) refreshStaffMessages();
-      // Keep form identity in sync when dialogue resolves a child
+      // Always refresh admin lists lightly so inbox stays honest during demo
+      refreshAdminTodos();
+      refreshStaffMessages();
       const resolvedChild =
         data.trace?.booking?.child_name || data.trace?.cancel?.child_name;
       if (resolvedChild) setChildName(resolvedChild);
@@ -314,7 +404,6 @@ export default function BrightNestBotDemo() {
           booking: data,
         },
       ]);
-      // Refresh admin register so seats_left updates in the inspector
       fetch(`${API_BASE}/schedule?days=7`)
         .then((r) => r.json())
         .then((d) => setSchedule(d))
@@ -331,15 +420,40 @@ export default function BrightNestBotDemo() {
   const route = trace?.route;
   const meta = routeMeta(route);
   const steps = trace?.pipeline_steps || [];
-  const facts = trace?.opening_hours?.facts;
+  const hoursFacts = trace?.opening_hours?.facts;
   const rag = trace?.rag;
-  const hits = rag?.hits || [...chatHistory].reverse().find((m) => m.role === "bot")?.citations || [];
+  // Only real RAG hits — never fall back to fact citations
+  const hits = Array.isArray(rag?.hits) ? rag.hits : [];
 
-  const turnKey = String(trace?.latency_ms ?? "idle");
-  const hoursOpen = route === "deterministic_opening_hours";
+  const turnKey = `${trace?.latency_ms ?? "idle"}-${route ?? "none"}-${chatHistory.length}`;
+  const factOpen = isFactRoute(route);
+  const hoursOpen = route === "deterministic_opening_hours" || route === "opening_hours";
   const ragOpen = route === "rag";
   const bookingOpen =
     route === "booking_tool" || route === "booking_dialogue" || route === "cancel_dialogue";
+  const adminTodoOpen = route === "unknown_programme" || Boolean(trace?.admin_todo);
+  const adminMsgOpen = route === "staff_escalation" || Boolean(trace?.staff_message);
+  const userTurns = chatHistory.filter((m) => m.role === "user").length;
+  const memoryTurns = Math.max(trace?.history?.turns_loaded ?? 0, Math.max(0, userTurns - 1));
+  const memoryDisplayTurns = Math.max(memoryTurns, userTurns > 0 ? userTurns : 0);
+  const memoryOpen = memoryDisplayTurns >= 1;
+
+  const activePanel = factOpen
+    ? "facts"
+    : hoursOpen
+      ? "hours"
+      : ragOpen
+        ? "rag"
+        : bookingOpen
+          ? "booking"
+          : adminMsgOpen
+            ? "admin_messages"
+            : adminTodoOpen
+              ? "admin_todo"
+              : memoryOpen && !route
+                ? "memory"
+                : null;
+
   const dialogue = trace?.booking;
   const cancelTrace = trace?.cancel;
   const teachers = schedule?.teachers || [];
@@ -351,24 +465,74 @@ export default function BrightNestBotDemo() {
       sessions: (day.sessions || []).filter((s) => s.teacher_id === scheduleTeacherId),
     }));
   }, [schedule, scheduleTeacherId]);
+
+  const highlightedSessionKeys = useMemo(() => {
+    const keys = new Set();
+    for (const slot of lastSlots || []) {
+      keys.add(slotMatchKey(slot));
+      for (const day of schedule?.days || []) {
+        for (const s of day.sessions || []) {
+          if (sessionMatchesSlot(s, slot)) {
+            keys.add(`${s.session_id}-${s.slot_start}`);
+          }
+        }
+      }
+    }
+    return keys;
+  }, [lastSlots, schedule]);
+
+  useEffect(() => {
+    if (!bookingOpen || !lastSlots?.length || !registerRef.current) return;
+    const hit = registerRef.current.querySelector(".bn-reg-hit");
+    if (hit) hit.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [bookingOpen, lastSlots, turnKey]);
+
   const scheduleSummary = schedule
-    ? `${teachers.length} teachers · ${scheduleDays.reduce((n, d) => n + (d.sessions?.length || 0), 0)} sessions / 7d`
+    ? `${teachers.length} teachers · ${scheduleDays.reduce((n, d) => n + (d.sessions?.length || 0), 0)} sessions / 7d${
+        lastSlots?.length ? ` · ${lastSlots.length} slot hit${lastSlots.length === 1 ? "" : "s"}` : ""
+      }`
     : "Synthetic admin register";
 
   const hoursSummary = useMemo(() => {
-    if (!facts) return "Idle until a date/hours query";
-    if (facts.weather_hint) return "Severe weather closure";
-    if (facts.is_holiday) return facts.holiday_name || "Public holiday";
-    if (facts.is_sunday) return "Sunday · closed";
-    if (facts.open_time) return `${facts.open_time}–${facts.close_time}`;
+    if (!hoursFacts) return "Idle until a date/hours query";
+    if (hoursFacts.weather_hint) return "Severe weather closure";
+    if (hoursFacts.is_holiday) return hoursFacts.holiday_name || "Public holiday";
+    if (hoursFacts.is_sunday) return "Sunday · closed";
+    if (hoursFacts.open_time) return `${hoursFacts.open_time}–${hoursFacts.close_time}`;
     return "Parsed";
-  }, [facts]);
+  }, [hoursFacts]);
 
   const ragSummary = useMemo(() => {
+    if (route && route !== "rag") return "Skipped — not on RAG path";
     if (!rag && !hits.length) return "Idle until a KB question";
     const n = rag?.hit_count ?? hits.length;
     return `${n} chunk${n === 1 ? "" : "s"} · ${rag?.embedding_mode || "embed"}`;
-  }, [rag, hits.length]);
+  }, [rag, hits.length, route]);
+
+  const factStep = steps.find(
+    (s) => s.id === "facts" || /fee|teacher|trial|weather|pickup|makeup|sibling|allerg|payment|location|pets/i.test(s.label || "")
+  );
+  const factsSummary = factOpen
+    ? factStep?.label || FACT_ROUTE_META[route]?.label || "Structured centre fact"
+    : "Idle until a fees / policy / teachers query";
+
+  const sid = typeof window !== "undefined" ? localStorage.getItem("bn_bot_session_id") : null;
+  const visibleTodos = useMemo(() => {
+    const deduped = dedupeByQuestion(adminTodos, "question");
+    if (adminScope === "all" || !sid) return deduped;
+    return deduped.filter((t) => !t.session_id || t.session_id === sid);
+  }, [adminTodos, adminScope, sid]);
+
+  const visibleStaff = useMemo(() => {
+    const deduped = dedupeByQuestion(staffMessages, "parent_message");
+    if (adminScope === "all" || !sid) return deduped;
+    return deduped.filter((m) => !m.session_id || m.session_id === sid);
+  }, [staffMessages, adminScope, sid]);
+
+  const historyPreview = trace?.history?.preview || "";
+  const memoryLines = historyPreview
+    ? historyPreview.split("\n").filter(Boolean)
+    : [];
 
   return (
     <div className="bn-app">
@@ -394,7 +558,6 @@ export default function BrightNestBotDemo() {
       </header>
 
       <div className="bn-stage">
-        {/* Phone */}
         <aside className="bn-phone-wrap">
           <p className="bn-col-label">Parent chat</p>
           <div className="bn-phone">
@@ -410,7 +573,10 @@ export default function BrightNestBotDemo() {
               {showEmpty && (
                 <div className="bn-row bn-row-bot">
                   <div className="bn-bubble bn-bubble-bot">
-                    <WaMarkdown>Hi! Ask about courses, fees, hours, or trial booking.</WaMarkdown>
+                    <WaMarkdown>
+                      Hi! Ask about courses, fees, hours, or trial booking. Try the numbered
+                      demo probes for a 90-second path.
+                    </WaMarkdown>
                     <span className="bn-time">{formatTime()}</span>
                   </div>
                 </div>
@@ -504,7 +670,6 @@ export default function BrightNestBotDemo() {
           </div>
         </aside>
 
-        {/* Inspector */}
         <section className="bn-inspector">
           <p className="bn-col-label">System inspector</p>
 
@@ -516,56 +681,119 @@ export default function BrightNestBotDemo() {
             </div>
             {steps.length > 0 && (
               <ol className="bn-step-rail" aria-label="Pipeline steps">
-                {steps.map((s) => (
-                  <li key={s.id} className={`bn-step-chip bn-step-${s.status || "idle"}`} title={s.detail}>
-                    <span>{s.label}</span>
-                  </li>
-                ))}
+                {steps.map((s) => {
+                  const isActive =
+                    s.status === "done" &&
+                    (s.id === "facts" ||
+                      (factOpen && /fee|teacher|trial|weather|pickup|makeup|sibling|allerg|payment|location|pets/i.test(s.label || "")) ||
+                      (hoursOpen && /hours|date|holiday|weather/i.test(s.id + s.label)) ||
+                      (ragOpen && s.id === "rag") ||
+                      (bookingOpen && /book|cancel/i.test(s.id + s.label)) ||
+                      (adminTodoOpen && s.id === "admin_todo") ||
+                      (adminMsgOpen && /escalat|staff/i.test(s.id + s.label)));
+                  return (
+                    <li
+                      key={s.id}
+                      className={`bn-step-chip bn-step-${s.status || "idle"}${isActive ? " bn-step-active" : ""}`}
+                      title={s.detail}
+                    >
+                      <span>{s.label}</span>
+                    </li>
+                  );
+                })}
               </ol>
             )}
             <p className="bn-hint">
-              Only the active path opens below. Expand others when you want the detail.
+              Active path is highlighted below. Dimmed panels stayed idle for this turn.
             </p>
           </div>
+
+          <Reveal
+            key={`facts-${turnKey}`}
+            title="Centre facts"
+            summary={factsSummary}
+            defaultOpen={factOpen}
+            active={activePanel === "facts"}
+            dimmed={Boolean(activePanel) && activePanel !== "facts"}
+          >
+            {!factOpen ? (
+              <p className="bn-empty">
+                Structured fees / policy / teachers answers land here (not RAG chunks).
+              </p>
+            ) : (
+              <>
+                <ul className="bn-fact-list">
+                  <li>
+                    <span>Route</span>
+                    <code>{route}</code>
+                  </li>
+                  <li>
+                    <span>Process</span>
+                    <code>{factStep?.label || "structured fact"}</code>
+                  </li>
+                  <li>
+                    <span>Detail</span>
+                    <code>{factStep?.detail || "centre_facts"}</code>
+                  </li>
+                </ul>
+                {lastCitations.length > 0 ? (
+                  <ul className="bn-hits">
+                    {lastCitations.slice(0, 4).map((c, i) => (
+                      <li key={`${c.source}-${i}`}>
+                        <div className="bn-hit-head">
+                          <strong>{c.title || c.source || `Source ${i + 1}`}</strong>
+                        </div>
+                        <span className="bn-hit-src">{c.source}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="bn-note">No citation objects on this turn.</p>
+                )}
+              </>
+            )}
+          </Reveal>
 
           <Reveal
             key={`hours-${turnKey}`}
             title="Date · holiday · weather"
             summary={hoursSummary}
             defaultOpen={hoursOpen}
+            active={activePanel === "hours"}
+            dimmed={Boolean(activePanel) && activePanel !== "hours"}
           >
-            {!facts ? (
+            {!hoursFacts ? (
               <p className="bn-empty">Ask an hours/date question to populate this panel.</p>
             ) : (
               <ul className="bn-fact-list">
                 <li>
                   <span>Resolved</span>
-                  <code>{facts.datetime}</code>
+                  <code>{hoursFacts.datetime}</code>
                 </li>
                 <li>
                   <span>Matched via</span>
                   <code>
-                    {facts.parse_debug?.matched_via ||
-                      (facts.parse_debug?.is_fallback_to_now ? "fallback_now" : "—")}
+                    {hoursFacts.parse_debug?.matched_via ||
+                      (hoursFacts.parse_debug?.is_fallback_to_now ? "fallback_now" : "—")}
                   </code>
                 </li>
                 <li>
                   <span>Window</span>
                   <code>
-                    {facts.open_time && facts.close_time
-                      ? `${facts.open_time}–${facts.close_time}`
-                      : facts.is_sunday
+                    {hoursFacts.open_time && hoursFacts.close_time
+                      ? `${hoursFacts.open_time}–${hoursFacts.close_time}`
+                      : hoursFacts.is_sunday
                         ? "closed (Sunday)"
                         : "—"}
                   </code>
                 </li>
                 <li>
                   <span>Holiday</span>
-                  <code>{facts.is_holiday ? facts.holiday_name || "yes" : "no"}</code>
+                  <code>{hoursFacts.is_holiday ? hoursFacts.holiday_name || "yes" : "no"}</code>
                 </li>
                 <li>
                   <span>HKO weather</span>
-                  <code>{facts.weather_hint || "none / not today"}</code>
+                  <code>{hoursFacts.weather_hint || "none / not today"}</code>
                 </li>
                 {trace?.opening_hours?.effective_message && (
                   <li>
@@ -577,12 +805,19 @@ export default function BrightNestBotDemo() {
             )}
           </Reveal>
 
-          <Reveal key={`rag-${turnKey}`} title="RAG retrieval" summary={ragSummary} defaultOpen={ragOpen}>
+          <Reveal
+            key={`rag-${turnKey}`}
+            title="RAG retrieval"
+            summary={ragSummary}
+            defaultOpen={ragOpen}
+            active={activePanel === "rag"}
+            dimmed={Boolean(activePanel) && activePanel !== "rag"}
+          >
             {hits.length === 0 ? (
               <p className="bn-empty">
                 {route === "rag"
                   ? "No chunks returned."
-                  : "Skipped when hours/booking short-circuits."}
+                  : "Only shown for true RAG turns (fact citations stay in Centre facts)."}
               </p>
             ) : (
               <>
@@ -611,12 +846,20 @@ export default function BrightNestBotDemo() {
             key={`register-${turnKey}`}
             title="Class register"
             summary={scheduleSummary}
-            defaultOpen={bookingOpen || !trace}
+            defaultOpen={bookingOpen}
+            active={activePanel === "booking"}
+            dimmed={Boolean(activePanel) && activePanel !== "booking"}
           >
             <p className="bn-note">
               Backed by local CSV admin sheets (teachers, windows, sessions, enrolments,
-              trial_slots). Chat bookings append to <code>chat_bookings.csv</code> — same
-              idea as writing into a live spreadsheet, without Google OAuth.
+              trial_slots). Chat bookings append to <code>chat_bookings.csv</code>.
+              {lastSlots?.length ? (
+                <>
+                  {" "}
+                  Highlighted rows match the <strong>{lastSlots.length}</strong> open slot
+                  {lastSlots.length === 1 ? "" : "s"} from chat.
+                </>
+              ) : null}
               {schedule?.sheets_dir ? (
                 <>
                   {" "}
@@ -643,7 +886,7 @@ export default function BrightNestBotDemo() {
             {!schedule ? (
               <p className="bn-empty">Schedule API offline — restart local backend to load.</p>
             ) : (
-              <div className="bn-register">
+              <div className="bn-register" ref={registerRef}>
                 {teachers.length > 0 && scheduleTeacherId === "all" && (
                   <ul className="bn-teacher-windows">
                     {teachers.map((t) => (
@@ -661,38 +904,45 @@ export default function BrightNestBotDemo() {
                     <div className="bn-reg-day" key={day.date}>
                       <h4>{day.label}</h4>
                       <ul>
-                        {day.sessions.map((s) => (
-                          <li key={`${s.session_id}-${s.slot_start}`}>
-                            <div className="bn-reg-line">
-                              <strong>
-                                {s.slot_display.split(", ").pop()} · {s.course_label}
-                              </strong>
-                              <code className={s.status === "open" ? "ok" : ""}>
-                                {s.seats_left}/{s.capacity}
-                              </code>
-                            </div>
-                            <span>
-                              {s.teacher_name}
-                              {s.room ? ` · ${s.room}` : ""}
-                              {s.kind === "trial" ? " · trial" : ""}
-                              {s.enrolled_count
-                                ? ` · ${s.enrolled_count} on register`
-                                : ""}
-                              {s.chat_bookings ? ` · +${s.chat_bookings} chat` : ""}
-                            </span>
-                            {s.enrolled?.length > 0 && (
-                              <em>
-                                {s.enrolled
-                                  .slice(0, 4)
-                                  .map((e) => e.child)
-                                  .join(", ")}
-                                {s.enrolled.length > 4
-                                  ? ` +${s.enrolled.length - 4}`
+                        {day.sessions.map((s) => {
+                          const hit = highlightedSessionKeys.has(`${s.session_id}-${s.slot_start}`);
+                          return (
+                            <li
+                              key={`${s.session_id}-${s.slot_start}`}
+                              className={hit ? "bn-reg-hit" : undefined}
+                            >
+                              <div className="bn-reg-line">
+                                <strong>
+                                  {s.slot_display.split(", ").pop()} · {s.course_label}
+                                  {hit ? " · match" : ""}
+                                </strong>
+                                <code className={s.status === "open" ? "ok" : ""}>
+                                  {s.seats_left}/{s.capacity}
+                                </code>
+                              </div>
+                              <span>
+                                {s.teacher_name}
+                                {s.room ? ` · ${s.room}` : ""}
+                                {s.kind === "trial" ? " · trial" : ""}
+                                {s.enrolled_count
+                                  ? ` · ${s.enrolled_count} on register`
                                   : ""}
-                              </em>
-                            )}
-                          </li>
-                        ))}
+                                {s.chat_bookings ? ` · +${s.chat_bookings} chat` : ""}
+                              </span>
+                              {s.enrolled?.length > 0 && (
+                                <em>
+                                  {s.enrolled
+                                    .slice(0, 4)
+                                    .map((e) => e.child)
+                                    .join(", ")}
+                                  {s.enrolled.length > 4
+                                    ? ` +${s.enrolled.length - 4}`
+                                    : ""}
+                                </em>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   ) : null
@@ -705,32 +955,52 @@ export default function BrightNestBotDemo() {
             key={`admin-${turnKey}`}
             title="Admin to-do"
             summary={
-              adminTodos.length
-                ? `${adminTodos.length} open · quiet KB / programme gaps`
+              visibleTodos.length
+                ? `${visibleTodos.length} open · quiet KB / programme gaps`
                 : "Empty — quiet flags when RAG can't answer"
             }
-            defaultOpen={Boolean(trace?.admin_todo) || adminTodos.length > 0}
+            defaultOpen={adminTodoOpen}
+            active={activePanel === "admin_todo"}
+            dimmed={Boolean(activePanel) && activePanel !== "admin_todo"}
           >
             <p className="bn-note">
               Internal research queue (<code>admin_todos.csv</code>). Parents are{" "}
-              <strong>never</strong> told about this sheet — they only hear a helpful
-              reply (and can ask to speak with our team).
+              <strong>never</strong> told about this sheet.
             </p>
-            {adminTodos.length === 0 ? (
-              <p className="bn-empty">No open to-dos.</p>
+            <div className="bn-scope-toggle">
+              <button
+                type="button"
+                className={adminScope === "session" ? "bn-scope-on" : ""}
+                onClick={() => setAdminScope("session")}
+              >
+                This session
+              </button>
+              <button
+                type="button"
+                className={adminScope === "all" ? "bn-scope-on" : ""}
+                onClick={() => setAdminScope("all")}
+              >
+                All open
+              </button>
+            </div>
+            {visibleTodos.length === 0 ? (
+              <p className="bn-empty">No open to-dos in this view.</p>
             ) : (
               <ul className="bn-todos">
-                {adminTodos.map((t) => (
+                {visibleTodos.map((t) => (
                   <li key={t.id}>
                     <div className="bn-todo-head">
                       <strong>{t.parent_name || t.phone || "Unknown parent"}</strong>
                       <code>{t.id}</code>
                     </div>
                     <span className="bn-todo-q">Q: {t.question}</span>
-                    <span className="bn-todo-a">A: {(t.reply || "").slice(0, 160)}</span>
                     {t.info_needed ? (
                       <span className="bn-todo-need">Need: {t.info_needed}</span>
                     ) : null}
+                    <details className="bn-todo-expand">
+                      <summary>Full reply</summary>
+                      <pre className="bn-pre">{t.reply || "(empty)"}</pre>
+                    </details>
                     <button type="button" className="bn-ghost" onClick={() => markTodoDone(t.id)}>
                       Mark done
                     </button>
@@ -744,45 +1014,71 @@ export default function BrightNestBotDemo() {
             key={`boss-${turnKey}`}
             title="Admin messages"
             summary={
-              staffMessages.length
-                ? `${staffMessages.length} open · bot → centre boss`
+              visibleStaff.length
+                ? `${visibleStaff.length} open · bot → centre boss`
                 : "Empty — human hand-off notices land here"
             }
-            defaultOpen={Boolean(trace?.staff_message) || staffMessages.length > 0}
+            defaultOpen={adminMsgOpen}
+            active={activePanel === "admin_messages"}
+            dimmed={Boolean(activePanel) && activePanel !== "admin_messages"}
           >
             <p className="bn-note">
-              Direct notices to the centre lead (<code>staff_messages.csv</code>) when a
-              parent asks for a real person, is very upset, raises safety concerns, or
-              needs a human decision. Parent hears:{" "}
-              <em>“I've let our team know… somebody will reach out during working hours.”</em>
+              Direct notices to the centre lead (<code>staff_messages.csv</code>). Parent hears a
+              calm hand-off — never the sheet name.
             </p>
-            {staffMessages.length === 0 ? (
-              <p className="bn-empty">No open staff messages.</p>
+            <div className="bn-scope-toggle">
+              <button
+                type="button"
+                className={adminScope === "session" ? "bn-scope-on" : ""}
+                onClick={() => setAdminScope("session")}
+              >
+                This session
+              </button>
+              <button
+                type="button"
+                className={adminScope === "all" ? "bn-scope-on" : ""}
+                onClick={() => setAdminScope("all")}
+              >
+                All open
+              </button>
+            </div>
+            {visibleStaff.length === 0 ? (
+              <p className="bn-empty">No open staff messages in this view.</p>
             ) : (
               <ul className="bn-todos">
-                {staffMessages.map((m) => (
-                  <li key={m.id}>
-                    <div className="bn-todo-head">
-                      <strong>
-                        {(m.priority || "normal").toUpperCase()} · {m.category || "general"}
-                      </strong>
-                      <code>{m.id}</code>
-                    </div>
-                    <span className="bn-todo-q">
-                      From: {m.parent_name || m.phone || "Unknown"}
-                      {m.child_name ? ` · ${m.child_name}` : ""}
-                    </span>
-                    <span className="bn-todo-need">Boss: {m.summary_for_boss}</span>
-                    <span className="bn-todo-a">Parent said: {(m.parent_message || "").slice(0, 200)}</span>
-                    <button
-                      type="button"
-                      className="bn-ghost"
-                      onClick={() => ackStaffMessage(m.id)}
-                    >
-                      Acknowledge
-                    </button>
-                  </li>
-                ))}
+                {visibleStaff.map((m) => {
+                  const prio = (m.priority || "normal").toLowerCase();
+                  const hot = prio === "high" || prio === "urgent" || prio === "critical";
+                  return (
+                    <li key={m.id} className={hot ? "bn-todo-hot" : undefined}>
+                      <div className="bn-todo-head">
+                        <strong>
+                          <span className={`bn-prio ${hot ? "bn-prio-high" : ""}`}>
+                            {prio.toUpperCase()}
+                          </span>{" "}
+                          · {m.category || "general"}
+                        </strong>
+                        <code>{m.id}</code>
+                      </div>
+                      <span className="bn-todo-q">
+                        From: {m.parent_name || m.phone || "Unknown"}
+                        {m.child_name ? ` · ${m.child_name}` : ""}
+                      </span>
+                      <span className="bn-todo-need">Boss: {m.summary_for_boss}</span>
+                      <details className="bn-todo-expand" defaultOpen={hot}>
+                        <summary>Full parent message</summary>
+                        <pre className="bn-pre">{m.parent_message || "(empty)"}</pre>
+                      </details>
+                      <button
+                        type="button"
+                        className="bn-ghost"
+                        onClick={() => ackStaffMessage(m.id)}
+                      >
+                        Acknowledge
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Reveal>
@@ -804,6 +1100,8 @@ export default function BrightNestBotDemo() {
                     : "Idle — try book / cancel for Jason"
             }
             defaultOpen={bookingOpen}
+            active={activePanel === "booking"}
+            dimmed={Boolean(activePanel) && activePanel !== "booking"}
           >
             <p className="bn-note">
               Identity comes from the messaging number (<code>families.csv</code>). Demo
@@ -890,21 +1188,50 @@ export default function BrightNestBotDemo() {
           <Reveal
             key={`mem-${turnKey}`}
             title="Session memory"
-            summary={`${trace?.history?.turns_loaded ?? 0}/${trace?.history?.limit ?? 10} msgs`}
-            defaultOpen={false}
+            summary={`${memoryDisplayTurns}/${trace?.history?.limit ?? 10} msgs · includes this turn`}
+            defaultOpen={memoryOpen}
+            active={memoryOpen && !activePanel}
+            dimmed={Boolean(activePanel) && activePanel !== "memory" && !memoryOpen}
           >
-            {trace?.history?.preview ? (
-              <pre className="bn-pre">{trace.history.preview}</pre>
-            ) : (
+            {memoryLines.length === 0 && userTurns === 0 ? (
               <p className="bn-empty">No prior turns yet.</p>
+            ) : (
+              <>
+                <p className="bn-note">
+                  Loaded before reply: <strong>{trace?.history?.turns_loaded ?? 0}</strong> ·
+                  parent turns this session: <strong>{userTurns}</strong>
+                </p>
+                {memoryLines.length > 0 ? (
+                  <pre className="bn-pre bn-mem-pre">
+                    {memoryLines.map((line, i) => {
+                      const fresh = i >= Math.max(0, memoryLines.length - 2);
+                      return (
+                        <span
+                          key={i}
+                          className={`bn-mem-line${fresh ? " bn-mem-line-fresh" : ""}`}
+                        >
+                          {line}
+                          {"\n"}
+                        </span>
+                      );
+                    })}
+                  </pre>
+                ) : (
+                  <p className="bn-empty">
+                    First turn in this session — history will appear on the next message.
+                  </p>
+                )}
+              </>
             )}
           </Reveal>
 
           <Reveal
             key={`probes-${turnKey}`}
             title="Demo probes"
-            summary="Quick paths for the live talk"
+            summary="90s path = numbered 1–6"
             defaultOpen={!trace}
+            active={false}
+            dimmed={Boolean(activePanel)}
           >
             <div className="bn-probes">
               {DEMO_PROBES.map((p) => (
