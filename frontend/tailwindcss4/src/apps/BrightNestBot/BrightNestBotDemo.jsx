@@ -701,7 +701,7 @@ export default function BrightNestBotDemo() {
               <span className={`bn-pill bn-pill-${meta.tone}`}>{meta.label}</span>
               {llmTouched ? (
                 <span className="bn-pill bn-pill-llm" title="Cheap DashScope review / polish ran">
-                  qwen-turbo review
+                  cheap LLM review
                 </span>
               ) : null}
               {trace?.latency_ms != null && <span className="bn-latency">{trace.latency_ms} ms</span>}
@@ -755,8 +755,8 @@ export default function BrightNestBotDemo() {
                     gapStep?.status === "done" ? "gap polish" : null,
                   ]
                     .filter(Boolean)
-                    .join(" · ") || "qwen-turbo touched this turn"
-                : "Idle — turbo referee / polish when DashScope is live"
+                    .join(" · ") || "cheap LLM touched this turn"
+                : "Idle — cheap referee / polish when DashScope is live"
             }
             defaultOpen={llmOpen}
             active={activePanel === "llm"}
@@ -764,14 +764,14 @@ export default function BrightNestBotDemo() {
           >
             {!llmTouched ? (
               <p className="bn-empty">
-                After regex/prototype routing, a small DashScope model can keep, send to RAG, or
+                After regex/prototype routing, a cheap DashScope model can keep, send to RAG, or
                 polish a fixed fact card so the parent reply matches the question.
               </p>
             ) : (
               <>
                 <p className="bn-note">
-                  Demo “weaker LLM” path — fast <code>qwen-turbo</code> review, not the main RAG
-                  generator. Fail-open if the call times out.
+                  Demo “weaker LLM” path — short-prompt intent review / fact polish (same workspace
+                  model as RAG when MaaS only exposes one). Fail-open if the call times out.
                 </p>
                 <ul className="bn-fact-list">
                   <li>
