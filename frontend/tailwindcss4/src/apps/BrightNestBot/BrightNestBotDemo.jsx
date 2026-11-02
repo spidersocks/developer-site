@@ -12,49 +12,25 @@ const API_BASE = (
 
 const LOGO_SRC = "/projects/brightnest/logo.png";
 
-/** Ordered ~90s live-talk path, then deeper probes */
 const DEMO_PROBES = [
-  { label: "1 · Hours", text: "What are your opening hours?" },
-  { label: "2 · Phonics fee", text: "How much is phonics?" },
-  { label: "3 · Trial first?", text: "If my kid has not attended before, does he need to book a trial assessment first?" },
-  { label: "4 · Trial slots", text: "Show trial class availability" },
-  { label: "5 · Book Jason", text: "Can I book a class for Jason next week?" },
-  { label: "6 · Talk to staff", text: "Can I speak to a real person please? This is urgent about my child's safety." },
-  { label: "Teachers", text: "Tell me about your teachers" },
-  { label: "Sibling %", text: "Do you have a sibling discount?" },
-  { label: "Makeup", text: "What is your make-up class policy?" },
-  { label: "Peanut allergy", text: "Peanut allergy policy?" },
-  { label: "FPS pay", text: "How do I pay? What is your FPS ID?" },
-  { label: "Location", text: "Where are you located?" },
+  { label: "Hours", text: "What are your opening hours?" },
   { label: "Tomorrow", text: "tomorrow?" },
   { label: "Christmas", text: "Are you open on Christmas Day?" },
+  { label: "Phonics fee", text: "How much is phonics?" },
+  { label: "Teachers", text: "Tell me about your teachers" },
+  { label: "Location", text: "Where are you located?" },
+  { label: "Trial slots", text: "Show trial class availability" },
   { label: "Phonics seats", text: "Show phonics availability" },
+  { label: "Math seats", text: "Show early math availability" },
+  { label: "Avery slots", text: "Show Avery open slots for trial" },
+  { label: "Jordan slots", text: "Show Jordan open slots for phonics" },
+  { label: "Book Jason", text: "Can I book a class for Jason next week?" },
   { label: "Cancel class", text: "Can I cancel Jason's class next Tuesday?" },
   { label: "Unknown ask", text: "Does BrightNest offer scuba diving for toddlers?" },
   { label: "Private 1:1", text: "How much is private English tuition?" },
+  { label: "Talk to staff", text: "Can I speak to a real person please?" },
   { label: "Angry parent", text: "This is unacceptable — I'm furious about today's class!" },
 ];
-
-const FACT_ROUTE_META = {
-  fees: { label: "Centre facts · Fees", tone: "facts" },
-  trial_info: { label: "Centre facts · Trial policy", tone: "facts" },
-  teachers: { label: "Centre facts · Teachers", tone: "facts" },
-  pickup: { label: "Centre facts · Pickup", tone: "facts" },
-  makeup: { label: "Centre facts · Make-up", tone: "facts" },
-  sibling: { label: "Centre facts · Sibling discount", tone: "facts" },
-  waiting: { label: "Centre facts · Waiting list", tone: "facts" },
-  location: { label: "Centre facts · Location", tone: "facts" },
-  allergy: { label: "Centre facts · Allergy", tone: "facts" },
-  illness: { label: "Centre facts · Illness", tone: "facts" },
-  payment: { label: "Centre facts · Payment", tone: "facts" },
-  pets_policy: { label: "Centre facts · Pets policy", tone: "facts" },
-  severe_weather: { label: "Centre facts · Severe weather", tone: "facts" },
-  unsupported_facility: { label: "Centre facts · Not offered", tone: "facts" },
-  greeting: { label: "Greeting", tone: "idle" },
-  thanks: { label: "Thanks", tone: "idle" },
-  confused: { label: "Clarify", tone: "idle" },
-  off_domain: { label: "Out of scope", tone: "idle" },
-};
 
 function getOrCreateSessionId() {
   let id = localStorage.getItem("bn_bot_session_id");
@@ -81,89 +57,57 @@ function scoreLabel(score) {
 }
 
 function routeMeta(route) {
-  if (!route) return { label: "Waiting for a query", tone: "idle" };
-  if (route === "deterministic_opening_hours" || route === "opening_hours") {
+  if (route === "deterministic_opening_hours") {
     return { label: "Opening-hours engine", tone: "hours" };
   }
-  if (route === "booking_dialogue") return { label: "Booking dialogue", tone: "book" };
-  if (route === "cancel_dialogue") return { label: "Cancel dialogue", tone: "book" };
-  if (route === "booking_tool") return { label: "Booking tool", tone: "book" };
-  if (route === "rag") return { label: "RAG retrieve → generate", tone: "rag" };
+  if (route === "booking_dialogue") {
+    return { label: "Booking dialogue", tone: "book" };
+  }
+  if (route === "cancel_dialogue") {
+    return { label: "Cancel dialogue", tone: "book" };
+  }
+  if (route === "booking_tool") {
+    return { label: "Booking tool", tone: "book" };
+  }
+  if (route === "rag") {
+    return { label: "RAG retrieve → generate", tone: "rag" };
+  }
   if (route === "staff_escalation") {
     return { label: "Staff escalation → boss inbox", tone: "book" };
   }
   if (route === "unknown_programme") {
     return { label: "Unknown programme (quiet admin flag)", tone: "rag" };
   }
-  if (FACT_ROUTE_META[route]) return FACT_ROUTE_META[route];
-  return { label: route, tone: "idle" };
+  return { label: "Waiting for a query", tone: "idle" };
 }
 
-function isFactRoute(route) {
-  return Boolean(FACT_ROUTE_META[route]?.tone === "facts");
-}
-
-function fingerprintQuestion(q) {
-  return String(q || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function dedupeByQuestion(items, key = "question") {
-  const seen = new Set();
-  const out = [];
-  for (const item of items || []) {
-    const fp = fingerprintQuestion(item?.[key] || item?.parent_message);
-    if (!fp || seen.has(fp)) continue;
-    seen.add(fp);
-    out.push(item);
+function sheetWhen(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
+    return d.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(iso).slice(0, 16);
   }
-  return out;
 }
 
-function slotMatchKey(slot) {
-  if (!slot) return "";
-  const start = String(slot.slot_start || slot.slot_display || "");
-  const teacher = String(slot.teacher_name || slot.teacher_id || "").toLowerCase();
-  return `${start}|${teacher}`;
+function clip(text, n = 72) {
+  const s = (text || "").trim();
+  if (s.length <= n) return s;
+  return `${s.slice(0, n - 1)}…`;
 }
 
-function sessionMatchesSlot(session, slot) {
-  if (!session || !slot) return false;
-  const slotStart = String(slot.slot_start || "");
-  const sessStart = String(session.slot_start || "");
-  if (slotStart && sessStart && (slotStart === sessStart || sessStart.includes(slotStart.slice(0, 16)))) {
-    return true;
-  }
-  const tSlot = String(slot.teacher_name || "").toLowerCase();
-  const tSess = String(session.teacher_name || "").toLowerCase();
-  const timeHint = String(slot.slot_display || "").split(", ").pop();
-  const sessTime = String(session.slot_display || "").split(", ").pop();
-  if (tSlot && tSess && tSlot === tSess && timeHint && sessTime && timeHint === sessTime) {
-    return true;
-  }
-  return false;
-}
-
-function Reveal({
-  title,
-  summary,
-  defaultOpen = false,
-  active = false,
-  dimmed = false,
-  children,
-}) {
+function Reveal({ title, summary, defaultOpen = false, children }) {
   return (
-    <details
-      className={`bn-reveal${active ? " bn-reveal-active" : ""}${dimmed ? " bn-reveal-dim" : ""}`}
-      defaultOpen={defaultOpen}
-    >
+    <details className="bn-reveal" defaultOpen={defaultOpen}>
       <summary>
-        <span className="bn-reveal-title">
-          {active ? <span className="bn-active-dot" aria-hidden /> : null}
-          {title}
-        </span>
+        <span className="bn-reveal-title">{title}</span>
         {summary ? <span className="bn-reveal-summary">{summary}</span> : null}
       </summary>
       <div className="bn-reveal-body">{children}</div>
@@ -183,20 +127,18 @@ export default function BrightNestBotDemo() {
   const [phone, setPhone] = useState("+852 9000 0000");
   const [lastBooking, setLastBooking] = useState(null);
   const [pendingSlot, setPendingSlot] = useState(null);
-  const [lastSlots, setLastSlots] = useState([]);
   const [sessionLabel, setSessionLabel] = useState(() => shortSessionLabel());
   const [trace, setTrace] = useState(null);
-  const [lastCitations, setLastCitations] = useState([]);
   const [apiOnline, setApiOnline] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [scheduleTeacherId, setScheduleTeacherId] = useState("all");
   const [adminTodos, setAdminTodos] = useState([]);
   const [staffMessages, setStaffMessages] = useState([]);
-  const [adminScope, setAdminScope] = useState("session"); // session | all
+  const [rightView, setRightView] = useState("system"); // system | staff
+  const [selectedMsgId, setSelectedMsgId] = useState(null);
 
   const chatWindowRef = useRef(null);
   const textAreaRef = useRef(null);
-  const registerRef = useRef(null);
 
   useEffect(() => {
     const setVh = () => {
@@ -248,11 +190,27 @@ export default function BrightNestBotDemo() {
     }
   }
 
+  async function patchTodoField(id, fields) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/todos/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      if (!res.ok) return;
+      const updated = await res.json();
+      setAdminTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function ackStaffMessage(id) {
     try {
       await fetch(`${API_BASE}/admin/messages/${encodeURIComponent(id)}/ack`, {
         method: "POST",
       });
+      setSelectedMsgId((cur) => (cur === id ? null : cur));
       refreshStaffMessages();
     } catch {
       /* ignore */
@@ -279,11 +237,11 @@ export default function BrightNestBotDemo() {
       setError(null);
       setLastBooking(null);
       setPendingSlot(null);
-      setLastSlots([]);
-      setLastCitations([]);
       setTrace(null);
       setAdminTodos([]);
       setStaffMessages([]);
+      setSelectedMsgId(null);
+      setRightView("system");
       localStorage.removeItem("bn_bot_session_id");
       setSessionLabel(shortSessionLabel());
       refreshAdminTodos();
@@ -296,6 +254,7 @@ export default function BrightNestBotDemo() {
         .catch(() => {})
         .finally(finish);
     } else {
+      // Still clear admin to-dos for a clean demo even without a session id
       fetch(`${API_BASE}/chat/history/${encodeURIComponent("demo-reset")}`, {
         method: "DELETE",
       })
@@ -331,25 +290,19 @@ export default function BrightNestBotDemo() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setSessionLabel(shortSessionLabel());
-      const nextTrace = data.trace ? { ...data.trace } : {};
-      // Inspector reads provider / booking / cancel from trace — backfill from top-level
-      if (!nextTrace.provider && data.provider) nextTrace.provider = data.provider;
-      if (!nextTrace.answer_provider && data.provider) {
-        nextTrace.answer_provider = data.provider;
+      setTrace(data.trace || null);
+      const hitTodo = Boolean(data.trace?.admin_todo);
+      const hitBoss =
+        Boolean(data.trace?.staff_message) || data.trace?.route === "staff_escalation";
+      if (hitTodo) refreshAdminTodos();
+      if (hitBoss) {
+        refreshStaffMessages();
+        if (data.trace?.staff_message?.id) {
+          setSelectedMsgId(data.trace.staff_message.id);
+        }
       }
-      if (!nextTrace.booking && data.debug?.dialogue) nextTrace.booking = data.debug.dialogue;
-      if (!nextTrace.cancel && data.debug?.cancel) nextTrace.cancel = data.debug.cancel;
-      setTrace(Object.keys(nextTrace).length ? nextTrace : null);
-      setLastCitations(data.citations || []);
-      if (data.slots?.length) setLastSlots(data.slots);
-      else if (data.trace?.route !== "booking_tool" && data.trace?.route !== "booking_dialogue") {
-        setLastSlots([]);
-      }
-      if (data.trace?.admin_todo) refreshAdminTodos();
-      if (data.trace?.staff_message) refreshStaffMessages();
-      // Always refresh admin lists lightly so inbox stays honest during demo
-      refreshAdminTodos();
-      refreshStaffMessages();
+      if (hitTodo || hitBoss) setRightView("staff");
+      // Keep form identity in sync when dialogue resolves a child
       const resolvedChild =
         data.trace?.booking?.child_name || data.trace?.cancel?.child_name;
       if (resolvedChild) setChildName(resolvedChild);
@@ -412,6 +365,7 @@ export default function BrightNestBotDemo() {
           booking: data,
         },
       ]);
+      // Refresh admin register so seats_left updates in the inspector
       fetch(`${API_BASE}/schedule?days=7`)
         .then((r) => r.json())
         .then((d) => setSchedule(d))
@@ -428,72 +382,15 @@ export default function BrightNestBotDemo() {
   const route = trace?.route;
   const meta = routeMeta(route);
   const steps = trace?.pipeline_steps || [];
-  const hoursFacts = trace?.opening_hours?.facts;
+  const facts = trace?.opening_hours?.facts;
   const rag = trace?.rag;
-  // Only real RAG hits — never fall back to fact citations
-  const hits = Array.isArray(rag?.hits) ? rag.hits : [];
-  const routingDebug = trace?.routing?.debug || {};
-  const arbiter = routingDebug.arbiter || null;
-  const arbiterOverride = routingDebug.arbiter_override || null;
-  const llmMeta = trace?.llm || {};
-  const answerProvider =
-    trace?.answer_provider || trace?.provider || llmMeta.answer_provider || null;
-  const adaptStep = steps.find((s) => s.id === "adapt");
-  const arbiterStep = steps.find((s) => s.id === "intent_arbiter");
-  const gapStep = steps.find((s) => s.id === "gap_polish");
-  const cancelPickStep = steps.find((s) => s.id === "cancel_pick");
-  const bookingParseStep = steps.find((s) => s.id === "booking_parse");
-  const cheapDone = (s) => s && (s.status === "done" || s.status === "error");
-  const cheapCalled = Boolean(
-    llmMeta.cheap_called ||
-      arbiter?.called ||
-      cheapDone(arbiterStep) ||
-      cheapDone(gapStep) ||
-      cheapDone(cancelPickStep) ||
-      cheapDone(bookingParseStep)
-  );
-  const mainRewriteDone = adaptStep?.status === "done";
-  const llmTouched = cheapCalled || mainRewriteDone || Boolean(arbiterOverride);
+  const hits = rag?.hits || [...chatHistory].reverse().find((m) => m.role === "bot")?.citations || [];
 
-  const turnKey = `${trace?.latency_ms ?? "idle"}-${route ?? "none"}-${chatHistory.length}`;
-  const factOpen = isFactRoute(route);
-  const hoursOpen = route === "deterministic_opening_hours" || route === "opening_hours";
+  const turnKey = String(trace?.latency_ms ?? "idle");
+  const hoursOpen = route === "deterministic_opening_hours";
   const ragOpen = route === "rag";
   const bookingOpen =
     route === "booking_tool" || route === "booking_dialogue" || route === "cancel_dialogue";
-  const adminTodoOpen = route === "unknown_programme" || Boolean(trace?.admin_todo);
-  const adminMsgOpen = route === "staff_escalation" || Boolean(trace?.staff_message);
-  const userTurns = chatHistory.filter((m) => m.role === "user").length;
-  const memoryTurns = Math.max(trace?.history?.turns_loaded ?? 0, Math.max(0, userTurns - 1));
-  const memoryDisplayTurns = Math.max(memoryTurns, userTurns > 0 ? userTurns : 0);
-  const memoryOpen = memoryDisplayTurns >= 1;
-  const llmOpen =
-    llmTouched &&
-    (Boolean(arbiterOverride) ||
-      mainRewriteDone ||
-      gapStep?.status === "done" ||
-      cancelPickStep?.status === "done" ||
-      bookingParseStep?.status === "done" ||
-      (arbiter?.called && (arbiter?.action === "rag" || arbiter?.action === "reroute")));
-
-  const activePanel = factOpen
-    ? "facts"
-    : hoursOpen
-      ? "hours"
-      : ragOpen
-        ? "rag"
-        : bookingOpen
-          ? "booking"
-          : adminMsgOpen
-            ? "admin_messages"
-            : adminTodoOpen
-              ? "admin_todo"
-              : llmOpen
-                ? "llm"
-                : memoryOpen && !route
-                  ? "memory"
-                  : null;
-
   const dialogue = trace?.booking;
   const cancelTrace = trace?.cancel;
   const teachers = schedule?.teachers || [];
@@ -505,74 +402,31 @@ export default function BrightNestBotDemo() {
       sessions: (day.sessions || []).filter((s) => s.teacher_id === scheduleTeacherId),
     }));
   }, [schedule, scheduleTeacherId]);
-
-  const highlightedSessionKeys = useMemo(() => {
-    const keys = new Set();
-    for (const slot of lastSlots || []) {
-      keys.add(slotMatchKey(slot));
-      for (const day of schedule?.days || []) {
-        for (const s of day.sessions || []) {
-          if (sessionMatchesSlot(s, slot)) {
-            keys.add(`${s.session_id}-${s.slot_start}`);
-          }
-        }
-      }
-    }
-    return keys;
-  }, [lastSlots, schedule]);
-
-  useEffect(() => {
-    if (!bookingOpen || !lastSlots?.length || !registerRef.current) return;
-    const hit = registerRef.current.querySelector(".bn-reg-hit");
-    if (hit) hit.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [bookingOpen, lastSlots, turnKey]);
-
   const scheduleSummary = schedule
-    ? `${teachers.length} teachers · ${scheduleDays.reduce((n, d) => n + (d.sessions?.length || 0), 0)} sessions / 7d${
-        lastSlots?.length ? ` · ${lastSlots.length} slot hit${lastSlots.length === 1 ? "" : "s"}` : ""
-      }`
+    ? `${teachers.length} teachers · ${scheduleDays.reduce((n, d) => n + (d.sessions?.length || 0), 0)} sessions / 7d`
     : "Synthetic admin register";
 
   const hoursSummary = useMemo(() => {
-    if (!hoursFacts) return "Idle until a date/hours query";
-    if (hoursFacts.weather_hint) return "Severe weather closure";
-    if (hoursFacts.is_holiday) return hoursFacts.holiday_name || "Public holiday";
-    if (hoursFacts.is_sunday) return "Sunday · closed";
-    if (hoursFacts.open_time) return `${hoursFacts.open_time}–${hoursFacts.close_time}`;
+    if (!facts) return "Idle until a date/hours query";
+    if (facts.weather_hint) return "Severe weather closure";
+    if (facts.is_holiday) return facts.holiday_name || "Public holiday";
+    if (facts.is_sunday) return "Sunday · closed";
+    if (facts.open_time) return `${facts.open_time}–${facts.close_time}`;
     return "Parsed";
-  }, [hoursFacts]);
+  }, [facts]);
 
   const ragSummary = useMemo(() => {
-    if (route && route !== "rag") return "Skipped — not on RAG path";
     if (!rag && !hits.length) return "Idle until a KB question";
     const n = rag?.hit_count ?? hits.length;
     return `${n} chunk${n === 1 ? "" : "s"} · ${rag?.embedding_mode || "embed"}`;
-  }, [rag, hits.length, route]);
+  }, [rag, hits.length]);
 
-  const factStep = steps.find(
-    (s) => s.id === "facts" || /fee|teacher|trial|weather|pickup|makeup|sibling|allerg|payment|location|pets/i.test(s.label || "")
-  );
-  const factsSummary = factOpen
-    ? factStep?.label || FACT_ROUTE_META[route]?.label || "Structured centre fact"
-    : "Idle until a fees / policy / teachers query";
+  const selectedMsg = useMemo(() => {
+    if (!staffMessages.length) return null;
+    return staffMessages.find((m) => m.id === selectedMsgId) || staffMessages[0];
+  }, [staffMessages, selectedMsgId]);
 
-  const sid = typeof window !== "undefined" ? localStorage.getItem("bn_bot_session_id") : null;
-  const visibleTodos = useMemo(() => {
-    const deduped = dedupeByQuestion(adminTodos, "question");
-    if (adminScope === "all" || !sid) return deduped;
-    return deduped.filter((t) => !t.session_id || t.session_id === sid);
-  }, [adminTodos, adminScope, sid]);
-
-  const visibleStaff = useMemo(() => {
-    const deduped = dedupeByQuestion(staffMessages, "parent_message");
-    if (adminScope === "all" || !sid) return deduped;
-    return deduped.filter((m) => !m.session_id || m.session_id === sid);
-  }, [staffMessages, adminScope, sid]);
-
-  const historyPreview = trace?.history?.preview || "";
-  const memoryLines = historyPreview
-    ? historyPreview.split("\n").filter(Boolean)
-    : [];
+  const sheetCols = ["A", "B", "C", "D", "E", "F", "G"];
 
   return (
     <div className="bn-app">
@@ -598,6 +452,7 @@ export default function BrightNestBotDemo() {
       </header>
 
       <div className="bn-stage">
+        {/* Phone */}
         <aside className="bn-phone-wrap">
           <p className="bn-col-label">Parent chat</p>
           <div className="bn-phone">
@@ -613,10 +468,7 @@ export default function BrightNestBotDemo() {
               {showEmpty && (
                 <div className="bn-row bn-row-bot">
                   <div className="bn-bubble bn-bubble-bot">
-                    <WaMarkdown>
-                      Hi! Ask about courses, fees, hours, or trial booking. Try the numbered
-                      demo probes for a 90-second path.
-                    </WaMarkdown>
+                    <WaMarkdown>Hi! Ask about courses, fees, hours, or trial booking.</WaMarkdown>
                     <span className="bn-time">{formatTime()}</span>
                   </div>
                 </div>
@@ -710,283 +562,295 @@ export default function BrightNestBotDemo() {
           </div>
         </aside>
 
+        {/* Inspector / Staff desk */}
         <section className="bn-inspector">
-          <p className="bn-col-label">System inspector</p>
+          <div className="bn-right-head">
+            <p className="bn-col-label">
+              {rightView === "staff" ? "Staff desk" : "System inspector"}
+            </p>
+            <div className="bn-view-toggle" role="tablist" aria-label="Right panel">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={rightView === "system"}
+                className={rightView === "system" ? "active" : ""}
+                onClick={() => setRightView("system")}
+              >
+                System
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={rightView === "staff"}
+                className={rightView === "staff" ? "active" : ""}
+                onClick={() => setRightView("staff")}
+              >
+                Staff desk
+                {(adminTodos.length > 0 || staffMessages.length > 0) && (
+                  <span className="bn-view-badge">
+                    {adminTodos.length + staffMessages.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
 
+          {rightView === "staff" ? (
+            <div className="bn-staff-desk">
+              {/* Google Sheets–style admin to-do */}
+              <div className="bn-sheet-widget">
+                <div className="bn-sheet-menubar">
+                  <div className="bn-sheet-doc">
+                    <span className="bn-sheet-icon" aria-hidden="true" />
+                    <div>
+                      <strong>admin_todos</strong>
+                      <small>Research queue · parents never see this</small>
+                    </div>
+                  </div>
+                  <span className="bn-sheet-count">
+                    {adminTodos.length} open
+                  </span>
+                </div>
+                <div className="bn-sheet-formula">
+                  <span className="bn-sheet-fx">fx</span>
+                  <code>admin_todos.csv</code>
+                  <span className="bn-sheet-hint">Edit “Info needed”, tick Status when done</span>
+                </div>
+                <div className="bn-sheet-scroll">
+                  <table className="bn-sheet-grid">
+                    <thead>
+                      <tr>
+                        <th className="bn-sheet-corner" />
+                        {sheetCols.map((c) => (
+                          <th key={c}>{c}</th>
+                        ))}
+                      </tr>
+                      <tr className="bn-sheet-labels">
+                        <th />
+                        <th>Status</th>
+                        <th>Parent</th>
+                        <th>Child</th>
+                        <th>Question</th>
+                        <th>Info needed</th>
+                        <th>Reason</th>
+                        <th>When</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminTodos.length === 0 ? (
+                        <tr>
+                          <td className="bn-sheet-rownum">1</td>
+                          <td colSpan={7} className="bn-sheet-empty">
+                            No open to-dos — quiet flags appear when RAG can’t answer.
+                          </td>
+                        </tr>
+                      ) : (
+                        adminTodos.map((t, i) => (
+                          <tr key={t.id}>
+                            <td className="bn-sheet-rownum">{i + 1}</td>
+                            <td className="bn-sheet-check">
+                              <input
+                                type="checkbox"
+                                title="Mark done"
+                                aria-label={`Mark ${t.id} done`}
+                                onChange={() => markTodoDone(t.id)}
+                              />
+                            </td>
+                            <td title={t.phone || ""}>{t.parent_name || t.phone || "—"}</td>
+                            <td>{t.child_name || "—"}</td>
+                            <td className="bn-sheet-q" title={t.question}>
+                              {clip(t.question, 90)}
+                            </td>
+                            <td className="bn-sheet-edit">
+                              <input
+                                type="text"
+                                defaultValue={t.info_needed || ""}
+                                key={`${t.id}-${t.info_needed || ""}`}
+                                placeholder="What staff should look up…"
+                                onBlur={(e) => {
+                                  const next = e.target.value.trim();
+                                  if (next !== (t.info_needed || "").trim()) {
+                                    patchTodoField(t.id, { info_needed: next });
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td>
+                              <code>{t.reason || "—"}</code>
+                            </td>
+                            <td>{sheetWhen(t.created_at)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Gmail-style boss inbox */}
+              <div className="bn-inbox-widget">
+                <div className="bn-inbox-bar">
+                  <div>
+                    <strong>Inbox</strong>
+                    <span> · centre boss</span>
+                  </div>
+                  <span className="bn-inbox-unread">
+                    {staffMessages.length} open
+                  </span>
+                </div>
+                <div className="bn-inbox-body">
+                  <div className="bn-inbox-list" role="listbox" aria-label="Staff messages">
+                    {staffMessages.length === 0 ? (
+                      <p className="bn-inbox-empty">
+                        No hand-off notices. Escalations (angry parent, ask for human, safety)
+                        land here.
+                      </p>
+                    ) : (
+                      staffMessages.map((m) => {
+                        const active = selectedMsg?.id === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            className={`bn-inbox-row ${active ? "active" : ""}`}
+                            onClick={() => setSelectedMsgId(m.id)}
+                          >
+                            <span
+                              className={`bn-prio bn-prio-${m.priority || "normal"}`}
+                            >
+                              {(m.priority || "normal").slice(0, 1).toUpperCase()}
+                            </span>
+                            <span className="bn-inbox-row-main">
+                              <strong>
+                                {m.parent_name || m.phone || "Unknown parent"}
+                              </strong>
+                              <em>{m.category || "general"}</em>
+                              <span>{clip(m.summary_for_boss || m.parent_message, 64)}</span>
+                            </span>
+                            <time>{sheetWhen(m.created_at)}</time>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="bn-inbox-read">
+                    {!selectedMsg ? (
+                      <p className="bn-inbox-empty">Select a message to read.</p>
+                    ) : (
+                      <>
+                        <div className="bn-inbox-read-head">
+                          <h3>{selectedMsg.summary_for_boss || "Staff notice"}</h3>
+                          <div className="bn-inbox-meta">
+                            <span
+                              className={`bn-prio-pill bn-prio-${selectedMsg.priority || "normal"}`}
+                            >
+                              {(selectedMsg.priority || "normal").toUpperCase()}
+                            </span>
+                            <span>{selectedMsg.category || "general"}</span>
+                            <code>{selectedMsg.id}</code>
+                          </div>
+                          <p>
+                            From{" "}
+                            <strong>
+                              {selectedMsg.parent_name || selectedMsg.phone || "Unknown"}
+                            </strong>
+                            {selectedMsg.child_name ? ` · ${selectedMsg.child_name}` : ""}
+                            {selectedMsg.phone ? (
+                              <>
+                                {" "}
+                                · <code>{selectedMsg.phone}</code>
+                              </>
+                            ) : null}
+                          </p>
+                          <time>{sheetWhen(selectedMsg.created_at)}</time>
+                        </div>
+                        <div className="bn-inbox-read-body">
+                          <h4>Parent said</h4>
+                          <p>{selectedMsg.parent_message || "—"}</p>
+                          {selectedMsg.bot_reply ? (
+                            <>
+                              <h4>Bot promised</h4>
+                              <p>{selectedMsg.bot_reply}</p>
+                            </>
+                          ) : null}
+                        </div>
+                        <div className="bn-inbox-actions">
+                          <button
+                            type="button"
+                            className="bn-inbox-ack"
+                            onClick={() => ackStaffMessage(selectedMsg.id)}
+                          >
+                            Acknowledge
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
           <div className="bn-route-card">
             <div className="bn-route-main">
               <span className={`bn-pill bn-pill-${meta.tone}`}>{meta.label}</span>
-              {answerProvider ? (
-                <span
-                  className="bn-pill bn-pill-provider"
-                  title="Where the parent-facing answer came from"
-                >
-                  {answerProvider}
-                </span>
-              ) : null}
-              {cheapCalled ? (
-                <span className="bn-pill bn-pill-llm" title="Short-prompt DashScope referee ran">
-                  cheap LLM
-                </span>
-              ) : null}
-              {mainRewriteDone ? (
-                <span
-                  className="bn-pill bn-pill-main-llm"
-                  title="Main model rewrote a fixed fact card"
-                >
-                  main rewrite
-                </span>
-              ) : null}
               {trace?.latency_ms != null && <span className="bn-latency">{trace.latency_ms} ms</span>}
               {isLoading && <span className="bn-running">running…</span>}
             </div>
             {steps.length > 0 && (
               <ol className="bn-step-rail" aria-label="Pipeline steps">
-                {steps.map((s) => {
-                  const isCheap =
-                    s.id === "intent_arbiter" ||
-                    s.id === "gap_polish" ||
-                    s.id === "cancel_pick" ||
-                    s.id === "booking_parse";
-                  const isMainLlm = s.id === "adapt";
-                  const isActive =
-                    s.status === "done" &&
-                    (isCheap ||
-                      isMainLlm ||
-                      s.id === "facts" ||
-                      (factOpen && /fee|teacher|trial|weather|pickup|makeup|sibling|allerg|payment|location|pets/i.test(s.label || "")) ||
-                      (hoursOpen && /hours|date|holiday|weather/i.test(s.id + s.label)) ||
-                      (ragOpen && s.id === "rag") ||
-                      (bookingOpen && /book|cancel/i.test(s.id + s.label)) ||
-                      (adminTodoOpen && s.id === "admin_todo") ||
-                      (adminMsgOpen && /escalat|staff/i.test(s.id + s.label)));
-                  return (
-                    <li
-                      key={s.id}
-                      className={`bn-step-chip bn-step-${s.status || "idle"}${isCheap ? " bn-step-llm" : ""}${isMainLlm ? " bn-step-main-llm" : ""}${isActive ? " bn-step-active" : ""}`}
-                      title={s.detail}
-                    >
-                      <span>{s.label}</span>
-                    </li>
-                  );
-                })}
+                {steps.map((s) => (
+                  <li key={s.id} className={`bn-step-chip bn-step-${s.status || "idle"}`} title={s.detail}>
+                    <span>{s.label}</span>
+                  </li>
+                ))}
               </ol>
             )}
             <p className="bn-hint">
-              Amber = short-prompt referee. Teal-outline = main model fact rewrite. Dimmed panels
-              stayed idle.
+              Only the active path opens below. Expand others when you want the detail.
             </p>
           </div>
-
-          <Reveal
-            key={`llm-${turnKey}`}
-            title="LLM path (demo)"
-            summary={
-              llmTouched
-                ? [
-                    answerProvider ? `source ${answerProvider}` : null,
-                    cheapCalled
-                      ? `cheap ${llmMeta.cheap_model || arbiter?.model || "review"}`
-                      : null,
-                    mainRewriteDone
-                      ? `rewrite ${llmMeta.main_model || "main"}`
-                      : null,
-                    arbiterOverride
-                      ? `${arbiterOverride.from} → ${arbiterOverride.to}`
-                      : arbiter?.called
-                        ? `intent ${arbiter.action}`
-                        : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") || "LLM touched this turn"
-                : "Idle — referee / rewrite when DashScope is live"
-            }
-            defaultOpen={llmOpen}
-            active={activePanel === "llm"}
-            dimmed={Boolean(activePanel) && activePanel !== "llm" && !llmTouched}
-          >
-            {!llmTouched ? (
-              <p className="bn-empty">
-                Short-prompt calls review intent, cancel picks, and gap wording. Separately, the
-                main model can rewrite a fixed fact card so the reply matches the parent question.
-              </p>
-            ) : (
-              <>
-                <p className="bn-note">
-                  On this MaaS workspace both paths may use the same model name — the difference is
-                  the job (short JSON referee vs longer fact rewrite). Fail-open if a cheap call
-                  times out.
-                </p>
-                <ul className="bn-fact-list">
-                  <li>
-                    <span>Answer source</span>
-                    <code>{answerProvider || "—"}</code>
-                  </li>
-                  <li>
-                    <span>Main model</span>
-                    <code>{llmMeta.main_model || "—"}</code>
-                  </li>
-                  <li>
-                    <span>Cheap model</span>
-                    <code>
-                      {cheapCalled
-                        ? llmMeta.cheap_model || arbiter?.model || "called"
-                        : "not called"}
-                    </code>
-                  </li>
-                  {arbiter?.called ? (
-                    <li>
-                      <span>Intent review</span>
-                      <code>
-                        {arbiter.action || "keep"}
-                        {arbiter.reason ? ` · ${arbiter.reason}` : ""}
-                      </code>
-                    </li>
-                  ) : arbiterStep?.status === "skipped" ? (
-                    <li>
-                      <span>Intent review</span>
-                      <code>skipped · {arbiter?.reason || "not needed"}</code>
-                    </li>
-                  ) : null}
-                  {arbiterOverride ? (
-                    <li>
-                      <span>Override</span>
-                      <code>
-                        {arbiterOverride.from} → {arbiterOverride.to}
-                      </code>
-                    </li>
-                  ) : null}
-                  {adaptStep ? (
-                    <li>
-                      <span>Fact rewrite</span>
-                      <code>
-                        {adaptStep.status}
-                        {adaptStep.detail ? ` · ${adaptStep.detail}` : ""}
-                      </code>
-                    </li>
-                  ) : null}
-                  {gapStep ? (
-                    <li>
-                      <span>Gap polish</span>
-                      <code>
-                        {gapStep.status}
-                        {gapStep.detail ? ` · ${gapStep.detail}` : ""}
-                      </code>
-                    </li>
-                  ) : null}
-                  {cancelPickStep ? (
-                    <li>
-                      <span>Cancel pick</span>
-                      <code>
-                        {cancelPickStep.status}
-                        {cancelPickStep.detail ? ` · ${cancelPickStep.detail}` : ""}
-                      </code>
-                    </li>
-                  ) : null}
-                  {bookingParseStep ? (
-                    <li>
-                      <span>Booking parse</span>
-                      <code>
-                        {bookingParseStep.status}
-                        {bookingParseStep.detail ? ` · ${bookingParseStep.detail}` : ""}
-                      </code>
-                    </li>
-                  ) : null}
-                </ul>
-              </>
-            )}
-          </Reveal>
-
-          <Reveal
-            key={`facts-${turnKey}`}
-            title="Centre facts"
-            summary={factsSummary}
-            defaultOpen={factOpen}
-            active={activePanel === "facts"}
-            dimmed={Boolean(activePanel) && activePanel !== "facts"}
-          >
-            {!factOpen ? (
-              <p className="bn-empty">
-                Structured fees / policy / teachers answers land here (not RAG chunks).
-              </p>
-            ) : (
-              <>
-                <ul className="bn-fact-list">
-                  <li>
-                    <span>Route</span>
-                    <code>{route}</code>
-                  </li>
-                  <li>
-                    <span>Answer source</span>
-                    <code>{answerProvider || "centre_facts"}</code>
-                  </li>
-                  <li>
-                    <span>Process</span>
-                    <code>{factStep?.label || "structured fact"}</code>
-                  </li>
-                  <li>
-                    <span>Detail</span>
-                    <code>{factStep?.detail || "centre_facts"}</code>
-                  </li>
-                </ul>
-                {lastCitations.length > 0 ? (
-                  <ul className="bn-hits">
-                    {lastCitations.slice(0, 4).map((c, i) => (
-                      <li key={`${c.source}-${i}`}>
-                        <div className="bn-hit-head">
-                          <strong>{c.title || c.source || `Source ${i + 1}`}</strong>
-                        </div>
-                        <span className="bn-hit-src">{c.source}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="bn-note">No citation objects on this turn.</p>
-                )}
-              </>
-            )}
-          </Reveal>
 
           <Reveal
             key={`hours-${turnKey}`}
             title="Date · holiday · weather"
             summary={hoursSummary}
             defaultOpen={hoursOpen}
-            active={activePanel === "hours"}
-            dimmed={Boolean(activePanel) && activePanel !== "hours"}
           >
-            {!hoursFacts ? (
+            {!facts ? (
               <p className="bn-empty">Ask an hours/date question to populate this panel.</p>
             ) : (
               <ul className="bn-fact-list">
                 <li>
                   <span>Resolved</span>
-                  <code>{hoursFacts.datetime}</code>
+                  <code>{facts.datetime}</code>
                 </li>
                 <li>
                   <span>Matched via</span>
                   <code>
-                    {hoursFacts.parse_debug?.matched_via ||
-                      (hoursFacts.parse_debug?.is_fallback_to_now ? "fallback_now" : "—")}
+                    {facts.parse_debug?.matched_via ||
+                      (facts.parse_debug?.is_fallback_to_now ? "fallback_now" : "—")}
                   </code>
                 </li>
                 <li>
                   <span>Window</span>
                   <code>
-                    {hoursFacts.open_time && hoursFacts.close_time
-                      ? `${hoursFacts.open_time}–${hoursFacts.close_time}`
-                      : hoursFacts.is_sunday
+                    {facts.open_time && facts.close_time
+                      ? `${facts.open_time}–${facts.close_time}`
+                      : facts.is_sunday
                         ? "closed (Sunday)"
                         : "—"}
                   </code>
                 </li>
                 <li>
                   <span>Holiday</span>
-                  <code>{hoursFacts.is_holiday ? hoursFacts.holiday_name || "yes" : "no"}</code>
+                  <code>{facts.is_holiday ? facts.holiday_name || "yes" : "no"}</code>
                 </li>
                 <li>
                   <span>HKO weather</span>
-                  <code>{hoursFacts.weather_hint || "none / not today"}</code>
+                  <code>{facts.weather_hint || "none / not today"}</code>
                 </li>
                 {trace?.opening_hours?.effective_message && (
                   <li>
@@ -998,19 +862,12 @@ export default function BrightNestBotDemo() {
             )}
           </Reveal>
 
-          <Reveal
-            key={`rag-${turnKey}`}
-            title="RAG retrieval"
-            summary={ragSummary}
-            defaultOpen={ragOpen}
-            active={activePanel === "rag"}
-            dimmed={Boolean(activePanel) && activePanel !== "rag"}
-          >
+          <Reveal key={`rag-${turnKey}`} title="RAG retrieval" summary={ragSummary} defaultOpen={ragOpen}>
             {hits.length === 0 ? (
               <p className="bn-empty">
                 {route === "rag"
                   ? "No chunks returned."
-                  : "Only shown for true RAG turns (fact citations stay in Centre facts)."}
+                  : "Skipped when hours/booking short-circuits."}
               </p>
             ) : (
               <>
@@ -1039,20 +896,12 @@ export default function BrightNestBotDemo() {
             key={`register-${turnKey}`}
             title="Class register"
             summary={scheduleSummary}
-            defaultOpen={bookingOpen}
-            active={activePanel === "booking"}
-            dimmed={Boolean(activePanel) && activePanel !== "booking"}
+            defaultOpen={bookingOpen || !trace}
           >
             <p className="bn-note">
               Backed by local CSV admin sheets (teachers, windows, sessions, enrolments,
-              trial_slots). Chat bookings append to <code>chat_bookings.csv</code>.
-              {lastSlots?.length ? (
-                <>
-                  {" "}
-                  Highlighted rows match the <strong>{lastSlots.length}</strong> open slot
-                  {lastSlots.length === 1 ? "" : "s"} from chat.
-                </>
-              ) : null}
+              trial_slots). Chat bookings append to <code>chat_bookings.csv</code> — same
+              idea as writing into a live spreadsheet, without Google OAuth.
               {schedule?.sheets_dir ? (
                 <>
                   {" "}
@@ -1079,7 +928,7 @@ export default function BrightNestBotDemo() {
             {!schedule ? (
               <p className="bn-empty">Schedule API offline — restart local backend to load.</p>
             ) : (
-              <div className="bn-register" ref={registerRef}>
+              <div className="bn-register">
                 {teachers.length > 0 && scheduleTeacherId === "all" && (
                   <ul className="bn-teacher-windows">
                     {teachers.map((t) => (
@@ -1097,182 +946,43 @@ export default function BrightNestBotDemo() {
                     <div className="bn-reg-day" key={day.date}>
                       <h4>{day.label}</h4>
                       <ul>
-                        {day.sessions.map((s) => {
-                          const hit = highlightedSessionKeys.has(`${s.session_id}-${s.slot_start}`);
-                          return (
-                            <li
-                              key={`${s.session_id}-${s.slot_start}`}
-                              className={hit ? "bn-reg-hit" : undefined}
-                            >
-                              <div className="bn-reg-line">
-                                <strong>
-                                  {s.slot_display.split(", ").pop()} · {s.course_label}
-                                  {hit ? " · match" : ""}
-                                </strong>
-                                <code className={s.status === "open" ? "ok" : ""}>
-                                  {s.seats_left}/{s.capacity}
-                                </code>
-                              </div>
-                              <span>
-                                {s.teacher_name}
-                                {s.room ? ` · ${s.room}` : ""}
-                                {s.kind === "trial" ? " · trial" : ""}
-                                {s.enrolled_count
-                                  ? ` · ${s.enrolled_count} on register`
+                        {day.sessions.map((s) => (
+                          <li key={`${s.session_id}-${s.slot_start}`}>
+                            <div className="bn-reg-line">
+                              <strong>
+                                {s.slot_display.split(", ").pop()} · {s.course_label}
+                              </strong>
+                              <code className={s.status === "open" ? "ok" : ""}>
+                                {s.seats_left}/{s.capacity}
+                              </code>
+                            </div>
+                            <span>
+                              {s.teacher_name}
+                              {s.room ? ` · ${s.room}` : ""}
+                              {s.kind === "trial" ? " · trial" : ""}
+                              {s.enrolled_count
+                                ? ` · ${s.enrolled_count} on register`
+                                : ""}
+                              {s.chat_bookings ? ` · +${s.chat_bookings} chat` : ""}
+                            </span>
+                            {s.enrolled?.length > 0 && (
+                              <em>
+                                {s.enrolled
+                                  .slice(0, 4)
+                                  .map((e) => e.child)
+                                  .join(", ")}
+                                {s.enrolled.length > 4
+                                  ? ` +${s.enrolled.length - 4}`
                                   : ""}
-                                {s.chat_bookings ? ` · +${s.chat_bookings} chat` : ""}
-                              </span>
-                              {s.enrolled?.length > 0 && (
-                                <em>
-                                  {s.enrolled
-                                    .slice(0, 4)
-                                    .map((e) => e.child)
-                                    .join(", ")}
-                                  {s.enrolled.length > 4
-                                    ? ` +${s.enrolled.length - 4}`
-                                    : ""}
-                                </em>
-                              )}
-                            </li>
-                          );
-                        })}
+                              </em>
+                            )}
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   ) : null
                 )}
               </div>
-            )}
-          </Reveal>
-
-          <Reveal
-            key={`admin-${turnKey}`}
-            title="Admin to-do"
-            summary={
-              visibleTodos.length
-                ? `${visibleTodos.length} open · quiet KB / programme gaps`
-                : "Empty — quiet flags when RAG can't answer"
-            }
-            defaultOpen={adminTodoOpen}
-            active={activePanel === "admin_todo"}
-            dimmed={Boolean(activePanel) && activePanel !== "admin_todo"}
-          >
-            <p className="bn-note">
-              Internal research queue (<code>admin_todos.csv</code>). Parents are{" "}
-              <strong>never</strong> told about this sheet.
-            </p>
-            <div className="bn-scope-toggle">
-              <button
-                type="button"
-                className={adminScope === "session" ? "bn-scope-on" : ""}
-                onClick={() => setAdminScope("session")}
-              >
-                This session
-              </button>
-              <button
-                type="button"
-                className={adminScope === "all" ? "bn-scope-on" : ""}
-                onClick={() => setAdminScope("all")}
-              >
-                All open
-              </button>
-            </div>
-            {visibleTodos.length === 0 ? (
-              <p className="bn-empty">No open to-dos in this view.</p>
-            ) : (
-              <ul className="bn-todos">
-                {visibleTodos.map((t) => (
-                  <li key={t.id}>
-                    <div className="bn-todo-head">
-                      <strong>{t.parent_name || t.phone || "Unknown parent"}</strong>
-                      <code>{t.id}</code>
-                    </div>
-                    <span className="bn-todo-q">Q: {t.question}</span>
-                    {t.info_needed ? (
-                      <span className="bn-todo-need">Need: {t.info_needed}</span>
-                    ) : null}
-                    <details className="bn-todo-expand">
-                      <summary>Full reply</summary>
-                      <pre className="bn-pre">{t.reply || "(empty)"}</pre>
-                    </details>
-                    <button type="button" className="bn-ghost" onClick={() => markTodoDone(t.id)}>
-                      Mark done
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Reveal>
-
-          <Reveal
-            key={`boss-${turnKey}`}
-            title="Admin messages"
-            summary={
-              visibleStaff.length
-                ? `${visibleStaff.length} open · bot → centre boss`
-                : "Empty — human hand-off notices land here"
-            }
-            defaultOpen={adminMsgOpen}
-            active={activePanel === "admin_messages"}
-            dimmed={Boolean(activePanel) && activePanel !== "admin_messages"}
-          >
-            <p className="bn-note">
-              Direct notices to the centre lead (<code>staff_messages.csv</code>). Parent hears a
-              calm hand-off — never the sheet name.
-            </p>
-            <div className="bn-scope-toggle">
-              <button
-                type="button"
-                className={adminScope === "session" ? "bn-scope-on" : ""}
-                onClick={() => setAdminScope("session")}
-              >
-                This session
-              </button>
-              <button
-                type="button"
-                className={adminScope === "all" ? "bn-scope-on" : ""}
-                onClick={() => setAdminScope("all")}
-              >
-                All open
-              </button>
-            </div>
-            {visibleStaff.length === 0 ? (
-              <p className="bn-empty">No open staff messages in this view.</p>
-            ) : (
-              <ul className="bn-todos">
-                {visibleStaff.map((m) => {
-                  const prio = (m.priority || "normal").toLowerCase();
-                  const hot = prio === "high" || prio === "urgent" || prio === "critical";
-                  return (
-                    <li key={m.id} className={hot ? "bn-todo-hot" : undefined}>
-                      <div className="bn-todo-head">
-                        <strong>
-                          <span className={`bn-prio ${hot ? "bn-prio-high" : ""}`}>
-                            {prio.toUpperCase()}
-                          </span>{" "}
-                          · {m.category || "general"}
-                        </strong>
-                        <code>{m.id}</code>
-                      </div>
-                      <span className="bn-todo-q">
-                        From: {m.parent_name || m.phone || "Unknown"}
-                        {m.child_name ? ` · ${m.child_name}` : ""}
-                      </span>
-                      <span className="bn-todo-need">Boss: {m.summary_for_boss}</span>
-                      <details className="bn-todo-expand" defaultOpen={hot}>
-                        <summary>Full parent message</summary>
-                        <pre className="bn-pre">{m.parent_message || "(empty)"}</pre>
-                      </details>
-                      <button
-                        type="button"
-                        className="bn-ghost"
-                        onClick={() => ackStaffMessage(m.id)}
-                      >
-                        Acknowledge
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
             )}
           </Reveal>
 
@@ -1293,8 +1003,6 @@ export default function BrightNestBotDemo() {
                     : "Idle — try book / cancel for Jason"
             }
             defaultOpen={bookingOpen}
-            active={activePanel === "booking"}
-            dimmed={Boolean(activePanel) && activePanel !== "booking"}
           >
             <p className="bn-note">
               Identity comes from the messaging number (<code>families.csv</code>). Demo
@@ -1381,50 +1089,21 @@ export default function BrightNestBotDemo() {
           <Reveal
             key={`mem-${turnKey}`}
             title="Session memory"
-            summary={`${memoryDisplayTurns}/${trace?.history?.limit ?? 10} msgs · includes this turn`}
-            defaultOpen={memoryOpen}
-            active={memoryOpen && !activePanel}
-            dimmed={Boolean(activePanel) && activePanel !== "memory" && !memoryOpen}
+            summary={`${trace?.history?.turns_loaded ?? 0}/${trace?.history?.limit ?? 10} msgs`}
+            defaultOpen={false}
           >
-            {memoryLines.length === 0 && userTurns === 0 ? (
-              <p className="bn-empty">No prior turns yet.</p>
+            {trace?.history?.preview ? (
+              <pre className="bn-pre">{trace.history.preview}</pre>
             ) : (
-              <>
-                <p className="bn-note">
-                  Loaded before reply: <strong>{trace?.history?.turns_loaded ?? 0}</strong> ·
-                  parent turns this session: <strong>{userTurns}</strong>
-                </p>
-                {memoryLines.length > 0 ? (
-                  <pre className="bn-pre bn-mem-pre">
-                    {memoryLines.map((line, i) => {
-                      const fresh = i >= Math.max(0, memoryLines.length - 2);
-                      return (
-                        <span
-                          key={i}
-                          className={`bn-mem-line${fresh ? " bn-mem-line-fresh" : ""}`}
-                        >
-                          {line}
-                          {"\n"}
-                        </span>
-                      );
-                    })}
-                  </pre>
-                ) : (
-                  <p className="bn-empty">
-                    First turn in this session — history will appear on the next message.
-                  </p>
-                )}
-              </>
+              <p className="bn-empty">No prior turns yet.</p>
             )}
           </Reveal>
 
           <Reveal
             key={`probes-${turnKey}`}
             title="Demo probes"
-            summary="90s path = numbered 1–6"
+            summary="Quick paths for the live talk"
             defaultOpen={!trace}
-            active={false}
-            dimmed={Boolean(activePanel)}
           >
             <div className="bn-probes">
               {DEMO_PROBES.map((p) => (
@@ -1440,6 +1119,8 @@ export default function BrightNestBotDemo() {
               ))}
             </div>
           </Reveal>
+            </>
+          )}
         </section>
       </div>
     </div>
