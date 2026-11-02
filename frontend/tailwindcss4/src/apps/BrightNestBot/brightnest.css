@@ -1562,13 +1562,15 @@ code,
 
 .bn-mail-layout {
   display: grid;
-  grid-template-columns: 168px minmax(220px, 38%) 1fr;
+  /* Embedded staff desk is narrow — skip folder rail, favour list readability */
+  grid-template-columns: minmax(240px, 42%) 1fr;
   min-height: 0;
   overflow: hidden;
 }
 
 .bn-mail-nav {
-  display: flex;
+  /* Folder rail hidden in the embedded desk — too narrow to show with the list */
+  display: none;
   flex-direction: column;
   gap: 2px;
   padding: 10px 8px;
@@ -1639,6 +1641,17 @@ code,
   color: #0b57d0;
 }
 
+.bn-mail-list-unread {
+  margin-left: auto;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: #d93025;
+  background: #fce8e6;
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+
 .bn-mail-check-all {
   width: 16px;
   height: 16px;
@@ -1650,14 +1663,18 @@ code,
 .bn-mail-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 52px minmax(88px, 22%) minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "checks from when"
+    "checks main main";
+  column-gap: 8px;
+  row-gap: 2px;
   align-items: center;
   text-align: left;
   border: 0;
   border-bottom: 1px solid #f1f3f4;
   background: #fff;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
   color: inherit;
   font: inherit;
@@ -1683,14 +1700,17 @@ code,
 }
 
 .bn-mail-row-checks {
+  grid-area: checks;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  align-self: start;
+  padding-top: 2px;
 }
 
 .bn-mail-box {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   border: 2px solid #5f6368;
   border-radius: 2px;
   opacity: 0.55;
@@ -1698,20 +1718,23 @@ code,
 
 .bn-mail-star {
   color: #5f6368;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1;
   opacity: 0.7;
 }
 
 .bn-mail-row-from {
+  grid-area: from;
   font-size: 0.84rem;
   color: #202124;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .bn-mail-row-main {
+  grid-area: main;
   display: flex;
   align-items: baseline;
   gap: 4px;
@@ -1739,30 +1762,57 @@ code,
   font-size: 0.85rem;
 }
 
+.bn-mail-avatar-bot {
+  background: #0f9d58;
+  letter-spacing: 0.02em;
+}
+
+.bn-mail-row.unread {
+  background: #fff;
+}
+
+.bn-mail-row:not(.unread) .bn-mail-row-from,
+.bn-mail-row:not(.unread) .bn-mail-subj {
+  font-weight: 400;
+}
+
+.bn-mail-row:not(.unread) .bn-mail-when {
+  font-weight: 400;
+}
+
+.bn-mail-row.unread .bn-mail-when {
+  font-weight: 700;
+  color: #202124;
+}
+
 .bn-mail-when {
+  grid-area: when;
   flex-shrink: 0;
   font-size: 0.72rem;
   color: #5f6368;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  padding-right: 4px;
+  padding-right: 2px;
+  justify-self: end;
 }
 
 .bn-mail-subj {
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   color: #202124;
-  flex-shrink: 0;
-  max-width: 55%;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .bn-mail-snip {
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   color: #5f6368;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .bn-mail-read {
@@ -1929,11 +1979,7 @@ code,
 
 @media (max-width: 1100px) {
   .bn-mail-layout {
-    grid-template-columns: minmax(180px, 40%) 1fr;
-  }
-
-  .bn-mail-nav {
-    display: none;
+    grid-template-columns: minmax(200px, 46%) 1fr;
   }
 }
 
