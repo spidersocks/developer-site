@@ -13,7 +13,7 @@ const MAX_SPEED = 1800;
  * chip ("Selected projects") and flash on wrap. Cruise uses a measured pixel
  * --loop-w so the seam is exact. Drag takes over in JS and stays on JS.
  */
-export default function MarqueePill({ items }) {
+export default function MarqueePill({ items, onGrabChange }) {
   const viewportRef = useRef(null);
   const trackRef = useRef(null);
   const measureSetRef = useRef(null);
@@ -163,6 +163,7 @@ export default function MarqueePill({ items }) {
       s.samples = [{ x: e.clientX, t: e.timeStamp }];
       viewport.setPointerCapture(e.pointerId);
       viewport.classList.add(styles.marqueeDragging);
+      onGrabChange?.(true);
       e.preventDefault();
     };
 
@@ -182,6 +183,7 @@ export default function MarqueePill({ items }) {
       s.pointerId = null;
       s.samples = [];
       viewport.classList.remove(styles.marqueeDragging);
+      onGrabChange?.(false);
       try {
         if (e?.pointerId != null) viewport.releasePointerCapture(e.pointerId);
       } catch {
@@ -204,7 +206,7 @@ export default function MarqueePill({ items }) {
       viewport.removeEventListener("pointercancel", endDrag);
       viewport.removeEventListener("lostpointercapture", endDrag);
     };
-  }, [items, repeats]);
+  }, [items, repeats, onGrabChange]);
 
   const setItems = Array.from({ length: repeats }, () => items).flat();
 

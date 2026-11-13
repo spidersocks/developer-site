@@ -15,6 +15,7 @@ const MARQUEE = [
   "About",
   "PhD Computing · Hong Kong Polytechnic University",
   "Exercise and sleep research",
+  "Former HK Athletics team",
   "Selected projects",
 ];
 
@@ -116,6 +117,7 @@ export default function Home2() {
   const [timelineMax, setTimelineMax] = useState(null);
   const [resumeHeight, setResumeHeight] = useState(null);
   const [timelineGrabbing, setTimelineGrabbing] = useState(false);
+  const [handGrabbing, setHandGrabbing] = useState(false);
   const { count, justCounted } = useVisitorCount();
   const logRef = useRef(null);
   const leftRef = useRef(null);
@@ -124,6 +126,7 @@ export default function Home2() {
   const updatesRef = useRef(null);
   const resumeImgRef = useRef(null);
   const timelineDragRef = useRef(null);
+  const timelineCoastRef = useRef(0);
   const featured = projects[0];
   const rest = projects.slice(1);
 
@@ -205,16 +208,88 @@ export default function Home2() {
 
   useEffect(() => {
     if (!timelineGrabbing) return undefined;
+    const list = logRef.current;
+
+    const pushSample = (y, t) => {
+      const drag = timelineDragRef.current;
+      if (!drag) return;
+      drag.samples.push({ y, t });
+      if (drag.samples.length > 6) drag.samples.shift();
+    };
+
+    const flingVelocity = () => {
+      const drag = timelineDragRef.current;
+      const samples = drag?.samples;
+      if (!samples || samples.length < 2) return 0;
+      const a = samples[0];
+      const b = samples[samples.length - 1];
+      const dt = (b.t - a.t) / 1000;
+      if (dt <= 0.001) return 0;
+      // Finger velocity; scroll moves opposite the drag
+      return (b.y - a.y) / dt;
+    };
+
+    const stopCoast = () => {
+      if (timelineCoastRef.current) {
+        cancelAnimationFrame(timelineCoastRef.current);
+        timelineCoastRef.current = 0;
+      }
+    };
+
     const onMove = (e) => {
       const drag = timelineDragRef.current;
-      const list = logRef.current;
-      if (!drag || !list) return;
-      list.scrollTop = drag.scrollTop - (e.clientY - drag.y);
+      if (!drag || !list || e.pointerId !== drag.pointerId) return;
+      const dy = e.clientY - drag.lastY;
+      list.scrollTop -= dy;
+      drag.lastY = e.clientY;
+      pushSample(e.clientY, e.timeStamp);
     };
-    const onUp = () => {
+
+    const onUp = (e) => {
+      const drag = timelineDragRef.current;
+      if (!drag || (e?.pointerId != null && e.pointerId !== drag.pointerId)) {
+        return;
+      }
+
+      // Softer than the marquee fling (marquee caps at 1800)
+      const MAX_SPEED = 780;
+      const DECAY = 4.4;
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      let velocity = reduceMotion
+        ? 0
+        : Math.max(-MAX_SPEED, Math.min(MAX_SPEED, flingVelocity()));
+
       timelineDragRef.current = null;
       setTimelineGrabbing(false);
+      setHandGrabbing(false);
+
+      if (!list || Math.abs(velocity) < 40) return;
+
+      stopCoast();
+      let prev = performance.now();
+      const coast = (now) => {
+        const dt = Math.min(0.048, (now - prev) / 1000);
+        prev = now;
+        list.scrollTop -= velocity * dt;
+        velocity *= Math.exp(-DECAY * dt);
+
+        const maxScroll = list.scrollHeight - list.clientHeight;
+        if (list.scrollTop <= 0 || list.scrollTop >= maxScroll) {
+          list.scrollTop = Math.max(0, Math.min(maxScroll, list.scrollTop));
+          timelineCoastRef.current = 0;
+          return;
+        }
+        if (Math.abs(velocity) < 18) {
+          timelineCoastRef.current = 0;
+          return;
+        }
+        timelineCoastRef.current = requestAnimationFrame(coast);
+      };
+      timelineCoastRef.current = requestAnimationFrame(coast);
     };
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -224,6 +299,14 @@ export default function Home2() {
       window.removeEventListener("pointercancel", onUp);
     };
   }, [timelineGrabbing]);
+
+  useEffect(() => {
+    return () => {
+      if (timelineCoastRef.current) {
+        cancelAnimationFrame(timelineCoastRef.current);
+      }
+    };
+  }, []);
 
   const onTimelinePointerDown = (e) => {
     if (e.button !== 0) return;
@@ -237,17 +320,23 @@ export default function Home2() {
     if (!list) return;
     const rect = list.getBoundingClientRect();
     if (e.clientX > rect.right - 14) return;
+    if (timelineCoastRef.current) {
+      cancelAnimationFrame(timelineCoastRef.current);
+      timelineCoastRef.current = 0;
+    }
     timelineDragRef.current = {
-      y: e.clientY,
-      scrollTop: list.scrollTop,
+      pointerId: e.pointerId,
+      lastY: e.clientY,
+      samples: [{ y: e.clientY, t: e.timeStamp }],
     };
     setTimelineGrabbing(true);
+    setHandGrabbing(true);
     e.preventDefault();
   };
 
   return (
     <div
-      className={`${styles.page}${timelineGrabbing ? ` ${styles.pageGrabbing}` : ""}`}
+      className={`${styles.page}${handGrabbing ? ` ${styles.pageGrabbing}` : ""}`}
     >
       <MobileChrome contacts={CONTACTS} />
       <div className={styles.shell}>
@@ -273,7 +362,7 @@ export default function Home2() {
                 </span>
               </div>
             </div>
-            <MarqueePill items={MARQUEE} />
+            <MarqueePill items={MARQUEE} onGrabChange={setHandGrabbing} />
           </div>
         </header>
 

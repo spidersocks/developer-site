@@ -363,11 +363,17 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  cursor: inherit;
 }
 
-.marqueeDragging {
-  cursor: inherit;
+/* Open hand on hover; closed fist while throwing (beats .page * inherit) */
+.page .marquee,
+.page .marquee * {
+  cursor: url("/plaza/wii-hand-open.png") 16 17, auto !important;
+}
+
+.page .marqueeDragging,
+.page .marqueeDragging * {
+  cursor: url("/plaza/wii-hand-grab.png") 16 18, auto !important;
 }
 
 /* One natural item cycle — sized off-screen so we know how many repeats fill the viewport */
@@ -804,14 +810,18 @@
   scrollbar-width: thin;
   /* Temporary ceiling until layout sync runs — prevents flash of full list */
   max-height: 220px;
-  /* Open hand on hover; closed fist while dragging */
-  cursor: url("/plaza/wii-hand-open.png") 16 17, auto !important;
   touch-action: none;
   user-select: none;
 }
 
-.timelineGrabbing,
-.timelineGrabbing * {
+/* Open hand on hover; closed fist while dragging (beats .page * inherit) */
+.page .timelineList,
+.page .timelineList * {
+  cursor: url("/plaza/wii-hand-open.png") 16 17, auto !important;
+}
+
+.page .timelineGrabbing,
+.page .timelineGrabbing * {
   cursor: url("/plaza/wii-hand-grab.png") 16 18, auto !important;
 }
 
@@ -1317,8 +1327,12 @@
     pointer-events: none;
   }
 
-  .timelineList {
-    cursor: inherit;
+  .page .timelineList,
+  .page .timelineList * {
+    cursor: inherit !important;
+  }
+
+  .page .timelineList {
     touch-action: pan-y;
   }
 }

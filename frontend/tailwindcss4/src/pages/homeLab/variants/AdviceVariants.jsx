@@ -13,7 +13,7 @@ export function AdviceGifCards({ compact = false, className = "" } = {}) {
         {TIP_TOPICS.map((topic) => (
           <div key={topic.id} className={styles.gifCard}>
             <img src={topic.gif} alt="" />
-            <div>
+            <div className={styles.gifText}>
               <b>{topic.label}</b>
               <p>{dailyTip(topic)}</p>
             </div>

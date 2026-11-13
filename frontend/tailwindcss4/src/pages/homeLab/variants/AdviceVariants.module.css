@@ -83,6 +83,12 @@
   height: 36px;
 }
 
+.gifText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .gifCard b {
   display: block;
   font-family: "Fredoka", sans-serif;
@@ -105,10 +111,21 @@
 .quirk .gifCard p {
   font-size: 11px;
   line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  max-height: calc(1.3em * 3);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 180, 0.45) transparent;
+}
+
+.quirk .gifCard p::-webkit-scrollbar {
+  width: 4px;
+}
+
+.quirk .gifCard p::-webkit-scrollbar-thumb {
+  background: rgba(80, 140, 180, 0.45);
+  border-radius: 4px;
 }
 
 .compact .gifCard p {
@@ -133,7 +150,7 @@
 
   .quirk .gifCard p {
     font-size: 12px;
-    -webkit-line-clamp: 4;
+    max-height: calc(1.3em * 4);
   }
 
   .gifCard:hover {
