@@ -1324,7 +1324,10 @@ code,
   border-radius: 10px;
 }
 .bn-shape-decision,
-.bn-shape-cylinder {
+.bn-shape-cylinder,
+.bn-shape-io,
+.bn-shape-rule,
+.bn-shape-llm {
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -1336,7 +1339,15 @@ code,
 .bn-shape-cylinder.is-lit .bn-shape-svg path,
 .bn-shape-cylinder.is-lit .bn-shape-svg ellipse,
 .bn-shape-cylinder.is-active .bn-shape-svg path,
-.bn-shape-cylinder.is-active .bn-shape-svg ellipse {
+.bn-shape-cylinder.is-active .bn-shape-svg ellipse,
+.bn-shape-io.is-lit .bn-shape-svg polygon,
+.bn-shape-io.is-active .bn-shape-svg polygon,
+.bn-shape-rule.is-lit .bn-shape-svg rect,
+.bn-shape-rule.is-lit .bn-shape-svg line,
+.bn-shape-rule.is-active .bn-shape-svg rect,
+.bn-shape-rule.is-active .bn-shape-svg line,
+.bn-shape-llm.is-lit .bn-shape-svg polygon,
+.bn-shape-llm.is-active .bn-shape-svg polygon {
   stroke: var(--teal-ink);
   stroke-width: 2.6;
 }
@@ -1348,6 +1359,19 @@ code,
   padding: 34px 12px 12px;
   max-width: 90%;
   gap: 5px;
+}
+.bn-shape-io .bn-flow-node-body,
+.bn-shape-rule .bn-flow-node-body,
+.bn-shape-llm .bn-flow-node-body {
+  padding: 10px 18px 8px;
+  max-width: 82%;
+  gap: 4px;
+}
+.bn-shape-io .bn-pipe-node-label,
+.bn-shape-rule .bn-pipe-node-label,
+.bn-shape-llm .bn-pipe-node-label {
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 .bn-tok-hit {
   background: rgba(255, 196, 72, 0.55);

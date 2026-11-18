@@ -68,34 +68,47 @@ function isMainLlmCall(call) {
  * Live sits on the FSM column under staffmail (always in Fit). Edges to/from
  * live elbow through the left gutter — never pierce dst/gate/mail.
  */
+/**
+ * Layout — three-way split under Router (ISO-ish cascade):
+ *   FSM dialogue (far left) · Live tools (centre-left) · RAG (right)
+ * Calendar + HKO sit left of the live hub as separate API boxes.
+ */
 const LAYOUT = {
   parent: { x: 0, y: 0, w: 156, h: 42 },
-  lang: { x: 0, y: 68, w: 148, h: 42 },
-  memory: { x: 0, y: 140, w: 148, h: 68 },
-  rules: { x: 0, y: 230, w: 146, h: 46 },
-  router: { x: 0, y: 350, w: 120, h: 120 },
-  arbiter: { x: 200, y: 350, w: 118, h: 44 },
-  fsm: { x: -270, y: 520, w: 140, h: 44 },
-  rag: { x: 270, y: 520, w: 140, h: 44 },
-  dst: { x: -270, y: 600, w: 160, h: 44 },
-  gate: { x: -270, y: 680, w: 160, h: 44 },
-  staffmail: { x: -270, y: 760, w: 160, h: 44 },
-  live: { x: -270, y: 840, w: 148, h: 44 },
-  dense: { x: 170, y: 620, w: 130, h: 70 },
-  sparse: { x: 400, y: 620, w: 130, h: 70 },
-  fuse: { x: 285, y: 740, w: 148, h: 46 },
-  chroma: { x: 285, y: 840, w: 148, h: 70 },
-  rewrite: { x: 285, y: 940, w: 152, h: 46 },
-  chroma2: { x: 450, y: 1040, w: 140, h: 70 },
-  sheets: { x: -270, y: 1040, w: 160, h: 70 },
-  llm: { x: -30, y: 1040, w: 156, h: 46 },
-  answer: { x: 0, y: 1150, w: 156, h: 42 },
+  lang: { x: 0, y: 68, w: 148, h: 48 },
+  memory: { x: 0, y: 145, w: 148, h: 68 },
+  rules: { x: 0, y: 240, w: 146, h: 48 },
+  router: { x: 0, y: 360, w: 120, h: 120 },
+  arbiter: { x: 210, y: 360, w: 118, h: 48 },
+  // Branch heads
+  fsm: { x: -360, y: 530, w: 148, h: 46 },
+  live: { x: -40, y: 530, w: 148, h: 52 },
+  rag: { x: 340, y: 530, w: 140, h: 46 },
+  // FSM dialogue stack (far left — not shared with live APIs)
+  dst: { x: -360, y: 620, w: 160, h: 48 },
+  gate: { x: -360, y: 710, w: 160, h: 48 },
+  staffmail: { x: -360, y: 800, w: 160, h: 48 },
+  sheets: { x: -360, y: 1040, w: 160, h: 70 },
+  // Live API endpoints (left of live hub)
+  calendar: { x: -220, y: 640, w: 142, h: 52 },
+  hko: { x: -220, y: 740, w: 142, h: 52 },
+  // RAG retrieve arm (right) — clear of live→pack corridor
+  dense: { x: 240, y: 640, w: 130, h: 70 },
+  sparse: { x: 460, y: 640, w: 130, h: 70 },
+  fuse: { x: 350, y: 790, w: 168, h: 50 },
+  chroma: { x: 350, y: 890, w: 148, h: 70 },
+  rewrite: { x: 350, y: 990, w: 152, h: 48 },
+  chroma2: { x: 520, y: 1090, w: 140, h: 70 },
+  llm: { x: 40, y: 1090, w: 156, h: 52 },
+  answer: { x: 40, y: 1200, w: 156, h: 42 },
 };
 
-/** Corridor X between FSM column and RAG arm (FSM/DST → LLM). */
-const FSM_LLM_X = -140;
-/** Left gutter — elbows around the FSM stack without crossing boxes. */
-const LIVE_GUTTER_X = -430;
+/** Corridor X between FSM column and centre (FSM/DST → LLM). */
+const FSM_LLM_X = -200;
+/** Far-left gutter — elbows around the FSM stack without crossing boxes. */
+const LIVE_GUTTER_X = -520;
+/** Corridor under live APIs → channel pack (below dense/sparse labels). */
+const LIVE_PACK_Y = 790;
 const ARROW_SIZE = 11;
 
 const EDGES = [
@@ -106,6 +119,7 @@ const EDGES = [
   { id: "e-router-arb", from: "router", to: "arbiter", dashed: true },
   { id: "e-arb-router", from: "arbiter", to: "router", dashed: true },
   { id: "e-router-fsm", from: "router", to: "fsm" },
+  { id: "e-router-live", from: "router", to: "live" },
   { id: "e-router-rag", from: "router", to: "rag" },
   { id: "e-fsm-dst", from: "fsm", to: "dst" },
   { id: "e-fsm-gate", from: "fsm", to: "gate", dashed: true },
@@ -114,12 +128,15 @@ const EDGES = [
   { id: "e-staffmail-sheets", from: "staffmail", to: "sheets" },
   { id: "e-gate-sheets", from: "gate", to: "sheets", dashed: true },
   { id: "e-gate-answer", from: "gate", to: "answer", dashed: true },
-  { id: "e-fsm-live", from: "fsm", to: "live" },
   { id: "e-dst-llm", from: "dst", to: "llm", dashed: true },
   { id: "e-dst-answer", from: "dst", to: "answer", dashed: true },
   { id: "e-fsm-llm", from: "fsm", to: "llm" },
   { id: "e-fsm-answer", from: "fsm", to: "answer", dashed: true },
   { id: "e-fsm-sheets", from: "fsm", to: "sheets", dashed: true },
+  { id: "e-live-calendar", from: "live", to: "calendar" },
+  { id: "e-live-hko", from: "live", to: "hko" },
+  { id: "e-calendar-live", from: "calendar", to: "live", dashed: true },
+  { id: "e-hko-live", from: "hko", to: "live", dashed: true },
   { id: "e-rag-dense", from: "rag", to: "dense" },
   { id: "e-rag-sparse", from: "rag", to: "sparse" },
   { id: "e-dense-fuse", from: "dense", to: "fuse" },
@@ -135,9 +152,9 @@ const EDGES = [
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -460, minY: -28, maxX: 540, maxY: 1220 };
+const WORLD = { minX: -560, minY: -28, maxX: 620, maxY: 1280 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
-const FIT_FOCUS = { minX: -340, minY: -24, maxX: 260, maxY: 500 };
+const FIT_FOCUS = { minX: -280, minY: -24, maxX: 280, maxY: 520 };
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const PAN_MARGIN = 72;
@@ -222,12 +239,33 @@ function clip(text, n = 120) {
   return `${s.slice(0, n - 1)}…`;
 }
 
-/** FSM (tools / sticky dialogue) vs RAG (retrieve → generate). */
+/** Dialogue FSM routes (sticky / commit tools) — exclusive branch from Router. */
+const FSM_ROUTES = new Set([
+  "booking_dialogue",
+  "cancel_dialogue",
+  "staff_escalation",
+  "booking_tool",
+]);
+/** Live-info tools (hours / HKO) — distinct from FSM; may still KB-enrich. */
+const LIVE_ROUTES = new Set([
+  "opening_hours",
+  "deterministic_opening_hours",
+  "severe_weather",
+]);
+
+/**
+ * Three-way cascade under Router:
+ *   1) FSM dialogue  2) live tools  3) RAG
+ * FSM is the only hard branch; live and RAG can both light on enrich turns.
+ */
 function pathKind(route, grounding) {
   const g = grounding?.mode;
   // "pure_rag" kept for older traces; new API emits "rag"
-  if (g === "rag" || g === "pure_rag" || route === "rag") return "rag";
-  if (route) return "fsm";
+  if (g === "rag" || g === "pure_rag" || route === "rag" || route === "off_domain") {
+    return "rag";
+  }
+  if (LIVE_ROUTES.has(route)) return "live";
+  if (FSM_ROUTES.has(route) || route) return "fsm";
   return null;
 }
 
@@ -236,9 +274,17 @@ function liveUsed(route, grounding, facts) {
   return Boolean(
     grounding?.live_doc ||
       facts ||
+      LIVE_ROUTES.has(route) ||
       route === "booking_tool" ||
-      route === "severe_weather" ||
       route === "opening_hours"
+  );
+}
+
+function hoursApisUsed(route, facts, sources) {
+  if (LIVE_ROUTES.has(route) || facts) return true;
+  const consulted = sources?.consulted || [];
+  return consulted.some((s) =>
+    /hours_calendar|hko_opendata|calendar|hko/i.test(`${s.id || ""} ${s.label || ""}`)
   );
 }
 
@@ -504,6 +550,8 @@ function edgeGeometry(fromId, toId) {
 
   if (fromId === "router" && toId === "fsm") {
     pts = [nodeAnchor("router", "sw"), nodeAnchor("fsm", "top")];
+  } else if (fromId === "router" && toId === "live") {
+    pts = [nodeAnchor("router", "bottom"), nodeAnchor("live", "top")];
   } else if (fromId === "router" && toId === "rag") {
     pts = [nodeAnchor("router", "se"), nodeAnchor("rag", "top")];
   } else if (fromId === "router" && toId === "arbiter") {
@@ -512,9 +560,18 @@ function edgeGeometry(fromId, toId) {
     const s = nodeAnchor("arbiter", "bottom");
     const e = nodeAnchor("router", "right");
     pts = [s, { x: s.x, y: e.y }, e];
-  } else if (fromId === "fsm" && toId === "live") {
-    // Around left gutter — never vertically through dst/gate/mail
-    pts = gutterAround(nodeAnchor("fsm", "left"), nodeAnchor("live", "left"));
+  } else if (fromId === "live" && toId === "calendar") {
+    pts = [nodeAnchor("live", "left"), nodeAnchor("calendar", "top")];
+  } else if (fromId === "live" && toId === "hko") {
+    const s = nodeAnchor("live", "left");
+    const e = nodeAnchor("hko", "top");
+    pts = [s, { x: e.x, y: s.y }, e];
+  } else if (fromId === "calendar" && toId === "live") {
+    pts = [nodeAnchor("calendar", "right"), nodeAnchor("live", "left")];
+  } else if (fromId === "hko" && toId === "live") {
+    const s = nodeAnchor("hko", "right");
+    const e = nodeAnchor("live", "left");
+    pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "fsm" && toId === "dst") {
     pts = [nodeAnchor("fsm", "bottom"), nodeAnchor("dst", "top")];
   } else if (fromId === "fsm" && toId === "gate") {
@@ -524,11 +581,7 @@ function edgeGeometry(fromId, toId) {
   } else if (fromId === "gate" && toId === "staffmail") {
     pts = [nodeAnchor("gate", "bottom"), nodeAnchor("staffmail", "top")];
   } else if (fromId === "staffmail" && toId === "sheets") {
-    // Skip over live on the left gutter
-    pts = gutterAround(
-      nodeAnchor("staffmail", "left"),
-      nodeAnchor("sheets", "left")
-    );
+    pts = [nodeAnchor("staffmail", "bottom"), nodeAnchor("sheets", "top")];
   } else if (fromId === "gate" && toId === "sheets") {
     pts = gutterAround(nodeAnchor("gate", "left"), nodeAnchor("sheets", "left"));
   } else if (fromId === "gate" && toId === "answer") {
@@ -542,9 +595,10 @@ function edgeGeometry(fromId, toId) {
     toId === "llm"
   ) {
     if (fromId === "live") {
-      const s = nodeAnchor("live", "right");
-      const e = nodeAnchor("llm", "left");
-      pts = [s, { x: FSM_LLM_X, y: s.y }, { x: FSM_LLM_X, y: e.y }, e];
+      // Drop below channel-pack band, then into LLM — never across Dense labels
+      const s = nodeAnchor("live", "bottom");
+      const e = nodeAnchor("llm", "top");
+      pts = [s, { x: s.x, y: e.y - 40 }, { x: e.x, y: e.y - 40 }, e];
     } else {
       pts = orthoVia(
         nodeAnchor(fromId, "right"),
@@ -592,15 +646,14 @@ function edgeGeometry(fromId, toId) {
   } else if (fromId === "chroma2" && toId === "llm") {
     pts = [nodeAnchor("chroma2", "left"), nodeAnchor("llm", "right")];
   } else if (fromId === "live" && toId === "fuse") {
-    // Corridor, then ABOVE Pack top, then down into the tip — never under the card
+    // Same Y as Channel pack — short horizontal under dense/sparse, no hop over labels
     const s = nodeAnchor("live", "right");
-    const e = nodeAnchor("fuse", "top");
-    const overY = e.y - 36;
+    const e = nodeAnchor("fuse", "left");
+    const y = LIVE_PACK_Y;
     pts = [
-      s,
-      { x: FSM_LLM_X, y: s.y },
-      { x: FSM_LLM_X, y: overY },
-      { x: e.x, y: overY },
+      { x: s.x, y: s.y },
+      { x: s.x, y },
+      { x: e.x, y },
       e,
     ];
   } else if (fromId === "llm" && toId === "answer") {
@@ -1357,6 +1410,7 @@ function NodeDetail({
   arbiter,
   path,
   liveOn,
+  hoursApisOn,
   finalCheck,
   adminTodo,
   staffMessage,
@@ -1647,29 +1701,35 @@ function NodeDetail({
         {};
       const selectedTool = tools.selected_tool || {};
       const cascade = Array.isArray(tools.cascade) ? tools.cascade : [];
-      const branchLabel = enrichMode
-        ? `Tool + KB enrich · ${route || tools.selected || "live"}`
-        : path === "rag"
-          ? "RAG only (no tool owned this turn)"
-          : path === "fsm"
-            ? routing?.dialogue_active || routing?.cancel_active
-              ? `Sticky tool · ${route || "fsm"}`
-              : `Tool · ${route || tools.selected || "fsm"}`
-            : "—";
-      const whyShort = enrichMode
-        ? "Live / tool facts first · Pack still retrieves KB chunks"
-        : path === "rag"
-          ? "No tool ≥ threshold → retrieve → generate"
-          : path === "fsm"
-            ? routing?.dialogue_active || routing?.cancel_active
-              ? `Sticky ${route || "fsm"}`
-              : `Detector selected ${tools.selected || route || "tool"}`
-            : "—";
+      const branchLabel =
+        path === "fsm"
+          ? routing?.dialogue_active || routing?.cancel_active
+            ? `FSM dialogue · ${route || "fsm"}`
+            : `FSM · ${route || tools.selected || "fsm"}`
+          : path === "live"
+            ? enrichMode
+              ? `Live tools + KB enrich · ${route || "live"}`
+              : `Live tools · ${route || tools.selected || "live"}`
+            : path === "rag"
+              ? "RAG only (no tool owned this turn)"
+              : "—";
+      const whyShort =
+        path === "fsm"
+          ? routing?.dialogue_active || routing?.cancel_active
+            ? `Sticky ${route || "fsm"}`
+            : `Dialogue / commit detector · ${tools.selected || route || "tool"}`
+          : path === "live"
+            ? enrichMode
+              ? "Live calendar/HKO facts first · Channel pack still retrieves KB"
+              : "Live calendar / HKO decision"
+            : path === "rag"
+              ? "No tool ≥ threshold → retrieve → generate"
+              : "—";
       return (
         <>
           <p className="bn-rules-hint">
-            Not a hard FSM-vs-RAG fork — a live tool can win and still run Pack /
-            RAG with those facts prioritized.
+            Cascade: FSM dialogue → live tools → RAG. Live can still KB-enrich
+            via Channel pack; FSM is the only exclusive branch.
           </p>
           <MatchSummaryCard summary={matchSummary} />
           <ul className="bn-fact-list">
@@ -1752,9 +1812,9 @@ function NodeDetail({
           ) : null}
           {(trace?.data_sources?.consulted || []).length > 0 ? (
             <p className="bn-note">
-              Sources used this turn → open <strong>Live data</strong> (APIs) or{" "}
-              <strong>Dense / Sparse / Pack</strong> (KB). Scores →{" "}
-              <strong>Rules</strong>.
+              Sources used this turn → open <strong>Live tools</strong> /
+              calendar / HKO, or <strong>Dense / Sparse / Channel pack</strong>{" "}
+              (KB). Scores → <strong>Rules</strong>.
             </p>
           ) : null}
         </>
@@ -1984,7 +2044,9 @@ function NodeDetail({
       if (path !== "fsm") {
         return (
           <Skipped>
-            FSM path not taken (this turn used RAG).
+            {path === "live"
+              ? "FSM dialogue not taken — this turn used live tools."
+              : "FSM path not taken (this turn used RAG)."}
           </Skipped>
         );
       }
@@ -2286,105 +2348,44 @@ function NodeDetail({
       );
 
     case "live": {
-      if (!liveOn) {
-        return <Skipped>No live feed on this turn.</Skipped>;
+      if (!(path === "live" || liveOn)) {
+        return <Skipped>No live tools on this turn.</Skipped>;
       }
-      const sources =
-        trace?.data_sources ||
-        routing?.tools?.data_sources ||
-        null;
-      const LIVE_SRC = new Set([
-        "hours_calendar",
-        "hko_opendata",
-        "sqlite_families",
-        "csv_roster",
-      ]);
-      const LIVE_KIND = new Set(["rules_engine", "http_api", "sqlite", "csv"]);
-      const consulted = (Array.isArray(sources?.consulted)
-        ? sources.consulted
-        : []
-      ).filter(
-        (s) =>
-          LIVE_SRC.has(s.id) ||
-          LIVE_KIND.has(s.kind) ||
-          /hko|hours|calendar|weather/i.test(
-            `${s.id || ""} ${s.label || ""} ${s.kind || ""}`
-          )
-      );
-      const resolvedWhen = facts?.datetime
-        ? String(facts.datetime).replace(/\.\d+/, "").replace("T", " ")
-        : "—";
+      const liveDoc =
+        trace?.opening_hours?.live_doc ||
+        grounding?.live_doc_preview ||
+        "";
       return (
         <>
           <p className="bn-rules-hint">
-            Live APIs / calendars for this tool
-            {enrichMode ? " · KB enrich is on Dense → Pack" : ""}.
+            Live info hub · calendar + HKO are separate boxes to the left
+            {enrichMode ? " · facts feed Channel pack for KB enrich" : ""}.
           </p>
-          {consulted.length > 0 ? (
-            <ul className="bn-fact-list">
-              {consulted.map((s) => (
-                <li key={s.id || s.label}>
-                  <span>{s.label || s.id}</span>
-                  <code>
-                    {s.status || "consulted"}
-                    {s.detail ? ` · ${s.detail}` : ""}
-                  </code>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {facts ? (
-            <ul className="bn-fact-list">
-              <li>
-                <span>Resolved</span>
-                <code>{resolvedWhen}</code>
-              </li>
-              <li>
-                <span>Window</span>
-                <code>
-                  {facts.open_time && facts.close_time
-                    ? `${facts.open_time}–${facts.close_time}`
-                    : facts.is_sunday
-                      ? "closed (Sunday)"
-                      : "—"}
-                </code>
-              </li>
-              <li>
-                <span>Holiday</span>
-                <code>
-                  {facts.is_holiday
-                    ? facts.holiday_name || "yes"
-                    : "no"}
-                </code>
-              </li>
-              <li>
-                <span>HKO</span>
-                <code>
-                  {facts.weather_hint
-                    ? facts.weather_hint
-                    : facts.parse_debug?.weather_checked ||
-                        facts.parse_debug?.weather_resolved_same_day ||
-                        (facts.checks || []).some(
-                          (c) => c.id === "hko_weather" && c.checked
-                        )
-                      ? "checked · clear"
-                      : "not run"}
-                </code>
-              </li>
-            </ul>
-          ) : null}
+          <ul className="bn-fact-list">
+            <li>
+              <span>Route</span>
+              <code>{route || "—"}</code>
+            </li>
+            <li>
+              <span>Decision</span>
+              <code>{trace?.opening_hours?.decision || "—"}</code>
+            </li>
+            <li>
+              <span>LIVE doc</span>
+              <code>{liveDoc ? `${liveDoc.length} chars` : "empty"}</code>
+            </li>
+          </ul>
+          {liveDoc ? (
+            <pre className="bn-pre bn-pre-tall">{liveDoc}</pre>
+          ) : (
+            <p className="bn-note">
+              No privileged live summary attached this turn.
+            </p>
+          )}
           {(facts?.checks || []).length > 0 ? (
             <HardDecisionReveal
               title="Why open / closed"
-              summary={
-                facts.is_holiday
-                  ? "holiday"
-                  : facts.is_sunday
-                    ? "Sunday"
-                    : facts.weather_hint
-                      ? "weather"
-                      : "weekday window"
-              }
+              summary={trace?.opening_hours?.decision || "checks"}
               steps={[
                 "Resolve the asked date (or today)",
                 "Run holiday · Sunday · HKO same-day checks in order",
@@ -2400,6 +2401,160 @@ function NodeDetail({
                   .filter(Boolean)
                   .join(" · "),
               }))}
+            />
+          ) : null}
+        </>
+      );
+    }
+
+    case "calendar": {
+      if (!hoursApisOn && !facts) {
+        return <Skipped>HK calendar not consulted this turn.</Skipped>;
+      }
+      const holCheck = (facts?.checks || []).find(
+        (c) => c.id === "public_holiday"
+      );
+      const sunCheck = (facts?.checks || []).find((c) => c.id === "sunday");
+      return (
+        <>
+          <p className="bn-rules-hint">
+            Hong Kong public-holiday calendar + Sunday closed rule.
+          </p>
+          <ul className="bn-fact-list">
+            <li>
+              <span>Resolved</span>
+              <code>
+                {facts?.datetime
+                  ? String(facts.datetime).replace(/\.\d+/, "").replace("T", " ")
+                  : "—"}
+              </code>
+            </li>
+            <li>
+              <span>Holiday</span>
+              <code>
+                {facts?.is_holiday
+                  ? facts.holiday_name || "yes"
+                  : "no"}
+              </code>
+            </li>
+            <li>
+              <span>Sunday</span>
+              <code>{facts?.is_sunday ? "closed" : "no"}</code>
+            </li>
+            <li>
+              <span>Window</span>
+              <code>
+                {facts?.open_time && facts?.close_time
+                  ? `${facts.open_time}–${facts.close_time}`
+                  : facts?.is_sunday
+                    ? "closed (Sunday)"
+                    : "—"}
+              </code>
+            </li>
+          </ul>
+          <HardDecisionReveal
+            title="Calendar checks"
+            summary={
+              facts?.is_holiday
+                ? "holiday"
+                : facts?.is_sunday
+                  ? "Sunday"
+                  : "open day"
+            }
+            rows={[
+              holCheck
+                ? {
+                    key: "hol",
+                    label: holCheck.label,
+                    value: `${holCheck.passed ? "yes" : "no"} · ${holCheck.detail || ""}`,
+                  }
+                : {
+                    key: "hol",
+                    label: "Public holiday",
+                    value: facts?.is_holiday ? "yes" : "no",
+                  },
+              sunCheck
+                ? {
+                    key: "sun",
+                    label: sunCheck.label,
+                    value: `${sunCheck.passed ? "yes" : "no"} · ${sunCheck.detail || ""}`,
+                  }
+                : {
+                    key: "sun",
+                    label: "Sunday",
+                    value: facts?.is_sunday ? "yes" : "no",
+                  },
+            ]}
+          />
+        </>
+      );
+    }
+
+    case "hko": {
+      if (!hoursApisOn && !facts) {
+        return <Skipped>HKO Open Data not consulted this turn.</Skipped>;
+      }
+      const hkoCheck = (facts?.checks || []).find(
+        (c) => c.id === "hko_weather"
+      );
+      const checked =
+        Boolean(facts?.weather_hint) ||
+        facts?.parse_debug?.weather_checked ||
+        facts?.parse_debug?.weather_resolved_same_day ||
+        hkoCheck?.checked;
+      return (
+        <>
+          <p className="bn-rules-hint">
+            Live HKO warning feed · same-day only (future dates skip).
+          </p>
+          <ul className="bn-fact-list">
+            <li>
+              <span>Status</span>
+              <code>
+                {facts?.weather_hint
+                  ? `signal · ${facts.weather_hint}`
+                  : checked
+                    ? "checked · clear"
+                    : "skipped"}
+              </code>
+            </li>
+            <li>
+              <span>Same-day</span>
+              <code>
+                {facts?.parse_debug?.weather_resolved_same_day
+                  ? "yes"
+                  : facts?.parse_debug?.weather_same_day_only
+                    ? "no · skipped"
+                    : "—"}
+              </code>
+            </li>
+          </ul>
+          {hkoCheck ? (
+            <HardDecisionReveal
+              title="Why this HKO result"
+              summary={
+                facts?.weather_hint
+                  ? "signal"
+                  : checked
+                    ? "clear"
+                    : "skipped"
+              }
+              rows={[
+                {
+                  key: "hko",
+                  label: hkoCheck.label,
+                  value: [
+                    hkoCheck.checked === false
+                      ? "skipped"
+                      : hkoCheck.passed
+                        ? "yes"
+                        : "no",
+                    hkoCheck.detail || "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                },
+              ]}
             />
           ) : null}
         </>
@@ -2750,7 +2905,13 @@ function FlowNode({ node, lit, active }) {
   const stroke =
     shape === "cylinder"
       ? "rgba(70, 110, 85, 0.75)"
-      : "rgba(18, 169, 188, 0.55)";
+      : shape === "io"
+        ? "rgba(10, 126, 164, 0.7)"
+        : shape === "rule"
+          ? "rgba(180, 90, 90, 0.65)"
+          : shape === "llm"
+            ? "rgba(120, 90, 180, 0.65)"
+            : "rgba(18, 169, 188, 0.55)";
   const fill = "rgba(255,255,255,0.97)";
 
   return (
@@ -2805,6 +2966,74 @@ function FlowNode({ node, lit, active }) {
             cy="14"
             rx="44"
             ry="12"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="2.2"
+          />
+        </svg>
+      ) : null}
+      {/* ISO 5807 parallelogram — input/output / external tool or API */}
+      {shape === "io" ? (
+        <svg
+          className="bn-shape-svg"
+          viewBox="0 0 100 56"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <polygon
+            points="16,3 98,3 84,53 2,53"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="2.2"
+          />
+        </svg>
+      ) : null}
+      {/* ISO 5807 predefined process — hard-coded rule / subroutine */}
+      {shape === "rule" ? (
+        <svg
+          className="bn-shape-svg"
+          viewBox="0 0 100 56"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="6"
+            y="3"
+            width="88"
+            height="50"
+            rx="2"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="2.2"
+          />
+          <line
+            x1="14"
+            y1="3"
+            x2="14"
+            y2="53"
+            stroke={stroke}
+            strokeWidth="2"
+          />
+          <line
+            x1="86"
+            y1="3"
+            x2="86"
+            y2="53"
+            stroke={stroke}
+            strokeWidth="2"
+          />
+        </svg>
+      ) : null}
+      {/* Hexagon — preparation / LLM call (distinct from process + store) */}
+      {shape === "llm" ? (
+        <svg
+          className="bn-shape-svg"
+          viewBox="0 0 100 70"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <polygon
+            points="50,2 94,18 94,52 50,68 6,52 6,18"
             fill={fill}
             stroke={stroke}
             strokeWidth="2.2"
@@ -2982,6 +3211,11 @@ export default function TurnPipeline({
     null;
   const path = pathKind(route, grounding);
   const liveOn = liveUsed(route, grounding, facts);
+  const hoursApisOn = hoursApisUsed(
+    route,
+    facts,
+    trace?.data_sources || routing?.tools?.data_sources
+  );
   const adminTodo = trace?.admin_todo || trace?.debug?.admin_todo;
   const staffMessage = trace?.staff_message || trace?.debug?.staff_message;
   const inbound =
@@ -3005,8 +3239,8 @@ export default function TurnPipeline({
       {
         id: "lang",
         label: "Language detection",
-        kind: "router",
-        shape: "process",
+        kind: "rules",
+        shape: "rule",
         status: hasTrace ? "done" : "idle",
       },
       {
@@ -3026,7 +3260,7 @@ export default function TurnPipeline({
         id: "rules",
         label: "Rules · scores",
         kind: "rules",
-        shape: "process",
+        shape: "rule",
         status: !hasTrace
           ? "idle"
           : rulesEvaluated.length || routing?.scores
@@ -3037,25 +3271,28 @@ export default function TurnPipeline({
         id: "arbiter",
         label: "Arbiter",
         kind: "llm",
-        shape: "process",
+        shape: "llm",
         status: !hasTrace ? "idle" : arbiter?.called ? "done" : "skipped",
       },
       {
         id: "router",
-        label: enrichMode
-          ? "Router · tool+KB"
-          : path === "fsm"
-            ? "Router · tool"
-            : path === "rag"
-              ? "Router · RAG"
-              : "Router",
+        label:
+          path === "fsm"
+            ? "Router · FSM"
+            : path === "live"
+              ? enrichMode
+                ? "Router · live+KB"
+                : "Router · live"
+              : path === "rag"
+                ? "Router · RAG"
+                : "Router",
         kind: "router",
         shape: "decision",
         status: hasTrace && path ? "done" : hasTrace ? "done" : "idle",
       },
       {
         id: "fsm",
-        label: "FSM · tools",
+        label: "FSM · dialogue",
         kind: "hard",
         shape: "process",
         status: !hasTrace ? "idle" : path === "fsm" ? "done" : "skipped",
@@ -3064,7 +3301,7 @@ export default function TurnPipeline({
         id: "dst",
         label: "DST · cheap JSON",
         kind: "llm",
-        shape: "process",
+        shape: "llm",
         status: !hasTrace
           ? "idle"
           : path !== "fsm"
@@ -3075,18 +3312,13 @@ export default function TurnPipeline({
                   ?.ok || trace?.cancel?.cancel_dst?.ok
                 ? "done"
                 : "empty"
-              : route === "booking_tool" ||
-                  route === "cancel_dialogue" ||
-                  trace?.booking ||
-                  trace?.cancel
-                ? "skipped"
-                : "skipped",
+              : "skipped",
       },
       {
         id: "gate",
         label: "Final check",
         kind: "llm",
-        shape: "process",
+        shape: "llm",
         status: !hasTrace
           ? "idle"
           : path !== "fsm"
@@ -3107,7 +3339,7 @@ export default function TurnPipeline({
         id: "staffmail",
         label: "Staff email",
         kind: "llm",
-        shape: "process",
+        shape: "llm",
         status: !hasTrace
           ? "idle"
           : path !== "fsm"
@@ -3117,6 +3349,47 @@ export default function TurnPipeline({
               : route === "staff_escalation"
                 ? "empty"
                 : "skipped",
+      },
+      {
+        id: "live",
+        label: "Live tools",
+        kind: "live",
+        shape: "io",
+        status: !hasTrace
+          ? "idle"
+          : path === "live" || liveOn
+            ? "done"
+            : "skipped",
+      },
+      {
+        id: "calendar",
+        label: "HK calendar",
+        kind: "live",
+        shape: "io",
+        status: !hasTrace
+          ? "idle"
+          : hoursApisOn
+            ? "done"
+            : "skipped",
+      },
+      {
+        id: "hko",
+        label: "HKO Open Data",
+        kind: "live",
+        shape: "io",
+        status: !hasTrace
+          ? "idle"
+          : hoursApisOn
+            ? facts?.weather_hint
+              ? "done"
+              : facts?.parse_debug?.weather_checked ||
+                  facts?.parse_debug?.weather_resolved_same_day ||
+                  (facts?.checks || []).some(
+                    (c) => c.id === "hko_weather" && c.checked
+                  )
+                ? "done"
+                : "empty"
+            : "skipped",
       },
       {
         id: "rag",
@@ -3129,13 +3402,6 @@ export default function TurnPipeline({
           : path === "rag" || enrichMode
             ? "done"
             : "skipped",
-      },
-      {
-        id: "live",
-        label: "Live data",
-        kind: "live",
-        shape: "process",
-        status: !hasTrace ? "idle" : liveOn ? "done" : "skipped",
       },
       {
         id: "dense",
@@ -3168,7 +3434,7 @@ export default function TurnPipeline({
       },
       {
         id: "fuse",
-        label: "Pack · 3+2",
+        label: "Channel pack",
         kind: "rag",
         shape: "process",
         status: !hasTrace
@@ -3199,7 +3465,7 @@ export default function TurnPipeline({
         id: "rewrite",
         label: "Grade · rewrite",
         kind: "llm",
-        shape: "process",
+        shape: "llm",
         status: !hasTrace
           ? "idle"
           : !(path === "rag" || enrichMode || hits.length)
@@ -3227,7 +3493,7 @@ export default function TurnPipeline({
         id: "llm",
         label: "LLM (DashScope)",
         kind: "llm",
-        shape: "process",
+        shape: "llm",
         status: !hasTrace ? "idle" : genN ? "done" : "skipped",
       },
       {
@@ -3261,6 +3527,7 @@ export default function TurnPipeline({
     arbiter,
     path,
     liveOn,
+    hoursApisOn,
     facts,
     hits.length,
     rag?.hit_count,
@@ -3316,9 +3583,6 @@ export default function TurnPipeline({
       if (staffMessage || llmCalls.some((c) => isStaffEmailCall(c))) {
         lit.add("staffmail");
       }
-      if (liveOn) lit.add("live");
-      // Live facts inject into the same pack — retrieve is not skipped.
-      if (hits.length || enrichMode) lightRetrieve();
       if (
         adminTodo ||
         staffMessage ||
@@ -3327,9 +3591,16 @@ export default function TurnPipeline({
       ) {
         lit.add("sheets");
       }
+    } else if (path === "live") {
+      lit.add("live");
+      if (hoursApisOn) {
+        lit.add("calendar");
+        lit.add("hko");
+      }
+      // Live facts inject into the same pack — retrieve is not skipped.
+      if (hits.length || enrichMode) lightRetrieve();
     } else if (path === "rag") {
       lightRetrieve();
-      if (liveOn) lit.add("live");
       if (adminTodo) lit.add("sheets");
     }
     if (llmCalls.some((c) => isMainLlmCall(c))) lit.add("llm");
@@ -3340,6 +3611,7 @@ export default function TurnPipeline({
     arbiter,
     path,
     liveOn,
+    hoursApisOn,
     hits.length,
     enrichMode,
     llmCalls,
@@ -3370,7 +3642,8 @@ export default function TurnPipeline({
       link("arbiter", "router", "e-arb-router");
     }
     if (path === "fsm") link("router", "fsm", "e-router-fsm");
-    // Live/tool enrich still runs the retrieve arm — light both branches.
+    if (path === "live") link("router", "live", "e-router-live");
+    // Live/tool enrich still runs the retrieve arm — light RAG branch too.
     if (path === "rag" || enrichMode) link("router", "rag", "e-router-rag");
     if (on("fsm") && on("dst")) link("fsm", "dst", "e-fsm-dst");
     if (on("dst") && on("gate")) link("dst", "gate", "e-dst-gate");
@@ -3382,9 +3655,10 @@ export default function TurnPipeline({
       link("gate", "sheets", "e-gate-sheets");
     if (on("gate") && on("answer") && !on("llm") && !on("sheets") && !on("staffmail"))
       link("gate", "answer", "e-gate-answer");
-    if (on("fsm") && on("live")) link("fsm", "live", "e-fsm-live");
+    if (on("live") && on("calendar")) link("live", "calendar", "e-live-calendar");
+    if (on("live") && on("hko")) link("live", "hko", "e-live-hko");
     if (on("dst") && on("llm")) link("dst", "llm", "e-dst-llm");
-    else if (on("fsm") && on("llm") && !on("live") && !on("rewrite"))
+    else if (on("fsm") && on("llm") && !on("rewrite"))
       link("fsm", "llm", "e-fsm-llm");
     // Booking/cancel often end on FSM templates — no parent-facing DashScope call.
     if (on("dst") && on("answer") && !on("llm") && !on("gate"))
@@ -3450,10 +3724,12 @@ export default function TurnPipeline({
     const labels = {
       "e-rules-router": pick ? `→ ${pick}` : "",
       "e-arb-router": arbiter?.called ? arbiter.action || "keep" : "",
-      "e-router-fsm": path === "fsm" ? (enrichMode ? "tool" : "tool") : "",
+      "e-router-fsm": path === "fsm" ? "dialogue" : "",
+      "e-router-live": path === "live" ? "live info" : "",
       "e-router-rag":
         path === "rag" ? "RAG" : enrichMode ? "KB enrich" : "",
-      "e-fsm-live": liveOn ? "live" : "",
+      "e-live-calendar": hoursApisOn ? "holiday" : "",
+      "e-live-hko": hoursApisOn ? "weather" : "",
       "e-fsm-dst":
         (trace?.booking?.booking_dst || trace?.booking?.arbiter_booking)?.called ||
         trace?.cancel?.cancel_dst?.called
@@ -3478,7 +3754,7 @@ export default function TurnPipeline({
         hy?.dense_count != null ? `dense ${hy.dense_count}` : "dense",
       "e-sparse-fuse":
         hy?.sparse_count != null ? `BM25 ${hy.sparse_count}` : "BM25",
-      "e-fuse-chroma": isChannelPack(hy, rag) ? "3+2 pack" : "fuse",
+      "e-fuse-chroma": isChannelPack(hy, rag) ? "channel pack" : "fuse",
       "e-chroma-rewrite":
         (rag?.retrieval_grade?.grade
           ? String(rag.retrieval_grade.grade)
@@ -3491,8 +3767,8 @@ export default function TurnPipeline({
           ? rankedPassLabel(rag.pass2_hits[0])
           : "",
       "e-live-fuse":
-        enrichMode || (path === "fsm" && (hits.length || rag?.hybrid))
-          ? "KB enrich"
+        enrichMode || (path === "live" && (hits.length || rag?.hybrid))
+          ? "facts → pack"
           : "",
     };
     return labels;
@@ -3505,6 +3781,7 @@ export default function TurnPipeline({
     hits,
     rag,
     enrichMode,
+    hoursApisOn,
     trace,
     finalCheck,
   ]);
@@ -4047,6 +4324,7 @@ export default function TurnPipeline({
                     arbiter={arbiter}
                     path={path}
                     liveOn={liveOn}
+                    hoursApisOn={hoursApisOn}
                     finalCheck={finalCheck}
                     adminTodo={adminTodo}
                     staffMessage={staffMessage}
