@@ -1,46 +1,38 @@
 # System inspector visual audit
 
 Date: 2026-11-18  
-Method: live browser probes + screenshot + getBoundingClientRect visibility checks.
+Method: isolated Reset → Demo Parent → probe; CDP visibility + route meta; screenshots.
 
-## Issues found
+## Issues found → fixed
 
-### P0 — Live data “line to nowhere”
-- **Symptom:** Lit edge toward Live; Live node not in the viewport.
-- **Cause:** Live sat far left (`x: -470`) then later below the Fit focus; Fit framed only the top spine.
-- **Fix:** Live on FSM column under Staff email; auto-`fitLitPath` after each turn; Fit button frames lit nodes when a trace exists; tighter vertical spacing.
+| ID | Issue | Root cause | Fix |
+| --- | --- | --- | --- |
+| P0 | Live “line to nowhere” | Live outside Fit / below viewport | Live on FSM column; `fitLitPath` after turn; Fit frames lit nodes; tighter layout |
+| P0 | Arrowhead nub | Round linecap + stroke to tip | Stroke ends at arrow **base**; tip on port; `stroke-linecap: butt` |
+| P1 | Labels on tips | Midpoint of point list | ~34% path length + nudge; omit if path &lt; 96px |
+| P1 | Dense/Sparse → Pack collide | Both aimed at Pack top-center | Dense → Pack **left**; Sparse → Pack **right** |
+| P1 | Enrich looked like RAG skipped | Status only `path===rag` | Enrich lights full retrieve arm |
+| P2 | Live panel “HKO not run” | Used `weather_applied` only | Use `weather_checked` / checks row |
 
-### P0 — Arrowhead nub
-- **Symptom:** Stroke sticks out past the triangle tip.
-- **Cause:** `stroke-linecap: round` + stroke ended at the tip.
-- **Fix:** Stroke ends at arrow **base**; tip on port; `stroke-linecap: butt`.
+## Isolated route retest (pass)
 
-### P1 — Labels glued to tips
-- **Symptom:** “FSM” / pack labels sit on the arrowhead.
-- **Cause:** Label at midpoint of point list (often last elbow).
-- **Fix:** Place at ~34% path length with perpendicular nudge; omit labels on short edges (&lt;96px).
+| Probe | Meta route | Lighting | Live visible |
+| --- | --- | --- | --- |
+| Is the centre open now? | `deterministic_opening_hours` · live | FSM + Live + RAG/Dense/Sparse/Pack + LLM | yes |
+| Typhoon signal 8 | `severe_weather` · live | FSM + Live + enrich retrieve | yes |
+| Seats Saturday phonics | `booking_tool` · live | FSM + Live | yes |
+| Book a class for Jason | `booking_dialogue` | FSM + DST | n/a (skipped) |
+| Allergic reaction ASAP | `staff_escalation` | FSM + staffmail + sheets | n/a |
+| How much is phonics? | `rag` | RAG + Dense + Sparse + Pack | n/a |
+| How do fish breathe? | `rag` + refuse | RAG arm; FSM skipped | n/a |
 
-### P1 — Dense/Sparse → Pack 3+2
-- **Symptom:** Both edges ran along Pack’s top edge and pointed at each other.
-- **Cause:** Both targeted `fuse` top center then horizontal.
-- **Fix:** Dense → Pack **left** port; Sparse → Pack **right** port.
+## Geometry checks (CDP)
 
-### P1 — Enrich looked like RAG skipped
-- **Symptom:** Pack lit while RAG/Dense/Sparse showed skipped.
-- **Fix:** Enrich lights full retrieve arm (earlier commit).
+- `stroke-linecap === "butt"`
+- Lit edges: stroke end ≈ 11px before triangle tip (base), tip on node port
+- Dense→Pack path ends at Pack left; Sparse→Pack at Pack right (no shared top rail)
+- After enrich turns: `live.visible === true`, `fuse.visible === true`
 
-## Route retest matrix
+## Note on sticky FSM
 
-| # | Probe | Expect route | Expect lit | Visual |
-| --- | --- | --- | --- | --- |
-| 1 | Is the centre open now? | opening_hours | FSM, Live, RAG+Dense+Sparse+Pack, LLM | Live on-screen |
-| 2 | Typhoon signal 8? | severe_weather | FSM, Live, enrich retrieve | Live on-screen |
-| 3 | Seats left Saturday phonics? | booking_tool | FSM, Live | Live on-screen |
-| 4 | Book a class for Jason | booking_dialogue | FSM, DST | No Live required |
-| 5 | Call me ASAP allergic reaction | staff_escalation | FSM, gate, staffmail, sheets | — |
-| 6 | How much is phonics? | rag | RAG dual-channel → Pack sides | No FSM tools |
-| 7 | How do fish breathe? | rag refuse | RAG arm | No Live |
-
-## Retest log
-
-_(filled during browser pass)_
+Probes in one WhatsApp session without Reset stay in `booking_dialogue` after a book starts. Route matrix above uses **Reset between probes**.
