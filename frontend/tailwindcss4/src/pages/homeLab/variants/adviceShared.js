@@ -12,7 +12,7 @@ export const TIP_TOPICS = [
   {
     id: "sleep",
     label: "Sleep",
-    gif: "/plaza/tip-sleep.gif",
+    gif: "/plaza/tip-sleep.gif?v=2",
     tips: sleepTips,
     salt: 0,
   },
