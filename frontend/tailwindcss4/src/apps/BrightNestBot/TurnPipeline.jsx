@@ -71,35 +71,36 @@ function isMainLlmCall(call) {
 /**
  * Layout — three-way split under Router (ISO-ish cascade):
  *   FSM dialogue (far left) · Live tools (centre-left) · RAG (right)
- * Calendar + HKO sit left of the live hub as separate API boxes.
+ * Calendar left of Live (same row); HKO directly under Live.
+ * Straight ports only — no elbows into the API boxes.
  */
 const LAYOUT = {
-  parent: { x: 0, y: 0, w: 156, h: 42 },
-  lang: { x: 0, y: 68, w: 148, h: 48 },
-  memory: { x: 0, y: 145, w: 148, h: 68 },
-  rules: { x: 0, y: 240, w: 146, h: 48 },
-  router: { x: 0, y: 360, w: 120, h: 120 },
-  arbiter: { x: 210, y: 360, w: 118, h: 48 },
-  // Branch heads — FSM far left; live centre; clear gap before calendar/HKO
-  fsm: { x: -440, y: 530, w: 148, h: 46 },
-  live: { x: 40, y: 530, w: 148, h: 52 },
-  rag: { x: 360, y: 530, w: 140, h: 46 },
+  parent: { x: 0, y: 0, w: 156, h: 42, shape: "terminal" },
+  lang: { x: 0, y: 68, w: 148, h: 48, shape: "rule" },
+  memory: { x: 0, y: 145, w: 148, h: 68, shape: "cylinder" },
+  // Rules/scores live inside the router — one decision stage
+  router: { x: 0, y: 270, w: 128, h: 128, shape: "decision" },
+  arbiter: { x: 210, y: 300, w: 118, h: 48, shape: "llm" },
+  // Branch heads — FSM far left; live centre; RAG right
+  fsm: { x: -440, y: 470, w: 148, h: 46, shape: "process" },
+  live: { x: 50, y: 470, w: 148, h: 52, shape: "io" },
+  rag: { x: 360, y: 470, w: 140, h: 46, shape: "process" },
   // FSM dialogue stack (far left — not shared with live APIs)
-  dst: { x: -440, y: 620, w: 160, h: 48 },
-  gate: { x: -440, y: 710, w: 160, h: 48 },
-  staffmail: { x: -440, y: 800, w: 160, h: 48 },
-  sheets: { x: -440, y: 1040, w: 160, h: 70 },
-  // Live API endpoints left of live hub, well clear of FSM column
-  calendar: { x: -90, y: 640, w: 142, h: 52 },
-  hko: { x: -90, y: 780, w: 142, h: 52 },
-  // RAG retrieve arm (right) — clear of live→pack corridor
-  dense: { x: 260, y: 640, w: 130, h: 70 },
-  sparse: { x: 480, y: 640, w: 130, h: 70 },
-  fuse: { x: 370, y: 790, w: 168, h: 50 },
-  chroma: { x: 370, y: 890, w: 148, h: 70 },
-  rewrite: { x: 370, y: 990, w: 152, h: 48 },
-  llm: { x: 60, y: 1090, w: 156, h: 52 },
-  answer: { x: 60, y: 1200, w: 156, h: 42 },
+  dst: { x: -440, y: 560, w: 160, h: 48, shape: "llm" },
+  gate: { x: -440, y: 650, w: 160, h: 48, shape: "llm" },
+  staffmail: { x: -440, y: 740, w: 160, h: 48, shape: "llm" },
+  sheets: { x: -440, y: 980, w: 160, h: 70, shape: "cylinder" },
+  // Live APIs: calendar ← Live (horizontal), Live → HKO (vertical)
+  calendar: { x: -170, y: 470, w: 148, h: 52, shape: "io" },
+  hko: { x: 50, y: 610, w: 148, h: 52, shape: "io" },
+  // RAG retrieve arm (right) — pack+rank is one process; grade vs rewrite split
+  dense: { x: 260, y: 580, w: 130, h: 70, shape: "cylinder" },
+  sparse: { x: 480, y: 580, w: 130, h: 70, shape: "cylinder" },
+  fuse: { x: 370, y: 730, w: 176, h: 56, shape: "process" },
+  grade: { x: 370, y: 850, w: 160, h: 48, shape: "rule" },
+  rewrite: { x: 370, y: 950, w: 152, h: 48, shape: "llm" },
+  llm: { x: 60, y: 1050, w: 156, h: 52, shape: "llm" },
+  answer: { x: 60, y: 1160, w: 156, h: 42, shape: "terminal" },
 };
 
 /** Corridor X between FSM column and centre (FSM/DST → LLM). */
@@ -107,14 +108,13 @@ const FSM_LLM_X = -260;
 /** Far-left gutter — elbows around the FSM stack without crossing boxes. */
 const LIVE_GUTTER_X = -580;
 /** Corridor under live APIs → channel pack (below dense/sparse labels). */
-const LIVE_PACK_Y = 790;
+const LIVE_PACK_Y = 730;
 const ARROW_SIZE = 11;
 
 const EDGES = [
   { id: "e-parent-lang", from: "parent", to: "lang" },
   { id: "e-lang-mem", from: "lang", to: "memory" },
-  { id: "e-mem-rules", from: "memory", to: "rules" },
-  { id: "e-rules-router", from: "rules", to: "router" },
+  { id: "e-mem-router", from: "memory", to: "router" },
   { id: "e-router-arb", from: "router", to: "arbiter", dashed: true },
   { id: "e-arb-router", from: "arbiter", to: "router", dashed: true },
   { id: "e-router-fsm", from: "router", to: "fsm" },
@@ -134,26 +134,25 @@ const EDGES = [
   { id: "e-fsm-sheets", from: "fsm", to: "sheets", dashed: true },
   { id: "e-live-calendar", from: "live", to: "calendar" },
   { id: "e-live-hko", from: "live", to: "hko" },
-  { id: "e-calendar-live", from: "calendar", to: "live", dashed: true },
-  { id: "e-hko-live", from: "hko", to: "live", dashed: true },
   { id: "e-rag-dense", from: "rag", to: "dense" },
   { id: "e-rag-sparse", from: "rag", to: "sparse" },
   { id: "e-dense-fuse", from: "dense", to: "fuse" },
   { id: "e-sparse-fuse", from: "sparse", to: "fuse" },
-  { id: "e-fuse-chroma", from: "fuse", to: "chroma" },
-  { id: "e-chroma-rewrite", from: "chroma", to: "rewrite" },
+  { id: "e-fuse-grade", from: "fuse", to: "grade" },
+  { id: "e-grade-rewrite", from: "grade", to: "rewrite", dashed: true },
+  { id: "e-grade-llm", from: "grade", to: "llm" },
   // Corrective loop: rewrite → same RAG hub (2nd iteration), not a 2nd KB
   { id: "e-rewrite-rag", from: "rewrite", to: "rag", dashed: true },
-  { id: "e-rewrite-llm", from: "rewrite", to: "llm" },
+  { id: "e-rewrite-llm", from: "rewrite", to: "llm", dashed: true },
   { id: "e-live-llm", from: "live", to: "llm", dashed: true },
   { id: "e-live-fuse", from: "live", to: "fuse", dashed: true },
   { id: "e-llm-answer", from: "llm", to: "answer" },
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -620, minY: -28, maxX: 660, maxY: 1280 };
+const WORLD = { minX: -620, minY: -28, maxX: 660, maxY: 1240 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
-const FIT_FOCUS = { minX: -300, minY: -24, maxX: 300, maxY: 520 };
+const FIT_FOCUS = { minX: -300, minY: -24, maxX: 300, maxY: 460 };
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const PAN_MARGIN = 72;
@@ -417,26 +416,84 @@ function priorChatTurns(chatHistory, inbound) {
   return list;
 }
 
+/**
+ * Port on the VISIBLE shape edge — not the rectangular hit-box.
+ * ISO parallelogram / diamond / hexagon ports were floating when treated as rects.
+ */
 function nodeAnchor(id, side = "bottom") {
   const n = LAYOUT[id];
   if (!n) return { x: 0, y: 0 };
-  // Diamond ports sit on the diamond vertices (inset from the square bbox)
-  if (id === "router") {
-    const inset = n.w * 0.08;
-    if (side === "top") return { x: n.x, y: n.y - n.h / 2 + inset };
-    if (side === "bottom") return { x: n.x, y: n.y + n.h / 2 - inset };
-    if (side === "left") return { x: n.x - n.w / 2 + inset, y: n.y };
-    if (side === "right") return { x: n.x + n.w / 2 - inset, y: n.y };
+  const shape = n.shape || "process";
+  const left = n.x - n.w / 2;
+  const right = n.x + n.w / 2;
+  const top = n.y - n.h / 2;
+  const bottom = n.y + n.h / 2;
+
+  // Diamond (decision) — vertices on mid-sides of the square bbox
+  if (shape === "decision") {
+    const inset = Math.min(n.w, n.h) * 0.08;
+    if (side === "top") return { x: n.x, y: top + inset };
+    if (side === "bottom") return { x: n.x, y: bottom - inset };
+    if (side === "left") return { x: left + inset, y: n.y };
+    if (side === "right") return { x: right - inset, y: n.y };
     if (side === "sw") return { x: n.x - n.w * 0.28, y: n.y + n.h * 0.28 };
     if (side === "se") return { x: n.x + n.w * 0.28, y: n.y + n.h * 0.28 };
+    if (side === "center") return { x: n.x, y: n.y };
+    return { x: n.x, y: bottom - inset };
   }
-  if (side === "top") return { x: n.x, y: n.y - n.h / 2 };
-  if (side === "left") return { x: n.x - n.w / 2, y: n.y };
-  if (side === "right") return { x: n.x + n.w / 2, y: n.y };
-  if (side === "sw") return { x: n.x - n.w * 0.32, y: n.y + n.h / 2 };
-  if (side === "se") return { x: n.x + n.w * 0.32, y: n.y + n.h / 2 };
+
+  // ISO parallelogram (io) — SVG points "16,3 98,3 84,53 2,53" in 100×56
+  // Ports sit ON the drawn stroke (SVG insets), not the rectangular hit-box.
+  if (shape === "io") {
+    const tMid = 0.5;
+    const leftVb = 16 - 14 * tMid; // 9
+    const rightVb = 98 - 14 * tMid; // 91
+    const xAt = (vb) => left + (vb / 100) * n.w;
+    const topY = top + (3 / 56) * n.h;
+    const botY = bottom - (3 / 56) * n.h;
+    // Nudge tips 1px into the fill so they kiss the stroke, not float outside
+    if (side === "left") return { x: xAt(leftVb) + 1.2, y: n.y };
+    if (side === "right") return { x: xAt(rightVb) - 1.2, y: n.y };
+    if (side === "top") return { x: n.x, y: topY + 1.2 };
+    if (side === "bottom") return { x: n.x, y: botY - 1.2 };
+    if (side === "sw") return { x: xAt(8), y: botY - 1.2 };
+    if (side === "se") return { x: xAt(78), y: botY - 1.2 };
+    if (side === "center") return { x: n.x, y: n.y };
+    return { x: n.x, y: botY - 1.2 };
+  }
+
+  // Hexagon (llm) — flat left/right at vb x=6 / 94
+  if (shape === "llm") {
+    if (side === "left") return { x: left + 0.06 * n.w, y: n.y };
+    if (side === "right") return { x: right - 0.06 * n.w, y: n.y };
+    if (side === "top") return { x: n.x, y: top + 0.03 * n.h };
+    if (side === "bottom") return { x: n.x, y: bottom - 0.03 * n.h };
+    if (side === "sw") return { x: left + 0.06 * n.w, y: bottom - 0.18 * n.h };
+    if (side === "se") return { x: right - 0.06 * n.w, y: bottom - 0.18 * n.h };
+    if (side === "center") return { x: n.x, y: n.y };
+    return { x: n.x, y: bottom - 0.03 * n.h };
+  }
+
+  // Cylinder — side ports at body mid; top on ellipse equator
+  if (shape === "cylinder") {
+    if (side === "top") return { x: n.x, y: top + 0.18 * n.h };
+    if (side === "bottom") return { x: n.x, y: bottom };
+    if (side === "left") return { x: left + 0.06 * n.w, y: n.y + 0.06 * n.h };
+    if (side === "right") return { x: right - 0.06 * n.w, y: n.y + 0.06 * n.h };
+    if (side === "sw") return { x: left + 0.1 * n.w, y: bottom };
+    if (side === "se") return { x: right - 0.1 * n.w, y: bottom };
+    if (side === "center") return { x: n.x, y: n.y };
+    return { x: n.x, y: bottom };
+  }
+
+  // Process / rule / terminal — rectangle (rule has side rails but same outer box)
+  if (side === "top") return { x: n.x, y: top };
+  if (side === "left") return { x: left, y: n.y };
+  if (side === "right") return { x: right, y: n.y };
+  if (side === "sw") return { x: left + 0.18 * n.w, y: bottom };
+  if (side === "se") return { x: right - 0.18 * n.w, y: bottom };
   if (side === "center") return { x: n.x, y: n.y };
-  return { x: n.x, y: n.y + n.h / 2 };
+  return { x: n.x, y: bottom };
 }
 
 function shorten(a, b, padStart = 2, padEnd = 14) {
@@ -560,23 +617,11 @@ function edgeGeometry(fromId, toId) {
     const e = nodeAnchor("router", "right");
     pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "live" && toId === "calendar") {
-    // Short hop into calendar from the right — no shared vertical with HKO
+    // Same row — single horizontal into calendar right port
     pts = [nodeAnchor("live", "left"), nodeAnchor("calendar", "right")];
   } else if (fromId === "live" && toId === "hko") {
-    // Drop below calendar, then into HKO from the right — never through calendar
-    const s = nodeAnchor("live", "left");
-    const e = nodeAnchor("hko", "right");
-    const cal = LAYOUT.calendar;
-    const underY = cal.y + cal.h / 2 + 22;
-    pts = [s, { x: s.x, y: underY }, { x: e.x, y: underY }, e];
-  } else if (fromId === "calendar" && toId === "live") {
-    pts = [nodeAnchor("calendar", "right"), nodeAnchor("live", "left")];
-  } else if (fromId === "hko" && toId === "live") {
-    const s = nodeAnchor("hko", "right");
-    const e = nodeAnchor("live", "left");
-    const cal = LAYOUT.calendar;
-    const underY = cal.y + cal.h / 2 + 22;
-    pts = [s, { x: s.x, y: underY }, { x: e.x, y: underY }, e];
+    // Under Live — single vertical into HKO top
+    pts = [nodeAnchor("live", "bottom"), nodeAnchor("hko", "top")];
   } else if (fromId === "fsm" && toId === "dst") {
     pts = [nodeAnchor("fsm", "bottom"), nodeAnchor("dst", "top")];
   } else if (fromId === "fsm" && toId === "gate") {
@@ -600,10 +645,19 @@ function edgeGeometry(fromId, toId) {
     toId === "llm"
   ) {
     if (fromId === "live") {
-      // Drop below channel-pack band, then into LLM — never across Dense labels
-      const s = nodeAnchor("live", "bottom");
+      // Skirt right of HKO, drop under pack band, then into LLM top
+      const s = nodeAnchor("live", "right");
       const e = nodeAnchor("llm", "top");
-      pts = [s, { x: s.x, y: e.y - 40 }, { x: e.x, y: e.y - 40 }, e];
+      const hko = LAYOUT.hko;
+      const clearX = Math.max(s.x + 36, hko.x + hko.w / 2 + 28);
+      const dropY = e.y - 40;
+      pts = [
+        s,
+        { x: clearX, y: s.y },
+        { x: clearX, y: dropY },
+        { x: e.x, y: dropY },
+        e,
+      ];
     } else {
       pts = orthoVia(
         nodeAnchor(fromId, "right"),
@@ -636,10 +690,14 @@ function edgeGeometry(fromId, toId) {
     const s = nodeAnchor("sparse", "bottom");
     const e = nodeAnchor("fuse", "right");
     pts = [s, { x: s.x, y: e.y }, e];
-  } else if (fromId === "fuse" && toId === "chroma") {
-    pts = [nodeAnchor("fuse", "bottom"), nodeAnchor("chroma", "top")];
-  } else if (fromId === "chroma" && toId === "rewrite") {
-    pts = [nodeAnchor("chroma", "bottom"), nodeAnchor("rewrite", "top")];
+  } else if (fromId === "fuse" && toId === "grade") {
+    pts = [nodeAnchor("fuse", "bottom"), nodeAnchor("grade", "top")];
+  } else if (fromId === "grade" && toId === "rewrite") {
+    pts = [nodeAnchor("grade", "bottom"), nodeAnchor("rewrite", "top")];
+  } else if (fromId === "grade" && toId === "llm") {
+    const s = nodeAnchor("grade", "bottom");
+    const e = nodeAnchor("llm", "right");
+    pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "rewrite" && toId === "llm") {
     const s = nodeAnchor("rewrite", "bottom");
     const e = nodeAnchor("llm", "right");
@@ -651,13 +709,16 @@ function edgeGeometry(fromId, toId) {
     const loopX = Math.max(s.x, e.x) + 100;
     pts = [s, { x: loopX, y: s.y }, { x: loopX, y: e.y }, e];
   } else if (fromId === "live" && toId === "fuse") {
-    // Same Y as Channel pack — short horizontal under dense/sparse, no hop over labels
+    // Skirt right of HKO (under Live), then along pack corridor — never through HKO
     const s = nodeAnchor("live", "right");
     const e = nodeAnchor("fuse", "left");
+    const hko = LAYOUT.hko;
+    const clearX = Math.max(s.x + 36, hko.x + hko.w / 2 + 28);
     const y = LIVE_PACK_Y;
     pts = [
-      { x: s.x, y: s.y },
-      { x: s.x, y },
+      s,
+      { x: clearX, y: s.y },
+      { x: clearX, y },
       { x: e.x, y },
       e,
     ];
@@ -1689,7 +1750,7 @@ function NodeDetail({
       );
     }
 
-    case "rewrite": {
+    case "grade": {
       const qr = rag?.query_rewrite || null;
       const grade = rag?.retrieval_grade || null;
       const weakHits = rag?.pass1_hits || [];
@@ -1699,31 +1760,96 @@ function NodeDetail({
       if (!ran) {
         return <Skipped>Pass-1 retrieve did not run — nothing to grade.</Skipped>;
       }
+      const g = grade?.grade || qr?.grade || "—";
+      const why = grade?.why || qr?.grade_why || "";
+      const top = weakHits[0];
       return (
         <>
           <p className="bn-rules-hint">
-            Grade pass-1 · if weak, rewrite and loop back to RAG for a second
-            retrieve on the same Chroma + BM25 (max 1 retry).
+            Hard gate on pass-1 keep set · top-chunk retrieval score (no LLM).
+            Weak → dashed edge to <strong>Rewrite query</strong>; enough → generate.
           </p>
           <ul className="bn-fact-list">
             <li>
               <span>Grade</span>
               <code>
-                {grade?.grade || qr?.grade || "—"}
-                {grade?.why || qr?.grade_why
-                  ? ` · ${grade?.why || qr?.grade_why}`
-                  : ""}
+                {g}
+                {why ? ` · ${why}` : ""}
               </code>
             </li>
             <li>
-              <span>Rewrite</span>
+              <span>Top chunk score</span>
               <code>
-                {qr?.rewritten
-                  ? "yes"
-                  : qr?.called
-                    ? qr?.reason || "called"
-                    : qr?.reason || "no"}
+                {top?.score != null
+                  ? Number(top.score).toFixed(3)
+                  : top?.rerank?.score != null
+                    ? Number(top.rerank.score).toFixed(3)
+                    : "—"}
+                {rankedPassLabel(top) ? ` · ${rankedPassLabel(top)}` : ""}
               </code>
+            </li>
+            <li>
+              <span>Next</span>
+              <code>
+                {qr?.rewritten || qr?.retried
+                  ? "rewrite + 2nd retrieve"
+                  : "generate (no rewrite)"}
+              </code>
+            </li>
+          </ul>
+          <HardDecisionReveal
+            title="Grade gate"
+            summary={String(g)}
+            steps={[
+              "Read top kept chunk score after channel pack",
+              "If below threshold → mark weak and allow rewrite",
+              "If enough → skip rewrite LLM and go to generate",
+            ]}
+            rows={[
+              { key: "grade", label: "Decision", value: String(g) },
+              { key: "why", label: "Why", value: why || "—" },
+              {
+                key: "rewrite",
+                label: "Rewrite LLM",
+                value:
+                  qr?.rewritten || qr?.retried
+                    ? "will run"
+                    : "inactive this turn",
+              },
+            ]}
+          />
+          {g !== "correct" && weakHits.length > 0 ? (
+            <ChromaHitsPanel
+              title="Pass-1 chunks graded not enough (inspect):"
+              query={rag?.pass1_query || inbound}
+              hits={weakHits}
+              rag={rag}
+            />
+          ) : null}
+        </>
+      );
+    }
+
+    case "rewrite": {
+      const qr = rag?.query_rewrite || null;
+      if (!qr?.called && !qr?.rewritten && !qr?.retried) {
+        return (
+          <Skipped>
+            Rewrite LLM inactive — grade said pass-1 was enough (or retrieve
+            did not run).
+          </Skipped>
+        );
+      }
+      return (
+        <>
+          <p className="bn-rules-hint">
+            Cheap LLM rewrite · only when grade is weak. Loops back to the same
+            RAG indexes for one more retrieve (Pass 2).
+          </p>
+          <ul className="bn-fact-list">
+            <li>
+              <span>Rewritten</span>
+              <code>{qr?.rewritten ? "yes" : qr?.reason || "called"}</code>
             </li>
             <li>
               <span>Pass-2</span>
@@ -1740,16 +1866,13 @@ function NodeDetail({
               prior: priorPreview || "(no prior turns)",
             }}
             payload={{
-              grade: grade || { grade: qr?.grade, why: qr?.grade_why },
-              rewrite: qr
-                ? {
-                    rewritten: qr.rewritten,
-                    query: qr.query,
-                    reason: qr.reason,
-                    retried: qr.retried,
-                    kept: qr.kept,
-                  }
-                : null,
+              rewrite: {
+                rewritten: qr?.rewritten,
+                query: qr?.query,
+                reason: qr?.reason,
+                retried: qr?.retried,
+                kept: qr?.kept,
+              },
             }}
           />
           {qr?.rewritten ? (
@@ -1760,16 +1883,6 @@ function NodeDetail({
               </li>
             </ul>
           ) : null}
-          {(grade?.grade || qr?.grade) &&
-          (grade?.grade || qr?.grade) !== "correct" &&
-          weakHits.length > 0 ? (
-            <ChromaHitsPanel
-              title="Pass-1 chunks graded not enough (inspect):"
-              query={rag?.pass1_query || inbound}
-              hits={weakHits}
-              rag={rag}
-            />
-          ) : null}
           {llmCalls
             .filter((c) => c.role === "query_rewrite")
             .map((c, i) => (
@@ -1779,6 +1892,7 @@ function NodeDetail({
       );
     }
 
+    case "rules":
     case "router": {
       const tools =
         routing?.tools ||
@@ -1899,162 +2013,146 @@ function NodeDetail({
           {(trace?.data_sources?.consulted || []).length > 0 ? (
             <p className="bn-note">
               Sources used this turn → open <strong>Live tools</strong> /
-              calendar / HKO, or <strong>Dense / Sparse / Channel pack</strong>{" "}
-              (KB). Scores → <strong>Rules</strong>.
+              calendar / HKO, or <strong>Channel pack · ranked</strong> (KB).
             </p>
           ) : null}
-        </>
-      );
-    }
-
-    case "rules": {
-      const scoreRows = Object.entries(routing?.scores || {}).sort(
-        (a, b) => Number(b[1]) - Number(a[1])
-      );
-      const topRoute = scoreRows[0]?.[0] || null;
-      const rulesByScore = [...rulesEvaluated].sort((a, b) => {
-        const sa = Number(routing?.scores?.[a.id] ?? a.score ?? -Infinity);
-        const sb = Number(routing?.scores?.[b.id] ?? b.score ?? -Infinity);
-        return sb - sa;
-      });
-      const groupedScores = SCORE_GROUPS.map((g) => ({
-        ...g,
-        rows: scoreRows.filter(([k]) => g.routes.includes(k)),
-      })).filter((g) => g.rows.length > 0);
-      const otherScores = scoreRows.filter(
-        ([k]) => scoreGroupForRoute(k) === "other"
-      );
-      if (otherScores.length) {
-        groupedScores.push({
-          id: "other",
-          title: "Other",
-          blurb: "Extra detector keys",
-          rows: otherScores,
-        });
-      }
-      const groupedRules = [
-        ...SCORE_GROUPS.map((g) => ({
-          ...g,
-          rules: rulesByScore.filter((r) => g.routes.includes(r.id)),
-        })),
-        {
-          id: "other",
-          title: "Other",
-          blurb: "",
-          rules: rulesByScore.filter((r) => scoreGroupForRoute(r.id) === "other"),
-        },
-      ].filter((g) => (g.rules || []).length > 0);
-      return (
-        <>
-          <p className="bn-rules-hint">
-            Detector scores by group · highest wins (unless L2 promotes RAG).
-            Expand a rule for the matched cue and checks.
-          </p>
           {(() => {
-            const guide =
-              routing?.debug?.score_source_guide ||
-              routing?.score_source_guide ||
-              null;
-            const guideRows = Array.isArray(guide)
-              ? guide.map((g) => ({
-                  key: g.id || g.label,
-                  label: g.label || g.id,
-                  value: g.meaning || g.why || "",
-                }))
-              : guide && typeof guide === "object"
-                ? Object.entries(guide).map(([k, v]) => ({
-                    key: k,
-                    label: k,
-                    value:
-                      typeof v === "string"
-                        ? v
-                        : v?.meaning || v?.why || JSON.stringify(v),
-                  }))
-                : [];
-            if (!guideRows.length) return null;
+            const scoreRows = Object.entries(routing?.scores || {}).sort(
+              (a, b) => Number(b[1]) - Number(a[1])
+            );
+            const topRoute = scoreRows[0]?.[0] || null;
+            const rulesByScore = [...rulesEvaluated].sort((a, b) => {
+              const sa = Number(
+                routing?.scores?.[a.id] ?? a.score ?? -Infinity
+              );
+              const sb = Number(
+                routing?.scores?.[b.id] ?? b.score ?? -Infinity
+              );
+              return sb - sa;
+            });
+            const groupedScores = SCORE_GROUPS.map((g) => ({
+              ...g,
+              rows: scoreRows.filter(([k]) => g.routes.includes(k)),
+            })).filter((g) => g.rows.length > 0);
+            const otherScores = scoreRows.filter(
+              ([k]) => scoreGroupForRoute(k) === "other"
+            );
+            if (otherScores.length) {
+              groupedScores.push({
+                id: "other",
+                title: "Other",
+                blurb: "Extra detector keys",
+                rows: otherScores,
+              });
+            }
+            const groupedRules = [
+              ...SCORE_GROUPS.map((g) => ({
+                ...g,
+                rules: rulesByScore.filter((r) => g.routes.includes(r.id)),
+              })),
+              {
+                id: "other",
+                title: "Other",
+                blurb: "",
+                rules: rulesByScore.filter(
+                  (r) => scoreGroupForRoute(r.id) === "other"
+                ),
+              },
+            ].filter((g) => (g.rules || []).length > 0);
             return (
-              <HardDecisionReveal
-                title="How hard scores are set"
-                summary="fixed awards"
-                rows={guideRows}
-              />
+              <>
+                <p className="bn-rules-hint">
+                  <strong>Rules · scores</strong> · this is the decision.
+                  Highest wins (unless L2 / action policy promotes). Expand a
+                  rule for the matched cue and checks.
+                </p>
+                {groupedScores.length > 0 ? (
+                  groupedScores.map((g) => (
+                    <div key={`score-g-${g.id}`} className="bn-score-group">
+                      <p className="bn-rules-hint">
+                        <strong>{g.title}</strong>
+                        {g.blurb ? ` — ${g.blurb}` : ""}
+                      </p>
+                      <ul className="bn-fact-list">
+                        {g.rows.map(([k, v]) => {
+                          const origin =
+                            routing.score_origins?.[k] ||
+                            scoreLedger
+                              .filter((e) => e.route === k)
+                              .slice(-1)[0];
+                          const isTop = k === topRoute;
+                          return (
+                            <li key={k}>
+                              <span>
+                                {isTop ? "★ " : ""}
+                                {k}
+                                {origin?.source ? (
+                                  <em className="bn-score-src">
+                                    {" "}
+                                    · {origin.source}
+                                  </em>
+                                ) : null}
+                              </span>
+                              <code>
+                                {formatRouteScore(k, v, origin)}
+                              </code>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))
+                ) : (
+                  <Skipped>No detector scores this turn.</Skipped>
+                )}
+                {scoreLedger.length > 0 ? (
+                  <details className="bn-rules bn-ledger">
+                    <summary>Ledger · {scoreLedger.length}</summary>
+                    <ol className="bn-score-ledger">
+                      {scoreLedger.map((e, i) => (
+                        <li
+                          key={`led-${i}`}
+                          className={`bn-led-${e.op || "note"}`}
+                        >
+                          <strong>{e.op || "note"}</strong>
+                          <span>
+                            <code>{e.route}</code>
+                            {e.score != null
+                              ? ` = ${formatRouteScore(e.route, e.score, e)}`
+                              : ""}
+                            {e.source ? ` · ${e.source}` : ""}
+                            {e.why ? ` — ${e.why}` : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                ) : null}
+                {groupedRules.length > 0 ? (
+                  groupedRules.map((g) => (
+                    <div key={`rule-g-${g.id}`} className="bn-score-group">
+                      <p className="bn-rules-hint">
+                        <strong>{g.title}</strong> · match evidence
+                      </p>
+                      <ul className="bn-rule-list">
+                        {g.rules.map((r) => (
+                          <RuleEvidence
+                            key={r.id}
+                            rule={r}
+                            isWinner={
+                              r.id === winningRuleId && Boolean(r.matched)
+                            }
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  ))
+                ) : (
+                  <Skipped>No rule trace on this turn.</Skipped>
+                )}
+              </>
             );
           })()}
-          {groupedScores.length > 0 ? (
-            groupedScores.map((g) => (
-              <div key={`score-g-${g.id}`} className="bn-score-group">
-                <p className="bn-rules-hint">
-                  <strong>{g.title}</strong>
-                  {g.blurb ? ` — ${g.blurb}` : ""}
-                </p>
-                <ul className="bn-fact-list">
-                  {g.rows.map(([k, v]) => {
-                    const origin =
-                      routing.score_origins?.[k] ||
-                      scoreLedger.filter((e) => e.route === k).slice(-1)[0];
-                    const isTop = k === topRoute;
-                    return (
-                      <li key={k}>
-                        <span>
-                          {isTop ? "★ " : ""}
-                          {k}
-                          {origin?.source ? (
-                            <em className="bn-score-src"> · {origin.source}</em>
-                          ) : null}
-                        </span>
-                        <code>{formatRouteScore(k, v, origin)}</code>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))
-          ) : (
-            <Skipped>No detector scores this turn.</Skipped>
-          )}
-          {scoreLedger.length > 0 ? (
-            <details className="bn-rules bn-ledger">
-              <summary>Ledger · {scoreLedger.length}</summary>
-              <ol className="bn-score-ledger">
-                {scoreLedger.map((e, i) => (
-                  <li
-                    key={`led-${i}`}
-                    className={`bn-led-${e.op || "note"}`}
-                  >
-                    <strong>{e.op || "note"}</strong>
-                    <span>
-                      <code>{e.route}</code>
-                      {e.score != null
-                        ? ` = ${formatRouteScore(e.route, e.score, e)}`
-                        : ""}
-                      {e.source ? ` · ${e.source}` : ""}
-                      {e.why ? ` — ${e.why}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : null}
-          {groupedRules.length > 0 ? (
-            groupedRules.map((g) => (
-              <div key={`rule-g-${g.id}`} className="bn-score-group">
-                <p className="bn-rules-hint">
-                  <strong>{g.title}</strong> · match evidence
-                </p>
-                <ul className="bn-rule-list">
-                  {g.rules.map((r) => (
-                    <RuleEvidence
-                      key={r.id}
-                      rule={r}
-                      isWinner={r.id === winningRuleId && Boolean(r.matched)}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ))
-          ) : (
-            <Skipped>No rule trace on this turn.</Skipped>
-          )}
         </>
       );
     }
@@ -2448,7 +2546,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Live info hub · calendar + HKO are separate boxes to the left
+            Live info hub · calendar left of Live · HKO under Live
             {enrichMode ? " · facts feed Channel pack for KB enrich" : ""}.
           </p>
           <ul className="bn-fact-list">
@@ -2725,6 +2823,7 @@ function NodeDetail({
       );
     }
 
+    case "chroma":
     case "fuse": {
       const ran =
         path === "rag" ||
@@ -2757,6 +2856,14 @@ function NodeDetail({
                       <code>{hy.reason || "—"}</code>
                     </li>
                   </ul>
+                  <ChromaHitsPanel
+                    title={`${pass.label} · ranked keep`}
+                    query={pass.query}
+                    hits={pass.hits}
+                    rag={rag}
+                    hybrid={hy}
+                    emptyHint={`${pass.label} returned no chunks.`}
+                  />
                 </>
               );
             }
@@ -2819,8 +2926,9 @@ function NodeDetail({
             return (
               <>
                 <p className="bn-rules-hint">
-                  <strong>Channel pack</strong> · keep {keepK} · dense top{" "}
-                  {denseN}, then BM25 if slots remain
+                  <strong>Channel pack · ranked</strong> · one process: pack
+                  keep={keepK} (dense top {denseN}, then BM25) → ranked keep
+                  set{pass.kept ? " (kept for generate)" : ""}.
                 </p>
                 <ul className="bn-fact-list">
                   <li>
@@ -2871,54 +2979,31 @@ function NodeDetail({
                     Channel-pack preview for this pass not in payload.
                   </Skipped>
                 ) : null}
+                <ChromaHitsPanel
+                  title={
+                    enrichMode
+                      ? `${pass.label} · ranked enrich hits`
+                      : `${pass.label} · ranked keep set`
+                  }
+                  query={pass.query}
+                  hits={pass.hits}
+                  rag={rag}
+                  hybrid={pass.hybrid || rag?.hybrid}
+                  stripExtra={
+                    <>
+                      <span>
+                        pool {rag?.pool_returned ?? "—"}/{rag?.pool_k ?? "—"}
+                      </span>
+                      <span>top_k {rag?.top_k ?? "—"}</span>
+                      <span>chroma {rag?.index_size ?? "—"}</span>
+                      <span>BM25 {rag?.sparse_index_size ?? "—"}</span>
+                    </>
+                  }
+                  emptyHint={`${pass.label} returned no chunks.`}
+                />
               </>
             );
           }}
-        </RetrievalPassTabs>
-      );
-    }
-
-    case "chroma": {
-      const hasAny =
-        (rag?.pass1_hits || hits).length ||
-        (rag?.pass2_hits || []).length ||
-        enrichMode ||
-        path === "rag";
-      if (!hasAny) {
-        return <Skipped>KB retrieve did not run.</Skipped>;
-      }
-      return (
-        <RetrievalPassTabs rag={rag} inbound={inbound}>
-          {(pass) => (
-            <>
-              <p className="bn-rules-hint">
-                Ranked keep set after channel pack · {pass.label}
-                {pass.kept ? " (kept for generate)" : ""}.
-              </p>
-              <ChromaHitsPanel
-                title={
-                  enrichMode
-                    ? `${pass.label} · fused enrich hits`
-                    : `${pass.label} · fused hits`
-                }
-                query={pass.query}
-                hits={pass.hits}
-                rag={rag}
-                hybrid={pass.hybrid || rag?.hybrid}
-                stripExtra={
-                  <>
-                    <span>
-                      pool {rag?.pool_returned ?? "—"}/{rag?.pool_k ?? "—"}
-                    </span>
-                    <span>top_k {rag?.top_k ?? "—"}</span>
-                    <span>chroma {rag?.index_size ?? "—"}</span>
-                    <span>BM25 {rag?.sparse_index_size ?? "—"}</span>
-                  </>
-                }
-                emptyHint={`${pass.label} returned no chunks.`}
-              />
-            </>
-          )}
         </RetrievalPassTabs>
       );
     }
@@ -3386,17 +3471,6 @@ export default function TurnPipeline({
               : "empty",
       },
       {
-        id: "rules",
-        label: "Rules · scores",
-        kind: "rules",
-        shape: "rule",
-        status: !hasTrace
-          ? "idle"
-          : rulesEvaluated.length || routing?.scores
-            ? "done"
-            : "skipped",
-      },
-      {
         id: "arbiter",
         label: "Arbiter",
         kind: "llm",
@@ -3414,10 +3488,14 @@ export default function TurnPipeline({
                 : "Router · live"
               : path === "rag"
                 ? "Router · RAG"
-                : "Router",
+                : "Router · scores",
         kind: "router",
         shape: "decision",
-        status: hasTrace && path ? "done" : hasTrace ? "done" : "idle",
+        status: !hasTrace
+          ? "idle"
+          : rulesEvaluated.length || routing?.scores || path
+            ? "done"
+            : "done",
       },
       {
         id: "fsm",
@@ -3563,7 +3641,9 @@ export default function TurnPipeline({
       },
       {
         id: "fuse",
-        label: "Channel pack",
+        label: rag?.query_rewrite?.retried
+          ? "Channel pack · ranked"
+          : "Channel pack · ranked",
         kind: "rag",
         shape: "process",
         status: !hasTrace
@@ -3571,41 +3651,42 @@ export default function TurnPipeline({
           : !(path === "rag" || enrichMode || hits.length || rag?.hybrid)
             ? "skipped"
             : isChannelPack(rag?.hybrid, rag) ||
-                (rag?.pass1_hits || hits).length
+                (rag?.pass1_hits || hits).length ||
+                rag?.pass1_hit_count
               ? "done"
               : path === "rag" || enrichMode
                 ? "empty"
                 : "skipped",
       },
       {
-        id: "chroma",
-        label: rag?.query_rewrite?.retried
-          ? "Ranked · dual pass"
-          : "Ranked · pass 1",
-        kind: "store",
-        shape: "cylinder",
+        id: "grade",
+        label: "Grade · top score",
+        kind: "rules",
+        shape: "rule",
         status: !hasTrace
           ? "idle"
-          : (rag?.pass1_hits || hits).length ||
-              rag?.pass1_hit_count ||
-              (rag?.pass2_hits || []).length
-            ? "done"
-            : path === "rag" || enrichMode
-              ? "empty"
-              : "skipped",
+          : !(path === "rag" || enrichMode || hits.length)
+            ? "skipped"
+            : rag?.retrieval_grade || rag?.query_rewrite?.grade
+              ? "done"
+              : path === "rag" || enrichMode
+                ? "empty"
+                : "skipped",
       },
       {
         id: "rewrite",
-        label: "Grade · rewrite",
+        label: "Rewrite query",
         kind: "llm",
         shape: "llm",
         status: !hasTrace
           ? "idle"
           : !(path === "rag" || enrichMode || hits.length)
             ? "skipped"
-            : rag?.retrieval_grade || rag?.query_rewrite
+            : rag?.query_rewrite?.rewritten || rag?.query_rewrite?.retried
               ? "done"
-              : "skipped",
+              : rag?.query_rewrite?.called
+                ? "empty"
+                : "skipped",
       },
       {
         id: "llm",
@@ -3671,21 +3752,21 @@ export default function TurnPipeline({
       "parent",
       "lang",
       "memory",
-      "rules",
       "router",
       "answer",
     ]);
     if (history?.enabled === false) lit.delete("memory");
     if (arbiter?.called) lit.add("arbiter");
-    // Retrieve arm: dense ∥ sparse → pack → ranked → grade
-    // (rewrite loops back to RAG — same indexes, 2nd iteration via tabs).
+    // Retrieve arm: dense ∥ sparse → pack+rank → grade → (optional rewrite loop)
     const lightRetrieve = () => {
       lit.add("rag");
       lit.add("dense");
       lit.add("sparse");
       lit.add("fuse");
-      lit.add("chroma");
-      lit.add("rewrite");
+      lit.add("grade");
+      if (rag?.query_rewrite?.rewritten || rag?.query_rewrite?.retried) {
+        lit.add("rewrite");
+      }
     };
     if (path === "fsm") {
       lit.add("fsm");
@@ -3722,6 +3803,14 @@ export default function TurnPipeline({
       if (adminTodo) lit.add("sheets");
     }
     if (llmCalls.some((c) => isMainLlmCall(c))) lit.add("llm");
+    // Grade enough with no rewrite still feeds generate
+    if (
+      lit.has("grade") &&
+      !lit.has("rewrite") &&
+      llmCalls.some((c) => isMainLlmCall(c))
+    ) {
+      lit.add("llm");
+    }
     return lit;
   }, [
     trace,
@@ -3737,6 +3826,7 @@ export default function TurnPipeline({
     staffMessage,
     finalCheck,
     rag?.query_rewrite?.retried,
+    rag?.query_rewrite?.rewritten,
   ]);
 
   const litEdgeIds = useMemo(() => {
@@ -3747,14 +3837,14 @@ export default function TurnPipeline({
       statusById[id] === "done" ||
       statusById[id] === "empty" ||
       (id === "memory" && on(id)) ||
-      (id === "rewrite" && on(id));
+      (id === "rewrite" && on(id)) ||
+      (id === "grade" && on(id));
     const link = (from, to, edgeId) => {
       if (on(from) && on(to) && ok(from) && ok(to)) lit.add(edgeId);
     };
     link("parent", "lang", "e-parent-lang");
     link("lang", "memory", "e-lang-mem");
-    link("memory", "rules", "e-mem-rules");
-    link("rules", "router", "e-rules-router");
+    link("memory", "router", "e-mem-router");
     if (arbiter?.called) {
       link("router", "arbiter", "e-router-arb");
       link("arbiter", "router", "e-arb-router");
@@ -3773,6 +3863,7 @@ export default function TurnPipeline({
       link("gate", "sheets", "e-gate-sheets");
     if (on("gate") && on("answer") && !on("llm") && !on("sheets") && !on("staffmail"))
       link("gate", "answer", "e-gate-answer");
+    // Live APIs fan-out under Live — no return arrows.
     if (on("live") && on("calendar")) link("live", "calendar", "e-live-calendar");
     if (on("live") && on("hko")) link("live", "hko", "e-live-hko");
     if (on("dst") && on("llm")) link("dst", "llm", "e-dst-llm");
@@ -3789,9 +3880,12 @@ export default function TurnPipeline({
     if (on("rag") && on("sparse")) link("rag", "sparse", "e-rag-sparse");
     if (on("dense") && on("fuse")) link("dense", "fuse", "e-dense-fuse");
     if (on("sparse") && on("fuse")) link("sparse", "fuse", "e-sparse-fuse");
-    if (on("fuse") && on("chroma")) link("fuse", "chroma", "e-fuse-chroma");
-    if (on("chroma") && on("rewrite")) {
-      link("chroma", "rewrite", "e-chroma-rewrite");
+    if (on("fuse") && on("grade")) link("fuse", "grade", "e-fuse-grade");
+    if (on("grade") && on("rewrite")) {
+      link("grade", "rewrite", "e-grade-rewrite");
+    }
+    if (on("grade") && on("llm") && !on("rewrite")) {
+      link("grade", "llm", "e-grade-llm");
     }
     if (on("rewrite") && on("rag") && rag?.query_rewrite?.retried) {
       // Corrective loop — second retrieve on the same RAG arm
@@ -3841,7 +3935,7 @@ export default function TurnPipeline({
     const pass1 = rag?.pass1_hits || hits;
     const hy = rag?.hybrid;
     const labels = {
-      "e-rules-router": pick ? `→ ${pick}` : "",
+      "e-mem-router": pick ? `→ ${pick}` : "",
       "e-arb-router": arbiter?.called ? arbiter.action || "keep" : "",
       "e-router-fsm": path === "fsm" ? "dialogue" : "",
       "e-router-live": path === "live" ? "live info" : "",
@@ -3873,18 +3967,20 @@ export default function TurnPipeline({
         hy?.dense_count != null ? `dense ${hy.dense_count}` : "dense",
       "e-sparse-fuse":
         hy?.sparse_count != null ? `BM25 ${hy.sparse_count}` : "BM25",
-      "e-fuse-chroma": isChannelPack(hy, rag) ? "channel pack" : "fuse",
-      "e-chroma-rewrite":
-        (rag?.retrieval_grade?.grade
-          ? String(rag.retrieval_grade.grade)
-          : "grade") +
-        (rankedPassLabel(pass1[0]) ? ` · ${rankedPassLabel(pass1[0])}` : ""),
+      "e-fuse-grade": isChannelPack(hy, rag)
+        ? `pack · ${(pass1 || []).length || "—"} kept`
+        : "ranked keep",
+      "e-grade-rewrite":
+        rag?.retrieval_grade?.grade || rag?.query_rewrite?.grade
+          ? String(rag?.retrieval_grade?.grade || rag?.query_rewrite?.grade)
+          : "weak?",
+      "e-grade-llm": "enough · generate",
       "e-rewrite-rag": rag?.query_rewrite?.retried
         ? "2nd retrieve · same KB"
         : "",
       "e-rewrite-llm": rag?.query_rewrite?.retried
         ? `kept ${rag?.final_pass || rag?.query_rewrite?.kept || "pass2"}`
-        : "no retry",
+        : "",
       "e-live-fuse":
         enrichMode || (path === "live" && (hits.length || rag?.hybrid))
           ? "facts → pack"

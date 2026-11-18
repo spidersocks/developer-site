@@ -41,10 +41,10 @@ const STAFF_URL_SHORT = {
 const PARENT_PROFILES = [
   {
     id: "jason",
-    label: "Demo Parent",
+    label: "Existing parent",
     short: "Jason Chan",
     blurb: "Known family",
-    parentName: "Demo Parent",
+    parentName: "Existing Parent",
     childName: "Jason Chan",
     phone: "+852 9000 0000",
     initials: "JC",

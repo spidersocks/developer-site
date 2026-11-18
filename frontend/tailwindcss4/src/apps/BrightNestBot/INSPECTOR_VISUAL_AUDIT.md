@@ -2,7 +2,7 @@
 
 Date: 2026-11-18 (pass 2)  
 Build: `BrightNestBotDemo-CENGm5S8` · `?v=CENGm5S8`  
-Method: Reset → Demo Parent → probe; FIT + zoom + drag canvas; open every lit node modal; CDP edge geometry.
+Method: Reset → Existing parent → probe; FIT + zoom + drag canvas; open every lit node modal; CDP edge geometry.
 
 ---
 
