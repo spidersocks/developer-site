@@ -80,7 +80,8 @@ const LAYOUT = {
   memory: { x: 0, y: 145, w: 148, h: 68, shape: "cylinder" },
   // Rules/scores live inside the router — one decision stage
   router: { x: 0, y: 270, w: 128, h: 128, shape: "decision" },
-  arbiter: { x: 210, y: 300, w: 118, h: 48, shape: "llm" },
+  // L2 sidecar — action policy and/or intent arbiter (cheap LLM)
+  arbiter: { x: 210, y: 300, w: 132, h: 48, shape: "llm" },
   // Branch heads — FSM far left; live centre; RAG right
   fsm: { x: -440, y: 470, w: 148, h: 46, shape: "process" },
   live: { x: 50, y: 470, w: 148, h: 52, shape: "io" },
@@ -107,8 +108,6 @@ const LAYOUT = {
 const FSM_LLM_X = -260;
 /** Far-left gutter — elbows around the FSM stack without crossing boxes. */
 const LIVE_GUTTER_X = -580;
-/** Corridor under live APIs → channel pack (below dense/sparse labels). */
-const LIVE_PACK_Y = 730;
 const ARROW_SIZE = 11;
 
 const EDGES = [
@@ -145,7 +144,6 @@ const EDGES = [
   { id: "e-rewrite-rag", from: "rewrite", to: "rag", dashed: true },
   { id: "e-rewrite-llm", from: "rewrite", to: "llm", dashed: true },
   { id: "e-live-llm", from: "live", to: "llm", dashed: true },
-  { id: "e-live-fuse", from: "live", to: "fuse", dashed: true },
   { id: "e-llm-answer", from: "llm", to: "answer" },
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
@@ -703,25 +701,12 @@ function edgeGeometry(fromId, toId) {
     const e = nodeAnchor("llm", "right");
     pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "rewrite" && toId === "rag") {
-    // Loop back to RAG for a second retrieve on the same indexes
+    // Far-right return — clear of Sparse (never under its cylinder)
     const s = nodeAnchor("rewrite", "right");
     const e = nodeAnchor("rag", "right");
-    const loopX = Math.max(s.x, e.x) + 100;
+    const sparseRight = LAYOUT.sparse.x + LAYOUT.sparse.w / 2;
+    const loopX = Math.max(s.x, e.x, sparseRight) + 56;
     pts = [s, { x: loopX, y: s.y }, { x: loopX, y: e.y }, e];
-  } else if (fromId === "live" && toId === "fuse") {
-    // Skirt right of HKO (under Live), then along pack corridor — never through HKO
-    const s = nodeAnchor("live", "right");
-    const e = nodeAnchor("fuse", "left");
-    const hko = LAYOUT.hko;
-    const clearX = Math.max(s.x + 36, hko.x + hko.w / 2 + 28);
-    const y = LIVE_PACK_Y;
-    pts = [
-      s,
-      { x: clearX, y: s.y },
-      { x: clearX, y },
-      { x: e.x, y },
-      e,
-    ];
   } else if (fromId === "llm" && toId === "answer") {
     pts = [nodeAnchor("llm", "bottom"), nodeAnchor("answer", "top")];
   } else if (fromId === "sheets" && toId === "answer") {
@@ -1920,7 +1905,7 @@ function NodeDetail({
             : `Dialogue / commit detector · ${tools.selected || route || "tool"}`
           : path === "live"
             ? enrichMode
-              ? "Live calendar/HKO facts first · Channel pack still retrieves KB"
+              ? "Live calendar/HKO facts → LLM · KB enrich runs on the RAG arm"
               : "Live calendar / HKO decision"
             : path === "rag"
               ? "No tool ≥ threshold → retrieve → generate"
@@ -1928,8 +1913,9 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Cascade: FSM dialogue → live tools → RAG. Live can still KB-enrich
-            via Channel pack; FSM is the only exclusive branch.
+            Cascade: FSM dialogue → live tools → RAG. Live facts go to the LLM;
+            optional KB enrich is a parallel RAG arm. FSM is the only exclusive
+            branch.
           </p>
           <MatchSummaryCard summary={matchSummary} />
           <ul className="bn-fact-list">
@@ -1988,9 +1974,9 @@ function NodeDetail({
               title="Why this tool won"
               summary={tools.selected || route || "cascade"}
               steps={[
-                "Hard detectors fire in priority order (escalation → weather → cancel → booking → hours)",
-                "Highest remaining score wins unless L2 / sticky state overrides",
-                "Winning live tool can still run Pack for KB enrich",
+                "L1 · hard detectors + sticky FSM (<1ms regex / state)",
+                "L2 · action policy cheap LLM may promote RAG → tool (escalate / book / cancel / hours)",
+                "L3 · selected tool runs; live facts go to DashScope, not into Channel pack",
               ]}
             >
               <ol className="bn-score-ledger">
@@ -2062,9 +2048,11 @@ function NodeDetail({
             return (
               <>
                 <p className="bn-rules-hint">
-                  <strong>Rules · scores</strong> · this is the decision.
-                  Highest wins (unless L2 / action policy promotes). Expand a
-                  rule for the matched cue and checks.
+                  <strong>Rules · scores</strong> · L1 ledger. Highest hard score
+                  wins unless sticky FSM or{" "}
+                  <strong>L2 Action policy</strong> (cheap LLM) promotes. A ★
+                  with source action_policy is not a regex hit — open the L2
+                  hexagon on the board.
                 </p>
                 {groupedScores.length > 0 ? (
                   groupedScores.map((g) => (
@@ -2158,65 +2146,131 @@ function NodeDetail({
     }
 
     case "arbiter": {
+      const ap = routing?.debug?.action_policy || {};
+      const apOverride = routing?.debug?.action_policy_override || null;
+      const apCalls = llmCalls.filter(
+        (c) => c.role === "action_policy" || c.role === "commit_audit"
+      );
       const arbCalls = llmCalls.filter((c) => c.role === "intent_arbiter");
-      if (!arbiter?.called) {
+      const l2Ran = Boolean(ap?.called || arbiter?.called);
+      if (!l2Ran) {
         return (
           <>
             <Skipped>
-              Skipped
-              {arbiter?.reason ? ` — ${arbiter.reason}` : ""}.
+              L2 cheap LLM idle
+              {ap?.gate || ap?.reason
+                ? ` — action policy ${ap.gate || ap.reason}`
+                : arbiter?.reason
+                  ? ` — ${arbiter.reason}`
+                  : " · hard detectors / sticky were enough"}
+              .
             </Skipped>
-            {(arbiter?.skip_detail || arbiter?.reason) && (
-              <HardDecisionReveal
-                title="Why arbiter was skipped"
-                summary={arbiter?.reason || "skipped"}
-                steps={[
-                  "L2 arbiter only runs when hard detectors leave a close / ambiguous call",
-                  "Clear hard-regex or sticky winners skip the LLM",
-                ]}
-                rows={[
-                  {
-                    key: "reason",
-                    label: "Gate",
-                    value: arbiter?.reason || "—",
-                  },
-                  ...(arbiter?.skip_detail
-                    ? [
-                        {
-                          key: "detail",
-                          label: "Detail",
-                          value: arbiter.skip_detail,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            )}
+            <HardDecisionReveal
+              title="When L2 runs"
+              summary="skipped"
+              steps={[
+                "L1 hard detectors + sticky FSM score first (<1ms)",
+                "Action policy (cheap LLM) classifies long-tail / soft escalate·book·cancel when RAG would otherwise win",
+                "Intent arbiter only for close / ambiguous hard-detector races",
+              ]}
+              rows={[
+                {
+                  key: "ap",
+                  label: "Action policy",
+                  value: ap?.gate || ap?.reason || "not called",
+                },
+                {
+                  key: "arb",
+                  label: "Intent arbiter",
+                  value: arbiter?.reason || "not called",
+                },
+              ]}
+            />
           </>
         );
       }
       return (
         <>
-          <ul className="bn-fact-list">
-            <li>
-              <span>Decision</span>
-              <code>{arbiter?.action || "—"}</code>
-            </li>
-            <li>
-              <span>Model</span>
-              <code>{arbiter?.model || "—"}</code>
-            </li>
-          </ul>
-          {arbCalls.map((c, i) => (
-            <LlmCallCard key={`arb-${i}`} call={c} defaultOpen />
+          <p className="bn-rules-hint">
+            L2 cheap LLM · not a hard regex win
+            {ap?.called && apOverride
+              ? ` · promoted ${apOverride.from || "rag"} → ${apOverride.to}`
+              : ap?.called
+                ? ` · act=${ap.act || "answer"} (kept RAG)`
+                : ""}
+            {arbiter?.called ? ` · arbiter ${arbiter.action || "decide"}` : ""}.
+          </p>
+          {ap?.called ? (
+            <ul className="bn-fact-list">
+              <li>
+                <span>Action policy</span>
+                <code>
+                  {ap.act || "—"}
+                  {ap.confidence != null
+                    ? ` · ${Number(ap.confidence).toFixed(2)}`
+                    : ""}
+                </code>
+              </li>
+              <li>
+                <span>Promote</span>
+                <code>
+                  {apOverride
+                    ? `${apOverride.from || "rag"} → ${apOverride.to}`
+                    : "no · stay on RAG floor"}
+                </code>
+              </li>
+              {ap.model || ap.provider ? (
+                <li>
+                  <span>Model</span>
+                  <code>{ap.model || ap.provider}</code>
+                </li>
+              ) : null}
+              {ap.reason ? (
+                <li>
+                  <span>Why</span>
+                  <code>{ap.reason}</code>
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
+          {apCalls.map((c, i) => (
+            <LlmCallCard key={`ap-${i}`} call={c} defaultOpen />
           ))}
-          {!arbCalls.length ? (
+          {arbiter?.called ? (
+            <>
+              <ul className="bn-fact-list">
+                <li>
+                  <span>Intent arbiter</span>
+                  <code>{arbiter?.action || "—"}</code>
+                </li>
+                <li>
+                  <span>Model</span>
+                  <code>{arbiter?.model || "—"}</code>
+                </li>
+              </ul>
+              {arbCalls.map((c, i) => (
+                <LlmCallCard key={`arb-${i}`} call={c} defaultOpen />
+              ))}
+              {!arbCalls.length ? (
+                <StageIO
+                  request={{ proposed: route, scores: routing?.scores }}
+                  payload={{
+                    action: arbiter?.action,
+                    reason: arbiter?.reason,
+                    raw: arbiter?.raw || null,
+                  }}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {ap?.called && !apCalls.length ? (
             <StageIO
-              request={{ proposed: route, scores: routing?.scores }}
+              request={{ route_before: apOverride?.from || route, scores: routing?.scores }}
               payload={{
-                action: arbiter?.action,
-                reason: arbiter?.reason,
-                raw: arbiter?.raw || null,
+                act: ap.act,
+                confidence: ap.confidence,
+                override: apOverride,
+                reason: ap.reason || null,
               }}
             />
           ) : null}
@@ -2492,7 +2546,7 @@ function NodeDetail({
         <>
           <p className="bn-rules-hint">
             {path === "live" || (enrichMode && path !== "rag")
-              ? "KB enrich retrieve is active · same Dense ∥ Sparse → Channel pack arm (live facts stay privileged)."
+              ? "KB enrich retrieve is active on the RAG arm · Dense ∥ Sparse → Channel pack (live facts go to the LLM, not into Pack)."
               : "Retrieve → generate · Dense ∥ Sparse → pack → grade."}
           </p>
           <ul className="bn-fact-list">
@@ -2546,8 +2600,9 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Live info hub · calendar left of Live · HKO under Live
-            {enrichMode ? " · facts feed Channel pack for KB enrich" : ""}.
+            Live info hub · calendar left of Live · HKO under Live · facts →
+            DashScope
+            {enrichMode ? " · KB enrich is a parallel RAG arm" : ""}.
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -3406,6 +3461,9 @@ export default function TurnPipeline({
     };
   }, [matchSummaryRaw, rulesEvaluated, hoursDebug, inboundForRules]);
   const arbiter = routing?.debug?.arbiter || {};
+  const actionPolicy = routing?.debug?.action_policy || {};
+  const actionPolicyOverride = routing?.debug?.action_policy_override || null;
+  const l2CheapOn = Boolean(arbiter?.called || actionPolicy?.called);
   const winningRuleId =
     matchSummary?.rule_id ||
     (winningRule?.route === "deterministic_opening_hours"
@@ -3472,10 +3530,16 @@ export default function TurnPipeline({
       },
       {
         id: "arbiter",
-        label: "Arbiter",
+        label: actionPolicy?.called
+          ? actionPolicyOverride
+            ? "Action policy · promote"
+            : "Action policy"
+          : arbiter?.called
+            ? "Intent arbiter"
+            : "L2 · cheap LLM",
         kind: "llm",
         shape: "llm",
-        status: !hasTrace ? "idle" : arbiter?.called ? "done" : "skipped",
+        status: !hasTrace ? "idle" : l2CheapOn ? "done" : "skipped",
       },
       {
         id: "router",
@@ -3724,7 +3788,11 @@ export default function TurnPipeline({
     rulesEvaluated.length,
     routing?.scores,
     arbiter,
+    actionPolicy,
+    actionPolicyOverride,
+    l2CheapOn,
     path,
+    route,
     liveOn,
     hoursApisOn,
     facts,
@@ -3756,7 +3824,7 @@ export default function TurnPipeline({
       "answer",
     ]);
     if (history?.enabled === false) lit.delete("memory");
-    if (arbiter?.called) lit.add("arbiter");
+    if (l2CheapOn) lit.add("arbiter");
     // Retrieve arm: dense ∥ sparse → pack+rank → grade → (optional rewrite loop)
     const lightRetrieve = () => {
       lit.add("rag");
@@ -3776,15 +3844,25 @@ export default function TurnPipeline({
       ) {
         lit.add("dst");
       }
-      if (finalCheck?.called || llmCalls.some((c) => isFinalCheckCall(c))) {
+      if (
+        finalCheck?.called ||
+        llmCalls.some((c) => isFinalCheckCall(c)) ||
+        route === "staff_escalation"
+      ) {
         lit.add("gate");
       }
-      if (staffMessage || llmCalls.some((c) => isStaffEmailCall(c))) {
+      if (
+        staffMessage ||
+        llmCalls.some((c) => isStaffEmailCall(c)) ||
+        route === "staff_escalation" ||
+        adminTodo
+      ) {
         lit.add("staffmail");
       }
       if (
         adminTodo ||
         staffMessage ||
+        route === "staff_escalation" ||
         trace?.booking?.stage === "booked" ||
         trace?.cancel?.stage === "cancelled"
       ) {
@@ -3796,7 +3874,7 @@ export default function TurnPipeline({
         lit.add("calendar");
         lit.add("hko");
       }
-      // Live facts inject into the same pack — retrieve is not skipped.
+      // Optional KB enrich on the RAG arm — live facts still go Live → LLM.
       if (hits.length || enrichMode) lightRetrieve();
     } else if (path === "rag") {
       lightRetrieve();
@@ -3815,8 +3893,9 @@ export default function TurnPipeline({
   }, [
     trace,
     history?.enabled,
-    arbiter,
+    l2CheapOn,
     path,
+    route,
     liveOn,
     hoursApisOn,
     hits.length,
@@ -3838,14 +3917,18 @@ export default function TurnPipeline({
       statusById[id] === "empty" ||
       (id === "memory" && on(id)) ||
       (id === "rewrite" && on(id)) ||
-      (id === "grade" && on(id));
+      (id === "grade" && on(id)) ||
+      (id === "arbiter" && on(id)) ||
+      (id === "gate" && on(id)) ||
+      (id === "staffmail" && on(id)) ||
+      (id === "sheets" && on(id));
     const link = (from, to, edgeId) => {
       if (on(from) && on(to) && ok(from) && ok(to)) lit.add(edgeId);
     };
     link("parent", "lang", "e-parent-lang");
     link("lang", "memory", "e-lang-mem");
     link("memory", "router", "e-mem-router");
-    if (arbiter?.called) {
+    if (l2CheapOn) {
       link("router", "arbiter", "e-router-arb");
       link("arbiter", "router", "e-arb-router");
     }
@@ -3894,10 +3977,8 @@ export default function TurnPipeline({
     if (on("rewrite") && on("llm")) {
       link("rewrite", "llm", "e-rewrite-llm");
     }
-    // Live facts inject into pack; still a retrieve arm, not a RAG bypass.
-    if (on("live") && on("fuse") && enrichMode) {
-      link("live", "fuse", "e-live-fuse");
-    } else if (on("live") && on("llm") && !on("fuse")) {
+    // Live docs join at DashScope compose — not Channel pack (pack is KB enrich only).
+    if (on("live") && on("llm")) {
       link("live", "llm", "e-live-llm");
     }
     if (on("llm")) link("llm", "answer", "e-llm-answer");
@@ -3907,7 +3988,7 @@ export default function TurnPipeline({
     trace,
     activePath,
     statusById,
-    arbiter,
+    l2CheapOn,
     path,
     enrichMode,
     rag?.query_rewrite?.retried,
@@ -3936,8 +4017,24 @@ export default function TurnPipeline({
     const hy = rag?.hybrid;
     const labels = {
       "e-mem-router": pick ? `→ ${pick}` : "",
-      "e-arb-router": arbiter?.called ? arbiter.action || "keep" : "",
-      "e-router-fsm": path === "fsm" ? "dialogue" : "",
+      "e-router-arb": l2CheapOn
+        ? actionPolicy?.called
+          ? "L2 classify"
+          : "L2 arbiter"
+        : "",
+      "e-arb-router": actionPolicy?.called
+        ? actionPolicyOverride
+          ? `${actionPolicyOverride.from || "rag"} → ${actionPolicyOverride.to}`
+          : `${actionPolicy.act || "answer"} · keep`
+        : arbiter?.called
+          ? arbiter.action || "keep"
+          : "",
+      "e-router-fsm":
+        path === "fsm"
+          ? route === "staff_escalation"
+            ? "escalate"
+            : "dialogue"
+          : "",
       "e-router-live": path === "live" ? "live info" : "",
       "e-router-rag":
         path === "rag" ? "RAG" : enrichMode ? "KB enrich" : "",
@@ -3981,10 +4078,8 @@ export default function TurnPipeline({
       "e-rewrite-llm": rag?.query_rewrite?.retried
         ? `kept ${rag?.final_pass || rag?.query_rewrite?.kept || "pass2"}`
         : "",
-      "e-live-fuse":
-        enrichMode || (path === "live" && (hits.length || rag?.hybrid))
-          ? "facts → pack"
-          : "",
+      "e-live-llm":
+        path === "live" || liveOn || enrichMode ? "facts → generate" : "",
     };
     return labels;
   }, [
@@ -3992,10 +4087,14 @@ export default function TurnPipeline({
     winningRuleId,
     route,
     arbiter,
+    actionPolicy,
+    actionPolicyOverride,
+    l2CheapOn,
     path,
     hits,
     rag,
     enrichMode,
+    liveOn,
     hoursApisOn,
     trace,
     finalCheck,
