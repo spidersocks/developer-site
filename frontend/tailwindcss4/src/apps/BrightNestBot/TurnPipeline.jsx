@@ -1375,8 +1375,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            {tools.blurb ||
-              "Tool registry cascade · detectors first, cheap LLM only if needed."}
+            Tool registry cascade · detectors first, cheap LLM only if needed.
           </p>
           <MatchSummaryCard summary={matchSummary} />
           <ul className="bn-fact-list">
