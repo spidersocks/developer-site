@@ -1131,6 +1131,16 @@ code,
   stroke-width: 2.35;
   color: var(--teal-deep);
 }
+.bn-pipe-arrow {
+  fill: rgba(18, 169, 188, 0.35);
+  stroke: none;
+  opacity: 0.55;
+  transition: fill 0.25s ease, opacity 0.25s ease;
+}
+.bn-pipe-arrow.is-lit {
+  fill: var(--teal-deep);
+  opacity: 1;
+}
 .bn-pipe-edge-label {
   fill: var(--muted);
   font-size: 10px;

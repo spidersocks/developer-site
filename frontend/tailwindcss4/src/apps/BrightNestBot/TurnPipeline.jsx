@@ -65,24 +65,22 @@ function isMainLlmCall(call) {
 /**
  * Compact top-down layout (world px, origin at spine).
  * Spine: parent → language → memory → rules → router (FSM|RAG) → …
- * Scores before the route pick; live data is a side arm.
+ * Live data sits LEFT of the FSM column so edges never pierce dst/gate/mail.
  */
 const LAYOUT = {
   parent: { x: 0, y: 0, w: 156, h: 42 },
   lang: { x: 0, y: 72, w: 148, h: 42 },
   memory: { x: 0, y: 150, w: 148, h: 72 },
   rules: { x: 0, y: 250, w: 146, h: 46 },
-  // Combined hybrid router + FSM|RAG branch (was two nodes)
   router: { x: 0, y: 380, w: 128, h: 128 },
   arbiter: { x: 210, y: 380, w: 120, h: 46 },
   fsm: { x: -280, y: 560, w: 140, h: 46 },
+  // Side arm — not under fsm/dst/gate (avoids vertical edges through boxes)
+  live: { x: -470, y: 560, w: 140, h: 46 },
   rag: { x: 280, y: 560, w: 140, h: 46 },
   dst: { x: -280, y: 650, w: 168, h: 46 },
-  // Commit gate + staff inbox draft — own nodes (not squashed into FSM)
   gate: { x: -280, y: 740, w: 168, h: 46 },
   staffmail: { x: -280, y: 830, w: 168, h: 46 },
-  live: { x: -280, y: 920, w: 140, h: 46 },
-  // Hybrid retrieve — further right so FSM→LLM corridor stays clear
   dense: { x: 200, y: 680, w: 136, h: 76 },
   sparse: { x: 400, y: 680, w: 136, h: 76 },
   fuse: { x: 300, y: 800, w: 148, h: 48 },
@@ -94,8 +92,11 @@ const LAYOUT = {
   answer: { x: 0, y: 1260, w: 156, h: 42 },
 };
 
-/** Left corridor for FSM/DST/Live → LLM (between sheets and RAG arm). */
+/** Corridor X between FSM column and RAG arm (FSM/DST → LLM). */
 const FSM_LLM_X = -140;
+/** Left gutter outside Live — enrich edges drop here then cross under. */
+const LIVE_GUTTER_X = -540;
+const LIVE_CROSS_Y = 1088;
 
 const EDGES = [
   { id: "e-parent-lang", from: "parent", to: "lang" },
@@ -113,8 +114,7 @@ const EDGES = [
   { id: "e-staffmail-sheets", from: "staffmail", to: "sheets" },
   { id: "e-gate-sheets", from: "gate", to: "sheets", dashed: true },
   { id: "e-gate-answer", from: "gate", to: "answer", dashed: true },
-  { id: "e-dst-live", from: "dst", to: "live", dashed: true },
-  { id: "e-fsm-live", from: "fsm", to: "live", dashed: true },
+  { id: "e-fsm-live", from: "fsm", to: "live" },
   { id: "e-dst-llm", from: "dst", to: "llm", dashed: true },
   { id: "e-dst-answer", from: "dst", to: "answer", dashed: true },
   { id: "e-fsm-llm", from: "fsm", to: "llm" },
@@ -135,9 +135,9 @@ const EDGES = [
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -450, minY: -28, maxX: 560, maxY: 1340 };
+const WORLD = { minX: -580, minY: -28, maxX: 560, maxY: 1340 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
-const FIT_FOCUS = { minX: -220, minY: -24, maxX: 260, maxY: 520 };
+const FIT_FOCUS = { minX: -320, minY: -24, maxX: 260, maxY: 520 };
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const PAN_MARGIN = 72;
@@ -377,8 +377,18 @@ function shorten(a, b, padStart = 2, padEnd = 14) {
   };
 }
 
-/** Shorten only the end of a polyline so the arrowhead sits on the last segment. */
-function shortenPolyEnd(pts, padEnd = 14) {
+/** Collapse near-duplicate polyline points; keep corners crisp. */
+function dedupePts(pts, eps = 0.5) {
+  const out = [];
+  for (const p of pts) {
+    const prev = out[out.length - 1];
+    if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) > eps) out.push(p);
+  }
+  return out;
+}
+
+/** Pull the tip back along the last segment so the triangle sits on the line. */
+function shortenPolyEnd(pts, padEnd = 10) {
   if (!pts || pts.length < 2) return pts || [];
   const out = pts.map((p) => ({ ...p }));
   const a = out[out.length - 2];
@@ -386,7 +396,7 @@ function shortenPolyEnd(pts, padEnd = 14) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
-  const cut = Math.min(padEnd, Math.max(0, len - 2));
+  const cut = Math.min(padEnd, Math.max(0, len * 0.45));
   out[out.length - 1] = {
     x: b.x - (dx / len) * cut,
     y: b.y - (dy / len) * cut,
@@ -394,149 +404,169 @@ function shortenPolyEnd(pts, padEnd = 14) {
   return out;
 }
 
+/** Filled triangle at the tip, oriented from the last segment (not SVG markers). */
+function arrowHeadPath(pts, size = 9) {
+  if (!pts || pts.length < 2) return null;
+  const a = pts[pts.length - 2];
+  const b = pts[pts.length - 1];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy;
+  const py = ux;
+  const back = size;
+  const half = size * 0.55;
+  const baseX = b.x - ux * back;
+  const baseY = b.y - uy * back;
+  return `M ${b.x} ${b.y} L ${baseX + px * half} ${baseY + py * half} L ${
+    baseX - px * half
+  } ${baseY - py * half} Z`;
+}
+
+function orthoVia(start, end, midX) {
+  return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+}
+
 function edgeGeometry(fromId, toId) {
   const a = LAYOUT[fromId];
   const b = LAYOUT[toId];
   if (!a || !b) return null;
 
-  let rawStart;
-  let rawEnd;
-  let elbow = null; // optional mid waypoint(s)
+  let pts = null;
 
   if (fromId === "router" && toId === "fsm") {
-    rawStart = nodeAnchor("router", "sw");
-    rawEnd = nodeAnchor(toId, "top");
+    pts = [nodeAnchor("router", "sw"), nodeAnchor("fsm", "top")];
   } else if (fromId === "router" && toId === "rag") {
-    rawStart = nodeAnchor("router", "se");
-    rawEnd = nodeAnchor(toId, "top");
+    pts = [nodeAnchor("router", "se"), nodeAnchor("rag", "top")];
   } else if (fromId === "router" && toId === "arbiter") {
-    rawStart = nodeAnchor("router", "right");
-    rawEnd = nodeAnchor("arbiter", "left");
+    pts = [nodeAnchor("router", "right"), nodeAnchor("arbiter", "left")];
   } else if (fromId === "arbiter" && toId === "router") {
-    rawStart = nodeAnchor("arbiter", "bottom");
-    rawEnd = nodeAnchor("router", "right");
+    const s = nodeAnchor("arbiter", "bottom");
+    const e = nodeAnchor("router", "right");
+    pts = [s, { x: s.x, y: e.y }, e];
+  } else if (fromId === "fsm" && toId === "live") {
+    // Horizontal side-arm — never down through dst/gate/mail
+    pts = [nodeAnchor("fsm", "left"), nodeAnchor("live", "right")];
   } else if (fromId === "fsm" && toId === "dst") {
-    rawStart = nodeAnchor("fsm", "bottom");
-    rawEnd = nodeAnchor("dst", "top");
+    pts = [nodeAnchor("fsm", "bottom"), nodeAnchor("dst", "top")];
   } else if (fromId === "fsm" && toId === "gate") {
-    rawStart = nodeAnchor("fsm", "bottom");
-    rawEnd = nodeAnchor("gate", "top");
+    const s = nodeAnchor("fsm", "left");
+    const e = nodeAnchor("gate", "left");
+    pts = [s, { x: LIVE_GUTTER_X + 40, y: s.y }, { x: LIVE_GUTTER_X + 40, y: e.y }, e];
   } else if (fromId === "dst" && toId === "gate") {
-    rawStart = nodeAnchor("dst", "bottom");
-    rawEnd = nodeAnchor("gate", "top");
+    pts = [nodeAnchor("dst", "bottom"), nodeAnchor("gate", "top")];
   } else if (fromId === "gate" && toId === "staffmail") {
-    rawStart = nodeAnchor("gate", "bottom");
-    rawEnd = nodeAnchor("staffmail", "top");
+    pts = [nodeAnchor("gate", "bottom"), nodeAnchor("staffmail", "top")];
   } else if (fromId === "staffmail" && toId === "sheets") {
-    rawStart = nodeAnchor("staffmail", "bottom");
-    rawEnd = nodeAnchor("sheets", "top");
+    pts = [nodeAnchor("staffmail", "bottom"), nodeAnchor("sheets", "top")];
   } else if (fromId === "gate" && toId === "sheets") {
-    rawStart = nodeAnchor("gate", "bottom");
-    rawEnd = nodeAnchor("sheets", "top");
+    const s = nodeAnchor("gate", "left");
+    const e = nodeAnchor("sheets", "left");
+    pts = [s, { x: LIVE_GUTTER_X + 40, y: s.y }, { x: LIVE_GUTTER_X + 40, y: e.y }, e];
   } else if (fromId === "gate" && toId === "answer") {
-    rawStart = nodeAnchor("gate", "right");
-    rawEnd = nodeAnchor("answer", "left");
-    elbow = [
-      { x: FSM_LLM_X, y: a.y },
-      { x: FSM_LLM_X, y: b.y },
-    ];
+    pts = orthoVia(
+      nodeAnchor("gate", "right"),
+      nodeAnchor("answer", "left"),
+      FSM_LLM_X
+    );
   } else if (
     (fromId === "fsm" || fromId === "dst" || fromId === "live") &&
     toId === "llm"
   ) {
-    // Left corridor — clear of dense/chroma on the right and sheets on the far left
-    rawStart = nodeAnchor(fromId, "right");
-    rawEnd = nodeAnchor("llm", "left");
-    elbow = [
-      { x: FSM_LLM_X, y: a.y },
-      { x: FSM_LLM_X, y: b.y },
-    ];
-  } else if (
-    (fromId === "fsm" || fromId === "dst") &&
-    toId === "answer"
-  ) {
-    // Template booking/cancel: DST/FSM → parent answer (no DashScope generate)
-    rawStart = nodeAnchor(fromId, "right");
-    rawEnd = nodeAnchor("answer", "left");
-    elbow = [
-      { x: FSM_LLM_X, y: a.y },
-      { x: FSM_LLM_X, y: b.y },
-    ];
+    const startSide = fromId === "live" ? "bottom" : "right";
+    const s = nodeAnchor(fromId, startSide);
+    const e = nodeAnchor("llm", "left");
+    if (fromId === "live") {
+      // Drop left gutter, cross under FSM column, enter LLM from corridor
+      pts = [
+        s,
+        { x: s.x, y: LIVE_CROSS_Y },
+        { x: FSM_LLM_X, y: LIVE_CROSS_Y },
+        { x: FSM_LLM_X, y: e.y },
+        e,
+      ];
+    } else {
+      pts = orthoVia(s, e, FSM_LLM_X);
+    }
+  } else if ((fromId === "fsm" || fromId === "dst") && toId === "answer") {
+    pts = orthoVia(
+      nodeAnchor(fromId, "right"),
+      nodeAnchor("answer", "left"),
+      FSM_LLM_X
+    );
   } else if (fromId === "fsm" && toId === "sheets") {
-    rawStart = nodeAnchor("fsm", "bottom");
-    rawEnd = nodeAnchor("sheets", "top");
-  } else if (fromId === "dst" && toId === "live") {
-    rawStart = nodeAnchor("dst", "bottom");
-    rawEnd = nodeAnchor("live", "top");
+    const s = nodeAnchor("fsm", "left");
+    const e = nodeAnchor("sheets", "left");
+    pts = [s, { x: LIVE_GUTTER_X + 40, y: s.y }, { x: LIVE_GUTTER_X + 40, y: e.y }, e];
   } else if (fromId === "rag" && toId === "dense") {
-    rawStart = nodeAnchor("rag", "sw");
-    rawEnd = nodeAnchor("dense", "top");
+    pts = [nodeAnchor("rag", "sw"), nodeAnchor("dense", "top")];
   } else if (fromId === "rag" && toId === "sparse") {
-    rawStart = nodeAnchor("rag", "se");
-    rawEnd = nodeAnchor("sparse", "top");
+    pts = [nodeAnchor("rag", "se"), nodeAnchor("sparse", "top")];
   } else if (fromId === "dense" && toId === "fuse") {
-    rawStart = nodeAnchor("dense", "bottom");
-    rawEnd = nodeAnchor("fuse", "left");
+    const s = nodeAnchor("dense", "bottom");
+    const e = nodeAnchor("fuse", "top");
+    pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "sparse" && toId === "fuse") {
-    rawStart = nodeAnchor("sparse", "bottom");
-    rawEnd = nodeAnchor("fuse", "right");
+    const s = nodeAnchor("sparse", "bottom");
+    const e = nodeAnchor("fuse", "top");
+    pts = [s, { x: s.x, y: e.y }, e];
+  } else if (fromId === "fuse" && toId === "chroma") {
+    pts = [nodeAnchor("fuse", "bottom"), nodeAnchor("chroma", "top")];
+  } else if (fromId === "chroma" && toId === "rewrite") {
+    pts = [nodeAnchor("chroma", "bottom"), nodeAnchor("rewrite", "top")];
   } else if (fromId === "rewrite" && toId === "llm") {
-    // Regular curve — pass 2 is further right
-    rawStart = nodeAnchor("rewrite", "bottom");
-    rawEnd = nodeAnchor("llm", "top");
+    const s = nodeAnchor("rewrite", "bottom");
+    const e = nodeAnchor("llm", "right");
+    pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "rewrite" && toId === "chroma2") {
-    rawStart = nodeAnchor("rewrite", "right");
-    rawEnd = nodeAnchor("chroma2", "top");
+    const s = nodeAnchor("rewrite", "right");
+    const e = nodeAnchor("chroma2", "top");
+    pts = [s, { x: e.x, y: s.y }, e];
   } else if (fromId === "chroma2" && toId === "llm") {
-    rawStart = nodeAnchor("chroma2", "left");
-    rawEnd = nodeAnchor("llm", "right");
+    pts = [nodeAnchor("chroma2", "left"), nodeAnchor("llm", "right")];
   } else if (fromId === "live" && toId === "fuse") {
-    rawStart = nodeAnchor("live", "right");
-    rawEnd = nodeAnchor("fuse", "left");
+    // Left gutter → under spine → up into pack (never through boxes)
+    const s = nodeAnchor("live", "bottom");
+    const e = nodeAnchor("fuse", "left");
+    pts = [
+      s,
+      { x: s.x, y: LIVE_CROSS_Y },
+      { x: LIVE_GUTTER_X, y: LIVE_CROSS_Y },
+      { x: e.x - 36, y: LIVE_CROSS_Y },
+      { x: e.x - 36, y: e.y },
+      e,
+    ];
+  } else if (fromId === "llm" && toId === "answer") {
+    pts = [nodeAnchor("llm", "bottom"), nodeAnchor("answer", "top")];
+  } else if (fromId === "sheets" && toId === "answer") {
+    const s = nodeAnchor("sheets", "right");
+    const e = nodeAnchor("answer", "left");
+    pts = [s, { x: e.x, y: s.y }, e];
   } else if (Math.abs(b.x - a.x) > 40 && Math.abs(b.y - a.y) < 30) {
-    rawStart = nodeAnchor(fromId, b.x < a.x ? "left" : "right");
-    rawEnd = nodeAnchor(toId, b.x < a.x ? "right" : "left");
+    pts = [
+      nodeAnchor(fromId, b.x < a.x ? "left" : "right"),
+      nodeAnchor(toId, b.x < a.x ? "right" : "left"),
+    ];
   } else {
-    rawStart = nodeAnchor(fromId, "bottom");
-    rawEnd = nodeAnchor(toId, "top");
+    pts = [nodeAnchor(fromId, "bottom"), nodeAnchor(toId, "top")];
   }
 
-  let d;
-  let labelAt;
-  let start;
-  let end;
-  if (elbow && elbow.length) {
-    const pts = shortenPolyEnd([rawStart, ...elbow, rawEnd], 14);
-    start = pts[0];
-    end = pts[pts.length - 1];
-    d = `M ${pts[0].x} ${pts[0].y}` + pts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
-    const mid = pts[Math.floor(pts.length / 2)];
-    labelAt = { x: mid.x + 8, y: mid.y - 6 };
-  } else {
-    ({ start, end } = shorten(rawStart, rawEnd, 1, 14));
-    const dx = Math.abs(end.x - start.x);
-    if (dx < 8) {
-      const midY = (start.y + end.y) / 2;
-      d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-      labelAt = { x: start.x + 10, y: midY };
-    } else if (fromId === "arbiter" || toId === "arbiter") {
-      const midY = (start.y + end.y) / 2;
-      d = `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`;
-      labelAt = { x: (start.x + end.x) / 2, y: midY - 6 };
-    } else if (fromId === "rewrite" && toId === "llm") {
-      // Straight Grade·rewrite → LLM (no elbow / bezier through pass 2)
-      d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-      labelAt = {
-        x: (start.x + end.x) / 2,
-        y: (start.y + end.y) / 2 - 8,
-      };
-    } else {
-      const midY = (start.y + end.y) / 2;
-      d = `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`;
-      labelAt = { x: (start.x + end.x) / 2, y: midY - 5 };
-    }
-  }
-  return { d, labelAt, start, end };
+  pts = dedupePts(shortenPolyEnd(dedupePts(pts), 10));
+  if (pts.length < 2) return null;
+  const d =
+    `M ${pts[0].x} ${pts[0].y}` +
+    pts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
+  const mid = pts[Math.floor(pts.length / 2)];
+  const labelAt = { x: mid.x + 8, y: mid.y - 6 };
+  return {
+    d,
+    labelAt,
+    start: pts[0],
+    end: pts[pts.length - 1],
+    arrow: arrowHeadPath(pts),
+  };
 }
 
 function QueryHighlight({ segments, fallback, cue }) {
@@ -1967,8 +1997,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Live facts (HKO, hours, register)
-            {enrichMode ? " · KB enrich via Pack" : ""}.
+            Live facts inject into retrieve context
+            {enrichMode ? " · Pack still runs" : ""}.
           </p>
           {consulted.length > 0 ? (
             <div className="bn-score-group">
@@ -2657,7 +2687,12 @@ export default function TurnPipeline({
         label: "RAG",
         kind: "rag",
         shape: "process",
-        status: !hasTrace ? "idle" : path === "rag" ? "done" : "skipped",
+        // Live tools enrich the retrieve context — RAG still ran, not bypassed.
+        status: !hasTrace
+          ? "idle"
+          : path === "rag" || enrichMode
+            ? "done"
+            : "skipped",
       },
       {
         id: "live",
@@ -2671,10 +2706,9 @@ export default function TurnPipeline({
         label: "Dense · Chroma",
         kind: "store",
         shape: "cylinder",
-        // Dual-channel cylinders only on the pure RAG arm (not FSM enrich).
         status: !hasTrace
           ? "idle"
-          : path !== "rag"
+          : !(path === "rag" || enrichMode)
             ? "skipped"
             : rag?.hybrid?.dense_count > 0 || (rag?.hybrid?.dense_top || []).length
               ? "done"
@@ -2687,7 +2721,7 @@ export default function TurnPipeline({
         shape: "cylinder",
         status: !hasTrace
           ? "idle"
-          : path !== "rag"
+          : !(path === "rag" || enrichMode)
             ? "skipped"
             : rag?.hybrid?.sparse_count > 0 ||
                 (rag?.hybrid?.sparse_top || []).length
@@ -2822,18 +2856,11 @@ export default function TurnPipeline({
     ]);
     if (history?.enabled === false) lit.delete("memory");
     if (arbiter?.called) lit.add("arbiter");
-    // Pure RAG: dual-channel retrieve from the RAG node.
-    const lightRagHybrid = () => {
+    // Retrieve arm: dense ∥ sparse → pack → pass 1 → grade (pure RAG or live enrich).
+    const lightRetrieve = () => {
+      lit.add("rag");
       lit.add("dense");
       lit.add("sparse");
-      lit.add("fuse");
-      lit.add("chroma");
-      lit.add("rewrite");
-      if (rag?.query_rewrite?.retried) lit.add("chroma2");
-    };
-    // FSM grounded-enrich (hours / weather / seats): live facts are primary;
-    // KB pack enters via live → fuse. Do NOT light dense/sparse (no edges in).
-    const lightEnrichSide = () => {
       lit.add("fuse");
       lit.add("chroma");
       lit.add("rewrite");
@@ -2854,7 +2881,8 @@ export default function TurnPipeline({
         lit.add("staffmail");
       }
       if (liveOn) lit.add("live");
-      if (hits.length || enrichMode) lightEnrichSide();
+      // Live facts inject into the same pack — retrieve is not skipped.
+      if (hits.length || enrichMode) lightRetrieve();
       if (
         adminTodo ||
         staffMessage ||
@@ -2864,8 +2892,7 @@ export default function TurnPipeline({
         lit.add("sheets");
       }
     } else if (path === "rag") {
-      lit.add("rag");
-      lightRagHybrid();
+      lightRetrieve();
       if (liveOn) lit.add("live");
       if (adminTodo) lit.add("sheets");
     }
@@ -2918,10 +2945,10 @@ export default function TurnPipeline({
       link("gate", "sheets", "e-gate-sheets");
     if (on("gate") && on("answer") && !on("llm") && !on("sheets") && !on("staffmail"))
       link("gate", "answer", "e-gate-answer");
-    if (on("dst") && on("live")) link("dst", "live", "e-dst-live");
-    else if (on("fsm") && on("live")) link("fsm", "live", "e-fsm-live");
+    if (on("fsm") && on("live")) link("fsm", "live", "e-fsm-live");
     if (on("dst") && on("llm")) link("dst", "llm", "e-dst-llm");
-    else if (on("fsm") && on("llm")) link("fsm", "llm", "e-fsm-llm");
+    else if (on("fsm") && on("llm") && !on("live") && !on("rewrite"))
+      link("fsm", "llm", "e-fsm-llm");
     // Booking/cancel often end on FSM templates — no parent-facing DashScope call.
     if (on("dst") && on("answer") && !on("llm") && !on("gate"))
       link("dst", "answer", "e-dst-answer");
@@ -2943,10 +2970,10 @@ export default function TurnPipeline({
     } else if (on("rewrite") && on("llm")) {
       link("rewrite", "llm", "e-rewrite-llm");
     }
-    // Hours/weather enrich: live → pack → ranked → grade → LLM (not a dangling dual-channel).
+    // Live facts inject into pack; still a retrieve arm, not a RAG bypass.
     if (on("live") && on("fuse") && enrichMode) {
       link("live", "fuse", "e-live-fuse");
-    } else if (on("live") && on("llm")) {
+    } else if (on("live") && on("llm") && !on("fuse")) {
       link("live", "llm", "e-live-llm");
     }
     if (on("llm")) link("llm", "answer", "e-llm-answer");
@@ -2988,6 +3015,7 @@ export default function TurnPipeline({
       "e-arb-router": arbiter?.called ? arbiter.action || "keep" : "",
       "e-router-fsm": path === "fsm" ? "FSM" : "",
       "e-router-rag": path === "rag" ? "RAG" : "",
+      "e-fsm-live": liveOn ? "live" : "",
       "e-fsm-dst":
         (trace?.booking?.booking_dst || trace?.booking?.arbiter_booking)?.called ||
         trace?.cancel?.cancel_dst?.called
@@ -3430,32 +3458,6 @@ export default function TurnPipeline({
             style={{ left: WORLD.minX, top: WORLD.minY }}
             aria-hidden="true"
           >
-            <defs>
-              <marker
-                id="bn-flow-arrow"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="10"
-                markerHeight="10"
-                orient="auto-start-reverse"
-                markerUnits="userSpaceOnUse"
-              >
-                <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="rgba(18,169,188,0.35)" />
-              </marker>
-              <marker
-                id="bn-flow-arrow-lit"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="10"
-                markerHeight="10"
-                orient="auto-start-reverse"
-                markerUnits="userSpaceOnUse"
-              >
-                <path d="M 0 1.2 L 9 5 L 0 8.8 Z" fill="#0b7f8f" />
-              </marker>
-            </defs>
             {EDGES.map((edge) => {
               const geo = edgeGeometry(edge.from, edge.to);
               if (!geo) return null;
@@ -3469,8 +3471,13 @@ export default function TurnPipeline({
                     className={`bn-pipe-edge${lit ? " is-lit" : ""}${
                       edge.dashed ? " is-dashed" : ""
                     }`}
-                    markerEnd={lit ? "url(#bn-flow-arrow-lit)" : "url(#bn-flow-arrow)"}
                   />
+                  {geo.arrow ? (
+                    <path
+                      d={geo.arrow}
+                      className={`bn-pipe-arrow${lit ? " is-lit" : ""}`}
+                    />
+                  ) : null}
                   {label ? (
                     <text
                       x={geo.labelAt.x}
