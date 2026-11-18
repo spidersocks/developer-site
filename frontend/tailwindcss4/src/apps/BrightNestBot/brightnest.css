@@ -1119,7 +1119,9 @@ code,
   fill: none;
   stroke: currentColor;
   stroke-width: 1.75;
-  stroke-linecap: round;
+  /* butt — round caps poke past the arrow tip and look like a nub */
+  stroke-linecap: butt;
+  stroke-linejoin: round;
   opacity: 0.32;
   transition: opacity 0.25s ease, stroke-width 0.25s ease, color 0.25s ease;
 }

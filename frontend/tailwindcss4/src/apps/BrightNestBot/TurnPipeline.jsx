@@ -65,7 +65,8 @@ function isMainLlmCall(call) {
 /**
  * Compact top-down layout (world px, origin at spine).
  * Spine: parent → language → memory → rules → router (FSM|RAG) → …
- * Live data sits LEFT of the FSM column so edges never pierce dst/gate/mail.
+ * Live sits on the FSM column under staffmail (always in Fit). Edges to/from
+ * live elbow through the left gutter — never pierce dst/gate/mail.
  */
 const LAYOUT = {
   parent: { x: 0, y: 0, w: 156, h: 42 },
@@ -75,28 +76,27 @@ const LAYOUT = {
   router: { x: 0, y: 380, w: 128, h: 128 },
   arbiter: { x: 210, y: 380, w: 120, h: 46 },
   fsm: { x: -280, y: 560, w: 140, h: 46 },
-  // Side arm — not under fsm/dst/gate (avoids vertical edges through boxes)
-  live: { x: -470, y: 560, w: 140, h: 46 },
   rag: { x: 280, y: 560, w: 140, h: 46 },
   dst: { x: -280, y: 650, w: 168, h: 46 },
   gate: { x: -280, y: 740, w: 168, h: 46 },
   staffmail: { x: -280, y: 830, w: 168, h: 46 },
-  dense: { x: 200, y: 680, w: 136, h: 76 },
-  sparse: { x: 400, y: 680, w: 136, h: 76 },
-  fuse: { x: 300, y: 800, w: 148, h: 48 },
-  chroma: { x: 300, y: 910, w: 148, h: 76 },
-  rewrite: { x: 300, y: 1020, w: 152, h: 48 },
-  chroma2: { x: 460, y: 1140, w: 148, h: 76 },
-  sheets: { x: -280, y: 1140, w: 168, h: 76 },
-  llm: { x: -40, y: 1140, w: 160, h: 48 },
-  answer: { x: 0, y: 1260, w: 156, h: 42 },
+  live: { x: -280, y: 930, w: 148, h: 46 },
+  dense: { x: 180, y: 680, w: 136, h: 76 },
+  sparse: { x: 420, y: 680, w: 136, h: 76 },
+  fuse: { x: 300, y: 820, w: 148, h: 48 },
+  chroma: { x: 300, y: 930, w: 148, h: 76 },
+  rewrite: { x: 300, y: 1040, w: 152, h: 48 },
+  chroma2: { x: 460, y: 1160, w: 148, h: 76 },
+  sheets: { x: -280, y: 1160, w: 168, h: 76 },
+  llm: { x: -40, y: 1160, w: 160, h: 48 },
+  answer: { x: 0, y: 1280, w: 156, h: 42 },
 };
 
 /** Corridor X between FSM column and RAG arm (FSM/DST → LLM). */
 const FSM_LLM_X = -140;
-/** Left gutter outside Live — enrich edges drop here then cross under. */
-const LIVE_GUTTER_X = -540;
-const LIVE_CROSS_Y = 1088;
+/** Left gutter — elbows around the FSM stack without crossing boxes. */
+const LIVE_GUTTER_X = -430;
+const ARROW_SIZE = 10;
 
 const EDGES = [
   { id: "e-parent-lang", from: "parent", to: "lang" },
@@ -135,9 +135,9 @@ const EDGES = [
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -580, minY: -28, maxX: 560, maxY: 1340 };
+const WORLD = { minX: -480, minY: -28, maxX: 560, maxY: 1360 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
-const FIT_FOCUS = { minX: -320, minY: -24, maxX: 260, maxY: 520 };
+const FIT_FOCUS = { minX: -360, minY: -24, maxX: 280, maxY: 540 };
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const PAN_MARGIN = 72;
@@ -387,46 +387,71 @@ function dedupePts(pts, eps = 0.5) {
   return out;
 }
 
-/** Pull the tip back along the last segment so the triangle sits on the line. */
-function shortenPolyEnd(pts, padEnd = 10) {
-  if (!pts || pts.length < 2) return pts || [];
-  const out = pts.map((p) => ({ ...p }));
-  const a = out[out.length - 2];
-  const b = out[out.length - 1];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const cut = Math.min(padEnd, Math.max(0, len * 0.45));
-  out[out.length - 1] = {
-    x: b.x - (dx / len) * cut,
-    y: b.y - (dy / len) * cut,
-  };
-  return out;
-}
-
-/** Filled triangle at the tip, oriented from the last segment (not SVG markers). */
-function arrowHeadPath(pts, size = 9) {
-  if (!pts || pts.length < 2) return null;
-  const a = pts[pts.length - 2];
-  const b = pts[pts.length - 1];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
+/**
+ * Stroke ends at the arrow BASE; tip sits on the node port.
+ * Avoids round linecaps poking past the triangle (the "nub").
+ */
+function splitArrow(pts, size = ARROW_SIZE) {
+  const raw = dedupePts(pts);
+  if (raw.length < 2) return null;
+  const tip = raw[raw.length - 1];
+  const prev = raw[raw.length - 2];
+  const dx = tip.x - prev.x;
+  const dy = tip.y - prev.y;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
+  const back = Math.min(size, Math.max(4, len - 2));
+  const base = { x: tip.x - ux * back, y: tip.y - uy * back };
+  const linePts = dedupePts([...raw.slice(0, -1), base]);
   const px = -uy;
   const py = ux;
-  const back = size;
-  const half = size * 0.55;
-  const baseX = b.x - ux * back;
-  const baseY = b.y - uy * back;
-  return `M ${b.x} ${b.y} L ${baseX + px * half} ${baseY + py * half} L ${
-    baseX - px * half
-  } ${baseY - py * half} Z`;
+  const half = back * 0.55;
+  const arrow = `M ${tip.x} ${tip.y} L ${base.x + px * half} ${
+    base.y + py * half
+  } L ${base.x - px * half} ${base.y - py * half} Z`;
+  return { linePts, tip, base, arrow, ux, uy };
+}
+
+/** Label ~40% along path length, nudged off the stroke. */
+function labelAlong(pts, frac = 0.4, nudge = 12) {
+  if (!pts || pts.length < 2) return { x: 0, y: 0 };
+  let total = 0;
+  const segs = [];
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    segs.push(d);
+    total += d;
+  }
+  let target = total * frac;
+  for (let i = 1; i < pts.length; i++) {
+    const d = segs[i - 1];
+    if (target <= d || i === pts.length - 1) {
+      const t = d ? target / d : 0;
+      const x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t;
+      const y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t;
+      const dx = pts[i].x - pts[i - 1].x;
+      const dy = pts[i].y - pts[i - 1].y;
+      const len = Math.hypot(dx, dy) || 1;
+      // Prefer upward/left offset so labels sit away from arrowheads.
+      return { x: x - (dy / len) * nudge, y: y + (dx / len) * nudge - 4 };
+    }
+    target -= d;
+  }
+  return { x: pts[0].x, y: pts[0].y - nudge };
 }
 
 function orthoVia(start, end, midX) {
   return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+}
+
+function gutterAround(start, end, gutterX = LIVE_GUTTER_X) {
+  return [
+    start,
+    { x: gutterX, y: start.y },
+    { x: gutterX, y: end.y },
+    end,
+  ];
 }
 
 function edgeGeometry(fromId, toId) {
@@ -447,24 +472,24 @@ function edgeGeometry(fromId, toId) {
     const e = nodeAnchor("router", "right");
     pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "fsm" && toId === "live") {
-    // Horizontal side-arm — never down through dst/gate/mail
-    pts = [nodeAnchor("fsm", "left"), nodeAnchor("live", "right")];
+    // Around left gutter — never vertically through dst/gate/mail
+    pts = gutterAround(nodeAnchor("fsm", "left"), nodeAnchor("live", "left"));
   } else if (fromId === "fsm" && toId === "dst") {
     pts = [nodeAnchor("fsm", "bottom"), nodeAnchor("dst", "top")];
   } else if (fromId === "fsm" && toId === "gate") {
-    const s = nodeAnchor("fsm", "left");
-    const e = nodeAnchor("gate", "left");
-    pts = [s, { x: LIVE_GUTTER_X + 40, y: s.y }, { x: LIVE_GUTTER_X + 40, y: e.y }, e];
+    pts = gutterAround(nodeAnchor("fsm", "left"), nodeAnchor("gate", "left"));
   } else if (fromId === "dst" && toId === "gate") {
     pts = [nodeAnchor("dst", "bottom"), nodeAnchor("gate", "top")];
   } else if (fromId === "gate" && toId === "staffmail") {
     pts = [nodeAnchor("gate", "bottom"), nodeAnchor("staffmail", "top")];
   } else if (fromId === "staffmail" && toId === "sheets") {
-    pts = [nodeAnchor("staffmail", "bottom"), nodeAnchor("sheets", "top")];
+    // Skip over live on the left gutter
+    pts = gutterAround(
+      nodeAnchor("staffmail", "left"),
+      nodeAnchor("sheets", "left")
+    );
   } else if (fromId === "gate" && toId === "sheets") {
-    const s = nodeAnchor("gate", "left");
-    const e = nodeAnchor("sheets", "left");
-    pts = [s, { x: LIVE_GUTTER_X + 40, y: s.y }, { x: LIVE_GUTTER_X + 40, y: e.y }, e];
+    pts = gutterAround(nodeAnchor("gate", "left"), nodeAnchor("sheets", "left"));
   } else if (fromId === "gate" && toId === "answer") {
     pts = orthoVia(
       nodeAnchor("gate", "right"),
@@ -475,20 +500,16 @@ function edgeGeometry(fromId, toId) {
     (fromId === "fsm" || fromId === "dst" || fromId === "live") &&
     toId === "llm"
   ) {
-    const startSide = fromId === "live" ? "bottom" : "right";
-    const s = nodeAnchor(fromId, startSide);
-    const e = nodeAnchor("llm", "left");
     if (fromId === "live") {
-      // Drop left gutter, cross under FSM column, enter LLM from corridor
-      pts = [
-        s,
-        { x: s.x, y: LIVE_CROSS_Y },
-        { x: FSM_LLM_X, y: LIVE_CROSS_Y },
-        { x: FSM_LLM_X, y: e.y },
-        e,
-      ];
+      const s = nodeAnchor("live", "right");
+      const e = nodeAnchor("llm", "left");
+      pts = [s, { x: FSM_LLM_X, y: s.y }, { x: FSM_LLM_X, y: e.y }, e];
     } else {
-      pts = orthoVia(s, e, FSM_LLM_X);
+      pts = orthoVia(
+        nodeAnchor(fromId, "right"),
+        nodeAnchor("llm", "left"),
+        FSM_LLM_X
+      );
     }
   } else if ((fromId === "fsm" || fromId === "dst") && toId === "answer") {
     pts = orthoVia(
@@ -497,20 +518,23 @@ function edgeGeometry(fromId, toId) {
       FSM_LLM_X
     );
   } else if (fromId === "fsm" && toId === "sheets") {
-    const s = nodeAnchor("fsm", "left");
-    const e = nodeAnchor("sheets", "left");
-    pts = [s, { x: LIVE_GUTTER_X + 40, y: s.y }, { x: LIVE_GUTTER_X + 40, y: e.y }, e];
+    pts = gutterAround(
+      nodeAnchor("fsm", "left"),
+      nodeAnchor("sheets", "left")
+    );
   } else if (fromId === "rag" && toId === "dense") {
     pts = [nodeAnchor("rag", "sw"), nodeAnchor("dense", "top")];
   } else if (fromId === "rag" && toId === "sparse") {
     pts = [nodeAnchor("rag", "se"), nodeAnchor("sparse", "top")];
   } else if (fromId === "dense" && toId === "fuse") {
+    // Enter pack from the LEFT — no shared top rail with sparse
     const s = nodeAnchor("dense", "bottom");
-    const e = nodeAnchor("fuse", "top");
+    const e = nodeAnchor("fuse", "left");
     pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "sparse" && toId === "fuse") {
+    // Enter pack from the RIGHT
     const s = nodeAnchor("sparse", "bottom");
-    const e = nodeAnchor("fuse", "top");
+    const e = nodeAnchor("fuse", "right");
     pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "fuse" && toId === "chroma") {
     pts = [nodeAnchor("fuse", "bottom"), nodeAnchor("chroma", "top")];
@@ -527,17 +551,10 @@ function edgeGeometry(fromId, toId) {
   } else if (fromId === "chroma2" && toId === "llm") {
     pts = [nodeAnchor("chroma2", "left"), nodeAnchor("llm", "right")];
   } else if (fromId === "live" && toId === "fuse") {
-    // Left gutter → under spine → up into pack (never through boxes)
-    const s = nodeAnchor("live", "bottom");
+    // Right out of live into corridor, then into pack left
+    const s = nodeAnchor("live", "right");
     const e = nodeAnchor("fuse", "left");
-    pts = [
-      s,
-      { x: s.x, y: LIVE_CROSS_Y },
-      { x: LIVE_GUTTER_X, y: LIVE_CROSS_Y },
-      { x: e.x - 36, y: LIVE_CROSS_Y },
-      { x: e.x - 36, y: e.y },
-      e,
-    ];
+    pts = [s, { x: FSM_LLM_X, y: s.y }, { x: FSM_LLM_X, y: e.y }, e];
   } else if (fromId === "llm" && toId === "answer") {
     pts = [nodeAnchor("llm", "bottom"), nodeAnchor("answer", "top")];
   } else if (fromId === "sheets" && toId === "answer") {
@@ -553,19 +570,17 @@ function edgeGeometry(fromId, toId) {
     pts = [nodeAnchor(fromId, "bottom"), nodeAnchor(toId, "top")];
   }
 
-  pts = dedupePts(shortenPolyEnd(dedupePts(pts), 10));
-  if (pts.length < 2) return null;
+  const split = splitArrow(pts, ARROW_SIZE);
+  if (!split || split.linePts.length < 2) return null;
   const d =
-    `M ${pts[0].x} ${pts[0].y}` +
-    pts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
-  const mid = pts[Math.floor(pts.length / 2)];
-  const labelAt = { x: mid.x + 8, y: mid.y - 6 };
+    `M ${split.linePts[0].x} ${split.linePts[0].y}` +
+    split.linePts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
   return {
     d,
-    labelAt,
-    start: pts[0],
-    end: pts[pts.length - 1],
-    arrow: arrowHeadPath(pts),
+    labelAt: labelAlong(split.linePts, 0.38, 14),
+    start: split.linePts[0],
+    end: split.tip,
+    arrow: split.arrow,
   };
 }
 
