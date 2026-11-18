@@ -831,6 +831,44 @@ code,
   padding-bottom: 10px;
 }
 
+/* Compact expandable used inside inspector node modals */
+.bn-reveal.bn-reveal-compact {
+  margin-top: 10px;
+  border-radius: 10px;
+  box-shadow: none;
+  border: 1px solid rgba(18, 169, 188, 0.18);
+  background: rgba(18, 169, 188, 0.04);
+}
+.bn-reveal.bn-reveal-compact > summary {
+  padding: 8px 10px;
+  align-items: center;
+}
+.bn-reveal.bn-reveal-compact .bn-reveal-title {
+  font-family: var(--font-sans, var(--font-body), inherit);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.bn-reveal.bn-reveal-compact .bn-reveal-summary {
+  font-size: 0.72rem;
+  max-width: 60%;
+}
+.bn-reveal.bn-reveal-compact .bn-reveal-body {
+  padding: 8px 10px 10px;
+}
+.bn-reveal.bn-reveal-compact .bn-fact-list {
+  margin: 0;
+}
+.bn-reveal-steps {
+  margin: 0 0 8px;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.bn-reveal-steps li {
+  margin: 0 0 2px;
+}
+
 .bn-empty {
   margin: 10px 0 0;
   color: var(--muted);

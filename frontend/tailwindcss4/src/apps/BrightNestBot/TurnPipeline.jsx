@@ -311,6 +311,39 @@ function StageIO({ request, payload, defaultOpen = false }) {
   );
 }
 
+/** Collapsed-by-default “how this hard rule decided” panel. */
+function HardDecisionReveal({ title, summary, steps, rows, children }) {
+  if (!rows?.length && !steps?.length && !children) return null;
+  return (
+    <details className="bn-reveal bn-reveal-compact">
+      <summary>
+        <span className="bn-reveal-title">{title || "How this was decided"}</span>
+        {summary ? <span className="bn-reveal-summary">{summary}</span> : null}
+      </summary>
+      <div className="bn-reveal-body">
+        {steps?.length ? (
+          <ol className="bn-reveal-steps">
+            {steps.map((s, i) => (
+              <li key={`hd-step-${i}`}>{s}</li>
+            ))}
+          </ol>
+        ) : null}
+        {rows?.length ? (
+          <ul className="bn-fact-list">
+            {rows.map((r) => (
+              <li key={r.key || r.label}>
+                <span>{r.label}</span>
+                <code>{r.value}</code>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {children}
+      </div>
+    </details>
+  );
+}
+
 function turnsToPreview(turns) {
   return (turns || [])
     .map((t) => {
@@ -1252,7 +1285,7 @@ function RuleEvidence({ rule, defaultOpen = false, isWinner = false }) {
             </p>
           )}
           <span className="bn-hit-expand-hint">
-            {open ? "Hide" : "Show message"}
+            {open ? "Hide why" : "Show why"}
           </span>
         </div>
       </button>
@@ -1368,7 +1401,93 @@ function NodeDetail({
         </>
       );
 
-    case "lang":
+    case "lang": {
+      const det = trace.language_detection || {};
+      const counts = det.counts || {};
+      const variant = det.variant_counts || {};
+      const decision = det.decision || trace.language || "—";
+      const hasCounts = Boolean(det.counts);
+      const langRows = hasCounts
+        ? [
+            { key: "cjk", label: "CJK chars", value: String(counts.cjk ?? 0) },
+            {
+              key: "latin",
+              label: "Latin letters",
+              value: String(counts.latin ?? 0),
+            },
+            {
+              key: "trad",
+              label: "Trad-only distinctive",
+              value: String(
+                variant.trad_only ?? counts.trad_only ?? 0
+              ),
+            },
+            {
+              key: "simp",
+              label: "Simp-only distinctive",
+              value: String(
+                variant.simp_only ?? counts.simp_only ?? 0
+              ),
+            },
+            {
+              key: "digits",
+              label: "Digits",
+              value: String(counts.digits ?? 0),
+            },
+            {
+              key: "other",
+              label: "Other printable",
+              value: String(counts.other ?? 0),
+            },
+            {
+              key: "ratio",
+              label: "CJK ratio",
+              value:
+                det.cjk_ratio != null
+                  ? `${det.cjk_ratio} (need ≥ ${det.cjk_threshold ?? 0.3})`
+                  : "—",
+            },
+            ...(variant.winner
+              ? [
+                  {
+                    key: "variant_winner",
+                    label: "Variant majority",
+                    value:
+                      variant.winner === "tie"
+                        ? `tie → ${variant.tie_break || "zh-HK"}`
+                        : String(variant.winner),
+                  },
+                ]
+              : []),
+            {
+              key: "method",
+              label: "Method",
+              value: det.method || "—",
+            },
+            {
+              key: "final",
+              label: "Final decision",
+              value: decision,
+            },
+          ]
+        : [
+            {
+              key: "method",
+              label: "Method",
+              value: det.method || "client / prior turn",
+            },
+            {
+              key: "final",
+              label: "Final decision",
+              value: decision,
+            },
+          ];
+      const langSteps = [
+        "Match each printable char to a set: CJK · Latin · digits · other",
+        "CJK ratio = CJK ÷ (CJK + Latin)",
+        `If ratio ≥ ${det.cjk_threshold ?? 0.3}, majority of trad-only vs simp-only distinctive chars picks zh-HK / zh-CN (tie → zh-HK)`,
+        "Otherwise → en (or Accept-Language / client override)",
+      ];
       return (
         <>
           <p className="bn-rules-hint">
@@ -1378,7 +1497,7 @@ function NodeDetail({
           <ul className="bn-fact-list">
             <li>
               <span>Language</span>
-              <code>{trace.language || "—"}</code>
+              <code>{decision}</code>
             </li>
             <li>
               <span>Filter fallback</span>
@@ -1389,8 +1508,17 @@ function NodeDetail({
               </code>
             </li>
           </ul>
+          <HardDecisionReveal
+            title="Why this language"
+            summary={decision}
+            steps={hasCounts || det.method ? langSteps : null}
+            rows={langRows}
+          >
+            {det.why ? <p className="bn-note">{det.why}</p> : null}
+          </HardDecisionReveal>
         </>
       );
+    }
 
     case "memory": {
       const loaded = priorTurns.length;
@@ -1596,10 +1724,15 @@ function NodeDetail({
             ) : null}
           </ul>
           {cascade.length > 0 ? (
-            <div className="bn-score-group">
-              <p className="bn-rules-hint">
-                <strong>Cascade</strong> · this turn
-              </p>
+            <HardDecisionReveal
+              title="Why this tool won"
+              summary={tools.selected || route || "cascade"}
+              steps={[
+                "Hard detectors fire in priority order (escalation → weather → cancel → booking → hours)",
+                "Highest remaining score wins unless L2 / sticky state overrides",
+                "Winning live tool can still run Pack for KB enrich",
+              ]}
+            >
               <ol className="bn-score-ledger">
                 {cascade.map((layer) => (
                   <li
@@ -1615,7 +1748,7 @@ function NodeDetail({
                   </li>
                 ))}
               </ol>
-            </div>
+            </HardDecisionReveal>
           ) : null}
           {(trace?.data_sources?.consulted || []).length > 0 ? (
             <p className="bn-note">
@@ -1669,7 +1802,38 @@ function NodeDetail({
         <>
           <p className="bn-rules-hint">
             Detector scores by group · highest wins (unless L2 promotes RAG).
+            Expand a rule for the matched cue and checks.
           </p>
+          {(() => {
+            const guide =
+              routing?.debug?.score_source_guide ||
+              routing?.score_source_guide ||
+              null;
+            const guideRows = Array.isArray(guide)
+              ? guide.map((g) => ({
+                  key: g.id || g.label,
+                  label: g.label || g.id,
+                  value: g.meaning || g.why || "",
+                }))
+              : guide && typeof guide === "object"
+                ? Object.entries(guide).map(([k, v]) => ({
+                    key: k,
+                    label: k,
+                    value:
+                      typeof v === "string"
+                        ? v
+                        : v?.meaning || v?.why || JSON.stringify(v),
+                  }))
+                : [];
+            if (!guideRows.length) return null;
+            return (
+              <HardDecisionReveal
+                title="How hard scores are set"
+                summary="fixed awards"
+                rows={guideRows}
+              />
+            );
+          })()}
           {groupedScores.length > 0 ? (
             groupedScores.map((g) => (
               <div key={`score-g-${g.id}`} className="bn-score-group">
@@ -1758,9 +1922,32 @@ function NodeDetail({
               Skipped
               {arbiter?.reason ? ` — ${arbiter.reason}` : ""}.
             </Skipped>
-            {arbiter?.skip_detail ? (
-              <p className="bn-note">{arbiter.skip_detail}</p>
-            ) : null}
+            {(arbiter?.skip_detail || arbiter?.reason) && (
+              <HardDecisionReveal
+                title="Why arbiter was skipped"
+                summary={arbiter?.reason || "skipped"}
+                steps={[
+                  "L2 arbiter only runs when hard detectors leave a close / ambiguous call",
+                  "Clear hard-regex or sticky winners skip the LLM",
+                ]}
+                rows={[
+                  {
+                    key: "reason",
+                    label: "Gate",
+                    value: arbiter?.reason || "—",
+                  },
+                  ...(arbiter?.skip_detail
+                    ? [
+                        {
+                          key: "detail",
+                          label: "Detail",
+                          value: arbiter.skip_detail,
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            )}
           </>
         );
       }
@@ -1847,6 +2034,49 @@ function NodeDetail({
               </li>
             ) : null}
           </ul>
+          {(() => {
+            const esc =
+              trace?.escalation ||
+              trace?.debug?.escalation ||
+              routing?.debug?.escalation;
+            if (!esc) return null;
+            return (
+              <HardDecisionReveal
+                title="Why escalation"
+                summary={esc.category || "staff"}
+                steps={[
+                  "Hard regex cascade: safety → angry → hard_conflict → ask_human",
+                  "First match wins · fixed score 1.0 on the Rules cascade",
+                ]}
+                rows={[
+                  {
+                    key: "category",
+                    label: "Category",
+                    value: esc.category || "—",
+                  },
+                  {
+                    key: "priority",
+                    label: "Priority",
+                    value: esc.priority || "—",
+                  },
+                  ...(esc.cue
+                    ? [
+                        {
+                          key: "cue",
+                          label: "Matched cue",
+                          value: `«${esc.cue}»`,
+                        },
+                      ]
+                    : []),
+                  {
+                    key: "summary",
+                    label: "Staff summary",
+                    value: esc.summary || "—",
+                  },
+                ]}
+              />
+            );
+          })()}
         </>
       );
 
@@ -2142,6 +2372,35 @@ function NodeDetail({
                 </code>
               </li>
             </ul>
+          ) : null}
+          {(facts?.checks || []).length > 0 ? (
+            <HardDecisionReveal
+              title="Why open / closed"
+              summary={
+                facts.is_holiday
+                  ? "holiday"
+                  : facts.is_sunday
+                    ? "Sunday"
+                    : facts.weather_hint
+                      ? "weather"
+                      : "weekday window"
+              }
+              steps={[
+                "Resolve the asked date (or today)",
+                "Run holiday · Sunday · HKO same-day checks in order",
+                "First hard closure wins; else use open–close window",
+              ]}
+              rows={(facts.checks || []).map((c) => ({
+                key: c.id || c.label,
+                label: c.label || c.id,
+                value: [
+                  c.checked === false ? "skipped" : c.passed ? "yes" : "no",
+                  c.detail || "",
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              }))}
+            />
           ) : null}
         </>
       );
