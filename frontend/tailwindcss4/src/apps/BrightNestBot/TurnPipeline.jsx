@@ -3086,29 +3086,27 @@ export default function TurnPipeline({
     finalCheck,
   ]);
 
-  const fitView = useCallback(() => {
+  const applyFitBox = useCallback((box, biasY = 0.45) => {
     const el = viewportRef.current;
     if (!el) return false;
-    // Skip while the system pane is display:none (staff desk) — avoids zoom flash.
     if (el.offsetParent === null && el.getClientRects().length === 0) return false;
     const { width, height } = el.getBoundingClientRect();
     if (width < 120 || height < 120) return false;
-    const gw = FIT_FOCUS.maxX - FIT_FOCUS.minX;
-    const gh = FIT_FOCUS.maxY - FIT_FOCUS.minY;
-    const pad = 28;
+    const pad = 36;
+    const gw = Math.max(120, box.maxX - box.minX);
+    const gh = Math.max(120, box.maxY - box.minY);
     const nextZoom = Math.min(
       MAX_ZOOM,
       Math.max(
         MIN_ZOOM,
-        Math.min((width - pad) / gw, (height - pad) / gh) * 1.08
+        Math.min((width - pad) / gw, (height - pad) / gh) * 0.92
       )
     );
-    const cx = (FIT_FOCUS.minX + FIT_FOCUS.maxX) / 2;
-    // Bias upward so parent/lang sit near the top of the viewport
-    const cy = FIT_FOCUS.minY + (FIT_FOCUS.maxY - FIT_FOCUS.minY) * 0.38;
+    const cx = (box.minX + box.maxX) / 2;
+    const cy = box.minY + (box.maxY - box.minY) * biasY;
     const rawPan = {
       x: width / 2 - cx * nextZoom,
-      y: height * 0.28 - cy * nextZoom,
+      y: height / 2 - cy * nextZoom,
     };
     const nextPan = clampPan(rawPan, nextZoom, width, height);
     zoomRef.current = nextZoom;
@@ -3118,9 +3116,47 @@ export default function TurnPipeline({
     return true;
   }, []);
 
+  const fitView = useCallback(() => {
+    return applyFitBox(FIT_FOCUS, 0.38);
+  }, [applyFitBox]);
+
+  /** Frame lit nodes so Live / Pack are never off-canvas after a turn. */
+  const fitLitPath = useCallback(() => {
+    const ids = [...activePath].filter(
+      (id) =>
+        statusById[id] === "done" ||
+        statusById[id] === "empty" ||
+        id === "memory"
+    );
+    if (ids.length < 2) return fitView();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const id of ids) {
+      const n = LAYOUT[id];
+      if (!n) continue;
+      minX = Math.min(minX, n.x - n.w / 2 - 24);
+      maxX = Math.max(maxX, n.x + n.w / 2 + 24);
+      minY = Math.min(minY, n.y - n.h / 2 - 24);
+      maxY = Math.max(maxY, n.y + n.h / 2 + 24);
+    }
+    if (!Number.isFinite(minX)) return fitView();
+    return applyFitBox({ minX, minY, maxX, maxY }, 0.45);
+  }, [activePath, statusById, applyFitBox, fitView]);
+
   useEffect(() => {
     setActiveId(null);
   }, [turnKey]);
+
+  // After each answered turn, frame the lit path (keeps Live / Pack on screen).
+  useEffect(() => {
+    if (!trace || !turnKey) return undefined;
+    const t = window.setTimeout(() => {
+      fitLitPath();
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [turnKey, trace, fitLitPath]);
 
   // Fit once when the canvas has a real size; never on hide/show of staff desk.
   useEffect(() => {
