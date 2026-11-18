@@ -15,7 +15,7 @@ export const lifeEvents = [
     year: "2020",
     title: "UCLA",
     detail: "Graduated from UCLA with a bachelor in communication.",
-    gif: "/plaza/life-ucla.gif",
+    gif: "/plaza/life-ucla.gif?v=3",
   },
   {
     year: "2020–2022",
