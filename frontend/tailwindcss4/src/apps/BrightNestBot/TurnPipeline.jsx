@@ -2072,7 +2072,11 @@ function NodeDetail({
                 <code>
                   {facts.weather_hint
                     ? facts.weather_hint
-                    : facts.parse_debug?.weather_applied
+                    : facts.parse_debug?.weather_checked ||
+                        facts.parse_debug?.weather_resolved_same_day ||
+                        (facts.checks || []).some(
+                          (c) => c.id === "hko_weather" && c.checked
+                        )
                       ? "checked · clear"
                       : "not run"}
                 </code>
