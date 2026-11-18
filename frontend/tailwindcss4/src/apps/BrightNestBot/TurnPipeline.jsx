@@ -80,32 +80,32 @@ const LAYOUT = {
   rules: { x: 0, y: 240, w: 146, h: 48 },
   router: { x: 0, y: 360, w: 120, h: 120 },
   arbiter: { x: 210, y: 360, w: 118, h: 48 },
-  // Branch heads
-  fsm: { x: -360, y: 530, w: 148, h: 46 },
-  live: { x: -40, y: 530, w: 148, h: 52 },
-  rag: { x: 340, y: 530, w: 140, h: 46 },
+  // Branch heads — FSM far left; live centre; clear gap before calendar/HKO
+  fsm: { x: -440, y: 530, w: 148, h: 46 },
+  live: { x: 40, y: 530, w: 148, h: 52 },
+  rag: { x: 360, y: 530, w: 140, h: 46 },
   // FSM dialogue stack (far left — not shared with live APIs)
-  dst: { x: -360, y: 620, w: 160, h: 48 },
-  gate: { x: -360, y: 710, w: 160, h: 48 },
-  staffmail: { x: -360, y: 800, w: 160, h: 48 },
-  sheets: { x: -360, y: 1040, w: 160, h: 70 },
-  // Live API endpoints (left of live hub)
-  calendar: { x: -220, y: 640, w: 142, h: 52 },
-  hko: { x: -220, y: 740, w: 142, h: 52 },
+  dst: { x: -440, y: 620, w: 160, h: 48 },
+  gate: { x: -440, y: 710, w: 160, h: 48 },
+  staffmail: { x: -440, y: 800, w: 160, h: 48 },
+  sheets: { x: -440, y: 1040, w: 160, h: 70 },
+  // Live API endpoints left of live hub, well clear of FSM column
+  calendar: { x: -90, y: 640, w: 142, h: 52 },
+  hko: { x: -90, y: 780, w: 142, h: 52 },
   // RAG retrieve arm (right) — clear of live→pack corridor
-  dense: { x: 240, y: 640, w: 130, h: 70 },
-  sparse: { x: 460, y: 640, w: 130, h: 70 },
-  fuse: { x: 350, y: 790, w: 168, h: 50 },
-  chroma: { x: 350, y: 890, w: 148, h: 70 },
-  rewrite: { x: 350, y: 990, w: 152, h: 48 },
-  llm: { x: 40, y: 1090, w: 156, h: 52 },
-  answer: { x: 40, y: 1200, w: 156, h: 42 },
+  dense: { x: 260, y: 640, w: 130, h: 70 },
+  sparse: { x: 480, y: 640, w: 130, h: 70 },
+  fuse: { x: 370, y: 790, w: 168, h: 50 },
+  chroma: { x: 370, y: 890, w: 148, h: 70 },
+  rewrite: { x: 370, y: 990, w: 152, h: 48 },
+  llm: { x: 60, y: 1090, w: 156, h: 52 },
+  answer: { x: 60, y: 1200, w: 156, h: 42 },
 };
 
 /** Corridor X between FSM column and centre (FSM/DST → LLM). */
-const FSM_LLM_X = -200;
+const FSM_LLM_X = -260;
 /** Far-left gutter — elbows around the FSM stack without crossing boxes. */
-const LIVE_GUTTER_X = -520;
+const LIVE_GUTTER_X = -580;
 /** Corridor under live APIs → channel pack (below dense/sparse labels). */
 const LIVE_PACK_Y = 790;
 const ARROW_SIZE = 11;
@@ -151,9 +151,9 @@ const EDGES = [
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -560, minY: -28, maxX: 640, maxY: 1280 };
+const WORLD = { minX: -620, minY: -28, maxX: 660, maxY: 1280 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
-const FIT_FOCUS = { minX: -280, minY: -24, maxX: 280, maxY: 520 };
+const FIT_FOCUS = { minX: -300, minY: -24, maxX: 300, maxY: 520 };
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const PAN_MARGIN = 72;
@@ -560,17 +560,23 @@ function edgeGeometry(fromId, toId) {
     const e = nodeAnchor("router", "right");
     pts = [s, { x: s.x, y: e.y }, e];
   } else if (fromId === "live" && toId === "calendar") {
-    pts = [nodeAnchor("live", "left"), nodeAnchor("calendar", "top")];
+    // Short hop into calendar from the right — no shared vertical with HKO
+    pts = [nodeAnchor("live", "left"), nodeAnchor("calendar", "right")];
   } else if (fromId === "live" && toId === "hko") {
+    // Drop below calendar, then into HKO from the right — never through calendar
     const s = nodeAnchor("live", "left");
-    const e = nodeAnchor("hko", "top");
-    pts = [s, { x: e.x, y: s.y }, e];
+    const e = nodeAnchor("hko", "right");
+    const cal = LAYOUT.calendar;
+    const underY = cal.y + cal.h / 2 + 22;
+    pts = [s, { x: s.x, y: underY }, { x: e.x, y: underY }, e];
   } else if (fromId === "calendar" && toId === "live") {
     pts = [nodeAnchor("calendar", "right"), nodeAnchor("live", "left")];
   } else if (fromId === "hko" && toId === "live") {
     const s = nodeAnchor("hko", "right");
     const e = nodeAnchor("live", "left");
-    pts = [s, { x: s.x, y: e.y }, e];
+    const cal = LAYOUT.calendar;
+    const underY = cal.y + cal.h / 2 + 22;
+    pts = [s, { x: s.x, y: underY }, { x: e.x, y: underY }, e];
   } else if (fromId === "fsm" && toId === "dst") {
     pts = [nodeAnchor("fsm", "bottom"), nodeAnchor("dst", "top")];
   } else if (fromId === "fsm" && toId === "gate") {
@@ -2374,19 +2380,22 @@ function NodeDetail({
       );
     }
 
-    case "rag":
-      if (path !== "rag") {
-        return (
-          <Skipped>
-            RAG path not taken
-            {enrichMode ? " (FSM may still enrich via hybrid retrieve)." : "."}
-          </Skipped>
-        );
+    case "rag": {
+      const retrieveRan =
+        path === "rag" ||
+        enrichMode ||
+        hits.length ||
+        rag?.hybrid ||
+        rag?.hybrid_pass1;
+      if (!retrieveRan) {
+        return <Skipped>Retrieve arm idle this turn.</Skipped>;
       }
       return (
         <>
           <p className="bn-rules-hint">
-            Retrieve → generate · Dense ∥ Sparse → pack → pass 1 → grade.
+            {path === "live" || (enrichMode && path !== "rag")
+              ? "KB enrich retrieve is active · same Dense ∥ Sparse → Channel pack arm (live facts stay privileged)."
+              : "Retrieve → generate · Dense ∥ Sparse → pack → grade."}
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -2426,6 +2435,7 @@ function NodeDetail({
           </ul>
         </>
       );
+    }
 
     case "live": {
       if (!(path === "live" || liveOn)) {
