@@ -98,7 +98,6 @@ const LAYOUT = {
   fuse: { x: 350, y: 790, w: 168, h: 50 },
   chroma: { x: 350, y: 890, w: 148, h: 70 },
   rewrite: { x: 350, y: 990, w: 152, h: 48 },
-  chroma2: { x: 520, y: 1090, w: 140, h: 70 },
   llm: { x: 40, y: 1090, w: 156, h: 52 },
   answer: { x: 40, y: 1200, w: 156, h: 42 },
 };
@@ -143,8 +142,8 @@ const EDGES = [
   { id: "e-sparse-fuse", from: "sparse", to: "fuse" },
   { id: "e-fuse-chroma", from: "fuse", to: "chroma" },
   { id: "e-chroma-rewrite", from: "chroma", to: "rewrite" },
-  { id: "e-rewrite-chroma2", from: "rewrite", to: "chroma2", dashed: true },
-  { id: "e-chroma2-llm", from: "chroma2", to: "llm", dashed: true },
+  // Corrective loop: rewrite → same RAG hub (2nd iteration), not a 2nd KB
+  { id: "e-rewrite-rag", from: "rewrite", to: "rag", dashed: true },
   { id: "e-rewrite-llm", from: "rewrite", to: "llm" },
   { id: "e-live-llm", from: "live", to: "llm", dashed: true },
   { id: "e-live-fuse", from: "live", to: "fuse", dashed: true },
@@ -152,7 +151,7 @@ const EDGES = [
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -560, minY: -28, maxX: 620, maxY: 1280 };
+const WORLD = { minX: -560, minY: -28, maxX: 640, maxY: 1280 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
 const FIT_FOCUS = { minX: -280, minY: -24, maxX: 280, maxY: 520 };
 const MIN_ZOOM = 0.5;
@@ -639,12 +638,12 @@ function edgeGeometry(fromId, toId) {
     const s = nodeAnchor("rewrite", "bottom");
     const e = nodeAnchor("llm", "right");
     pts = [s, { x: s.x, y: e.y }, e];
-  } else if (fromId === "rewrite" && toId === "chroma2") {
+  } else if (fromId === "rewrite" && toId === "rag") {
+    // Loop back to RAG for a second retrieve on the same indexes
     const s = nodeAnchor("rewrite", "right");
-    const e = nodeAnchor("chroma2", "top");
-    pts = [s, { x: e.x, y: s.y }, e];
-  } else if (fromId === "chroma2" && toId === "llm") {
-    pts = [nodeAnchor("chroma2", "left"), nodeAnchor("llm", "right")];
+    const e = nodeAnchor("rag", "right");
+    const loopX = Math.max(s.x, e.x) + 100;
+    pts = [s, { x: loopX, y: s.y }, { x: loopX, y: e.y }, e];
   } else if (fromId === "live" && toId === "fuse") {
     // Same Y as Channel pack — short horizontal under dense/sparse, no hop over labels
     const s = nodeAnchor("live", "right");
@@ -1045,6 +1044,86 @@ function ChannelPoolPanel({ title, query, rows, emptyHint, meta, highlightTokens
         </ul>
       )}
     </>
+  );
+}
+
+/** Pass-1 vs Pass-2 views when CRAG rewrite retried the same retrieve arm. */
+function retrievalPassViews(rag, inbound) {
+  const retried = Boolean(rag?.query_rewrite?.retried);
+  const kept = rag?.final_pass || rag?.query_rewrite?.kept || "pass1";
+  const pass1Hybrid =
+    rag?.hybrid_pass1 || (!retried ? rag?.hybrid : null) || null;
+  const pass2Hybrid =
+    rag?.hybrid_pass2 ||
+    (retried && kept === "pass2" ? rag?.hybrid : null) ||
+    null;
+  const passes = [
+    {
+      id: "pass1",
+      label: "Pass 1 · raw",
+      query: rag?.pass1_query || inbound || "",
+      hybrid: pass1Hybrid,
+      hits: rag?.pass1_hits || [],
+      kept: kept === "pass1",
+    },
+  ];
+  if (retried) {
+    passes.push({
+      id: "pass2",
+      label: "Pass 2 · rewrite",
+      query:
+        rag?.pass2_query ||
+        rag?.query_rewrite?.pass2_query ||
+        rag?.query_rewrite?.query ||
+        "",
+      hybrid: pass2Hybrid,
+      hits: rag?.pass2_hits || [],
+      kept: kept === "pass2",
+    });
+  }
+  return { retried, kept, passes };
+}
+
+function RetrievalPassTabs({ rag, inbound, defaultPass, children }) {
+  const { retried, kept, passes } = retrievalPassViews(rag, inbound);
+  const initial =
+    defaultPass ||
+    (retried && kept === "pass2" ? "pass2" : "pass1");
+  const [tab, setTab] = useState(initial);
+  useEffect(() => {
+    setTab(initial);
+  }, [initial, rag?.pass1_query, rag?.pass2_query, rag?.query_rewrite?.retried]);
+
+  const active = passes.find((p) => p.id === tab) || passes[0];
+  if (!retried) {
+    return children(active, { retried: false, kept, passes });
+  }
+  return (
+    <div className="bn-pass-tabs-wrap">
+      <div className="bn-pass-tabs" role="tablist" aria-label="Retrieve pass">
+        {passes.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === p.id}
+            className={`bn-pass-tab${tab === p.id ? " is-active" : ""}${
+              p.kept ? " is-kept" : ""
+            }`}
+            onClick={() => setTab(p.id)}
+          >
+            {p.label}
+            {p.kept ? <em> · kept</em> : null}
+          </button>
+        ))}
+      </div>
+      <p className="bn-note bn-pass-tab-note">
+        Same Chroma + BM25 indexes · {tab === "pass2" ? "rewritten" : "raw"}{" "}
+        query
+        {active?.kept ? " · this pass was kept for generate" : ""}.
+      </p>
+      {children(active, { retried: true, kept, passes })}
+    </div>
   );
 }
 
@@ -1617,7 +1696,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Grade pass-1 · rewrite + pass-2 only if weak (max 1 retry).
+            Grade pass-1 · if weak, rewrite and loop back to RAG for a second
+            retrieve on the same Chroma + BM25 (max 1 retry).
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -2562,235 +2642,274 @@ function NodeDetail({
     }
 
     case "dense": {
-      const hy = rag?.hybrid;
-      const ran = path === "rag" || enrichMode || hy || hits.length;
+      const ran =
+        path === "rag" ||
+        enrichMode ||
+        rag?.hybrid ||
+        rag?.hybrid_pass1 ||
+        hits.length;
       if (!ran) return <Skipped>Dense retrieve did not run.</Skipped>;
       return (
-        <ChannelPoolPanel
-          title="Dense · Chroma (embeddings)"
-          query={rag?.pass1_query || inbound}
-          rows={hy?.dense_top || []}
-          meta={{
-            Pool: hy?.dense_count ?? "—",
-            Index: rag?.index_size ?? "—",
-            Mode: rag?.embedding_mode || "—",
+        <RetrievalPassTabs rag={rag} inbound={inbound}>
+          {(pass) => {
+            const hy = pass.hybrid || {};
+            return (
+              <ChannelPoolPanel
+                title="Dense · Chroma (embeddings)"
+                query={pass.query}
+                rows={hy.dense_top || []}
+                meta={{
+                  Pool: hy.dense_count ?? "—",
+                  Index: rag?.index_size ?? "—",
+                  Mode: rag?.embedding_mode || "—",
+                  Pass: pass.id,
+                }}
+                emptyHint={
+                  !pass.hybrid && rag?.query_rewrite?.retried
+                    ? "Pass-1 dense pool not in this payload — redeploy API for hybrid_pass1/2."
+                    : hy.mode && !isChannelPack(hy)
+                      ? `Dense-only / fallback: ${hy.reason || hy.mode}`
+                      : "No dense pool rows in debug payload."
+                }
+              />
+            );
           }}
-          emptyHint={
-            hy?.mode && !isChannelPack(hy)
-              ? `Dense-only / fallback: ${hy.reason || hy.mode}`
-              : "No dense pool rows in debug payload."
-          }
-        />
+        </RetrievalPassTabs>
       );
     }
 
     case "sparse": {
-      const hy = rag?.hybrid;
-      const ran = path === "rag" || enrichMode || hy || hits.length;
+      const ran =
+        path === "rag" ||
+        enrichMode ||
+        rag?.hybrid ||
+        rag?.hybrid_pass1 ||
+        hits.length;
       if (!ran) return <Skipped>Sparse retrieve did not run.</Skipped>;
       return (
-        <ChannelPoolPanel
-          title="Sparse · BM25 (keyword / CJK tokens)"
-          query={rag?.pass1_query || inbound}
-          rows={hy?.sparse_top || []}
-          meta={{
-            Pool: hy?.sparse_count ?? "—",
-            Index: rag?.sparse_index_size ?? "—",
+        <RetrievalPassTabs rag={rag} inbound={inbound}>
+          {(pass) => {
+            const hy = pass.hybrid || {};
+            return (
+              <ChannelPoolPanel
+                title="Sparse · BM25 (keyword / CJK tokens)"
+                query={pass.query}
+                rows={hy.sparse_top || []}
+                meta={{
+                  Pool: hy.sparse_count ?? "—",
+                  Index: rag?.sparse_index_size ?? "—",
+                  Pass: pass.id,
+                }}
+                highlightTokens
+                emptyHint={
+                  !pass.hybrid && rag?.query_rewrite?.retried
+                    ? "Pass-1 BM25 pool not in this payload — redeploy API for hybrid_pass1/2."
+                    : hy.mode && !isChannelPack(hy)
+                      ? `BM25 skipped: ${hy.reason || hy.mode}`
+                      : "No BM25 pool rows in debug payload."
+                }
+              />
+            );
           }}
-          highlightTokens
-          emptyHint={
-            hy?.mode && !isChannelPack(hy)
-              ? `BM25 skipped: ${hy.reason || hy.mode}`
-              : "No BM25 pool rows in debug payload."
-          }
-        />
+        </RetrievalPassTabs>
       );
     }
 
     case "fuse": {
-      const hy = rag?.hybrid;
-      const ran = path === "rag" || enrichMode || hy || hits.length;
-      const pass1 = rag?.pass1_hits || hits;
+      const ran =
+        path === "rag" ||
+        enrichMode ||
+        rag?.hybrid ||
+        rag?.hybrid_pass1 ||
+        hits.length;
       if (!ran) return <Skipped>Channel pack did not run.</Skipped>;
-      if (hy && !isChannelPack(hy)) {
-        return (
-          <>
-            <p className="bn-rules-hint">Single-channel fallback this turn.</p>
-            <ul className="bn-fact-list">
-              <li>
-                <span>Mode</span>
-                <code>{hy.mode || "—"}</code>
-              </li>
-              <li>
-                <span>Reason</span>
-                <code>{hy.reason || "—"}</code>
-              </li>
-            </ul>
-          </>
-        );
-      }
-      const preview = hy?.packed_preview || hy?.fused_preview || [];
-      const keepRows =
-        preview.length > 0
-          ? preview.slice(0, 8).map((row) => ({
-              key: `fp-${row.rank}-${row.source}`,
-              rank: row.rank,
-              title: row.title || row.source || "chunk",
-              why: [
-                row.slot || null,
-                row.dense_rank != null ? `dense #${row.dense_rank}` : null,
-                row.sparse_rank != null ? `BM25 #${row.sparse_rank}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · "),
-            }))
-          : pass1.map((h, i) => ({
-              key: `kept-${h.source}-${i}`,
-              rank: h.rank ?? i + 1,
-              title: h.title || h.source || "hit",
-              why: [
-                h.pack?.slot || h.rerank?.why || "packed",
-                h.fusion?.dense_rank != null
-                  ? `dense #${h.fusion.dense_rank}`
-                  : null,
-                h.fusion?.sparse_rank != null
-                  ? `BM25 #${h.fusion.sparse_rank}`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" · "),
-            }));
-      const keepK = rag?.top_k ?? hy?.keep_k ?? (pass1.length || 5);
-      const denseN = hy?.dense_n ?? 3;
-      const denseKept = hy?.dense_kept ?? 0;
-      const sparseAdded = hy?.sparse_added ?? 0;
-      const sparsePool = hy?.sparse_count ?? 0;
-      const dupes = hy?.skipped_dupes ?? 0;
-      let packWhy = "";
-      if (sparseAdded === 0 && denseKept >= Math.min(denseN, keepK)) {
-        packWhy = `Why only dense: keep=${keepK} and dense already filled ranks 1–${Math.min(
-          denseN,
-          keepK
-        )} from its pool of ${hy?.dense_count ?? "—"}. BM25 still retrieved ${sparsePool} candidates${
-          dupes ? ` (${dupes} already in the dense set)` : ""
-        }, but no empty slots remained to fill.`;
-      } else if (sparseAdded > 0) {
-        packWhy = `Dense took ranks 1–${denseKept}; BM25 filled ${sparseAdded} remaining slot${
-          sparseAdded === 1 ? "" : "s"
-        } with non-duplicate keyword hits.`;
-      }
       return (
-        <>
-          <p className="bn-rules-hint">
-            <strong>Channel pack</strong> · keep {keepK} · take dense top{" "}
-            {denseN}, then BM25 only if slots remain
-          </p>
-          <ul className="bn-fact-list">
-            <li>
-              <span>Dense kept</span>
-              <code>
-                {denseKept} of top {denseN} (pool {hy?.dense_count ?? "—"})
-              </code>
-            </li>
-            <li>
-              <span>BM25 added</span>
-              <code>
-                {sparseAdded} (pool {sparsePool}
-                {dupes ? ` · ${dupes} dupes skipped` : ""})
-              </code>
-            </li>
-            <li>
-              <span>In pack</span>
-              <code>
-                both {hy?.both ?? 0} · dense-only {hy?.dense_only ?? 0} ·
-                BM25-only {hy?.sparse_only ?? 0}
-              </code>
-            </li>
-          </ul>
-          {packWhy ? <p className="bn-note">{packWhy}</p> : null}
-          {keepRows.length ? (
-            <>
-              <p className="bn-rules-hint">Keep order (→ pass 1)</p>
-              <ul className="bn-fact-list">
-                {keepRows.map((row) => (
-                  <li key={row.key}>
-                    <span>
-                      #{row.rank} {row.title}
-                    </span>
-                    <code>{row.why || "packed"}</code>
+        <RetrievalPassTabs rag={rag} inbound={inbound}>
+          {(pass) => {
+            const hy = pass.hybrid || {};
+            if (hy.mode && !isChannelPack(hy)) {
+              return (
+                <>
+                  <p className="bn-rules-hint">
+                    Single-channel fallback this pass.
+                  </p>
+                  <ul className="bn-fact-list">
+                    <li>
+                      <span>Query</span>
+                      <code>{pass.query || "—"}</code>
+                    </li>
+                    <li>
+                      <span>Mode</span>
+                      <code>{hy.mode || "—"}</code>
+                    </li>
+                    <li>
+                      <span>Reason</span>
+                      <code>{hy.reason || "—"}</code>
+                    </li>
+                  </ul>
+                </>
+              );
+            }
+            const preview = hy.packed_preview || hy.fused_preview || [];
+            const keepHits = pass.hits?.length ? pass.hits : [];
+            const keepRows =
+              preview.length > 0
+                ? preview.slice(0, 8).map((row) => ({
+                    key: `fp-${pass.id}-${row.rank}-${row.source}`,
+                    rank: row.rank,
+                    title: row.title || row.source || "chunk",
+                    why: [
+                      row.slot || null,
+                      row.dense_rank != null
+                        ? `dense #${row.dense_rank}`
+                        : null,
+                      row.sparse_rank != null
+                        ? `BM25 #${row.sparse_rank}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · "),
+                  }))
+                : keepHits.map((h, i) => ({
+                    key: `kept-${pass.id}-${h.source}-${i}`,
+                    rank: h.rank ?? i + 1,
+                    title: h.title || h.source || "hit",
+                    why: [
+                      h.pack?.slot || h.rerank?.why || "packed",
+                      h.fusion?.dense_rank != null
+                        ? `dense #${h.fusion.dense_rank}`
+                        : null,
+                      h.fusion?.sparse_rank != null
+                        ? `BM25 #${h.fusion.sparse_rank}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · "),
+                  }));
+            const keepK =
+              rag?.top_k ?? hy.keep_k ?? (keepHits.length || 5);
+            const denseN = hy.dense_n ?? 3;
+            const denseKept = hy.dense_kept ?? 0;
+            const sparseAdded = hy.sparse_added ?? 0;
+            const sparsePool = hy.sparse_count ?? 0;
+            const dupes = hy.skipped_dupes ?? 0;
+            let packWhy = "";
+            if (sparseAdded === 0 && denseKept >= Math.min(denseN, keepK)) {
+              packWhy = `Why only dense: keep=${keepK} and dense already filled ranks 1–${Math.min(
+                denseN,
+                keepK
+              )} from its pool of ${hy.dense_count ?? "—"}. BM25 still retrieved ${sparsePool} candidates${
+                dupes ? ` (${dupes} already in the dense set)` : ""
+              }, but no empty slots remained to fill.`;
+            } else if (sparseAdded > 0) {
+              packWhy = `Dense took ranks 1–${denseKept}; BM25 filled ${sparseAdded} remaining slot${
+                sparseAdded === 1 ? "" : "s"
+              } with non-duplicate keyword hits.`;
+            }
+            return (
+              <>
+                <p className="bn-rules-hint">
+                  <strong>Channel pack</strong> · keep {keepK} · dense top{" "}
+                  {denseN}, then BM25 if slots remain
+                </p>
+                <ul className="bn-fact-list">
+                  <li>
+                    <span>Query</span>
+                    <code>{pass.query || "—"}</code>
                   </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-        </>
+                  <li>
+                    <span>Dense kept</span>
+                    <code>
+                      {denseKept} of top {denseN} (pool{" "}
+                      {hy.dense_count ?? "—"})
+                    </code>
+                  </li>
+                  <li>
+                    <span>BM25 added</span>
+                    <code>
+                      {sparseAdded} (pool {sparsePool}
+                      {dupes ? ` · ${dupes} dupes skipped` : ""})
+                    </code>
+                  </li>
+                  <li>
+                    <span>In pack</span>
+                    <code>
+                      both {hy.both ?? 0} · dense-only {hy.dense_only ?? 0} ·
+                      BM25-only {hy.sparse_only ?? 0}
+                    </code>
+                  </li>
+                </ul>
+                {packWhy ? <p className="bn-note">{packWhy}</p> : null}
+                {keepRows.length ? (
+                  <>
+                    <p className="bn-rules-hint">
+                      Keep order ({pass.label})
+                    </p>
+                    <ul className="bn-fact-list">
+                      {keepRows.map((row) => (
+                        <li key={row.key}>
+                          <span>
+                            #{row.rank} {row.title}
+                          </span>
+                          <code>{row.why || "packed"}</code>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : !pass.hybrid ? (
+                  <Skipped>
+                    Channel-pack preview for this pass not in payload.
+                  </Skipped>
+                ) : null}
+              </>
+            );
+          }}
+        </RetrievalPassTabs>
       );
     }
 
     case "chroma": {
-      const pass1 = rag?.pass1_hits || hits;
-      if (!(pass1.length || enrichMode || path === "rag")) {
-        return <Skipped>Pass-1 KB retrieve did not run.</Skipped>;
+      const hasAny =
+        (rag?.pass1_hits || hits).length ||
+        (rag?.pass2_hits || []).length ||
+        enrichMode ||
+        path === "rag";
+      if (!hasAny) {
+        return <Skipped>KB retrieve did not run.</Skipped>;
       }
       return (
-        <>
-          <p className="bn-rules-hint">
-            Pass 1 · raw parent message after channel pack.
-          </p>
-          <ChromaHitsPanel
-            title={
-              enrichMode
-                ? "Pass 1 · fused enrich hits"
-                : "Pass 1 · fused raw-query hits"
-            }
-            query={rag?.pass1_query || inbound}
-            hits={pass1}
-            rag={rag}
-            hybrid={rag?.hybrid}
-            stripExtra={
-              <>
-                <span>
-                  pool {rag?.pool_returned ?? "—"}/{rag?.pool_k ?? "—"}
-                </span>
-                <span>top_k {rag?.top_k ?? "—"}</span>
-                <span>chroma {rag?.index_size ?? "—"}</span>
-                <span>BM25 {rag?.sparse_index_size ?? "—"}</span>
-              </>
-            }
-            emptyHint="Pass 1 returned no chunks."
-          />
-        </>
-      );
-    }
-
-    case "chroma2": {
-      const retried = Boolean(rag?.query_rewrite?.retried);
-      const pass2 = rag?.pass2_hits || [];
-      if (!(path === "rag" || enrichMode || hits.length)) {
-        return <Skipped>RAG path not taken.</Skipped>;
-      }
-      if (!retried) {
-        return (
-          <Skipped>
-            Pass 2 not fired — pass-1 grade was enough (or no rewrite).
-          </Skipped>
-        );
-      }
-      return (
-        <>
-          <p className="bn-rules-hint">
-            Pass 2 · rewritten query (kept:{" "}
-            {rag?.final_pass || rag?.query_rewrite?.kept || "—"}).
-          </p>
-          <ChromaHitsPanel
-            title="Pass 2 · hybrid rewritten-query retrieve"
-            query={rag?.pass2_query || rag?.query_rewrite?.query}
-            hits={pass2}
-            rag={rag}
-            hybrid={rag?.hybrid}
-            emptyHint="Pass 2 fired but returned no chunks."
-          />
-        </>
+        <RetrievalPassTabs rag={rag} inbound={inbound}>
+          {(pass) => (
+            <>
+              <p className="bn-rules-hint">
+                Ranked keep set after channel pack · {pass.label}
+                {pass.kept ? " (kept for generate)" : ""}.
+              </p>
+              <ChromaHitsPanel
+                title={
+                  enrichMode
+                    ? `${pass.label} · fused enrich hits`
+                    : `${pass.label} · fused hits`
+                }
+                query={pass.query}
+                hits={pass.hits}
+                rag={rag}
+                hybrid={pass.hybrid || rag?.hybrid}
+                stripExtra={
+                  <>
+                    <span>
+                      pool {rag?.pool_returned ?? "—"}/{rag?.pool_k ?? "—"}
+                    </span>
+                    <span>top_k {rag?.top_k ?? "—"}</span>
+                    <span>chroma {rag?.index_size ?? "—"}</span>
+                    <span>BM25 {rag?.sparse_index_size ?? "—"}</span>
+                  </>
+                }
+                emptyHint={`${pass.label} returned no chunks.`}
+              />
+            </>
+          )}
+        </RetrievalPassTabs>
       );
     }
 
@@ -3450,12 +3569,16 @@ export default function TurnPipeline({
       },
       {
         id: "chroma",
-        label: "Ranked · pass 1",
+        label: rag?.query_rewrite?.retried
+          ? "Ranked · dual pass"
+          : "Ranked · pass 1",
         kind: "store",
         shape: "cylinder",
         status: !hasTrace
           ? "idle"
-          : (rag?.pass1_hits || hits).length || rag?.pass1_hit_count
+          : (rag?.pass1_hits || hits).length ||
+              rag?.pass1_hit_count ||
+              (rag?.pass2_hits || []).length
             ? "done"
             : path === "rag" || enrichMode
               ? "empty"
@@ -3472,21 +3595,6 @@ export default function TurnPipeline({
             ? "skipped"
             : rag?.retrieval_grade || rag?.query_rewrite
               ? "done"
-              : "skipped",
-      },
-      {
-        id: "chroma2",
-        label: "KB · pass 2",
-        kind: "store",
-        shape: "cylinder",
-        status: !hasTrace
-          ? "idle"
-          : !(path === "rag" || enrichMode || hits.length)
-            ? "skipped"
-            : rag?.query_rewrite?.retried
-              ? (rag?.pass2_hits || []).length
-                ? "done"
-                : "empty"
               : "skipped",
       },
       {
@@ -3559,7 +3667,8 @@ export default function TurnPipeline({
     ]);
     if (history?.enabled === false) lit.delete("memory");
     if (arbiter?.called) lit.add("arbiter");
-    // Retrieve arm: dense ∥ sparse → pack → pass 1 → grade (pure RAG or live enrich).
+    // Retrieve arm: dense ∥ sparse → pack → ranked → grade
+    // (rewrite loops back to RAG — same indexes, 2nd iteration via tabs).
     const lightRetrieve = () => {
       lit.add("rag");
       lit.add("dense");
@@ -3567,7 +3676,6 @@ export default function TurnPipeline({
       lit.add("fuse");
       lit.add("chroma");
       lit.add("rewrite");
-      if (rag?.query_rewrite?.retried) lit.add("chroma2");
     };
     if (path === "fsm") {
       lit.add("fsm");
@@ -3675,10 +3783,11 @@ export default function TurnPipeline({
     if (on("chroma") && on("rewrite")) {
       link("chroma", "rewrite", "e-chroma-rewrite");
     }
-    if (on("rewrite") && on("chroma2") && rag?.query_rewrite?.retried) {
-      link("rewrite", "chroma2", "e-rewrite-chroma2");
-      if (on("chroma2") && on("llm")) link("chroma2", "llm", "e-chroma2-llm");
-    } else if (on("rewrite") && on("llm")) {
+    if (on("rewrite") && on("rag") && rag?.query_rewrite?.retried) {
+      // Corrective loop — second retrieve on the same RAG arm
+      link("rewrite", "rag", "e-rewrite-rag");
+    }
+    if (on("rewrite") && on("llm")) {
       link("rewrite", "llm", "e-rewrite-llm");
     }
     // Live facts inject into pack; still a retrieve arm, not a RAG bypass.
@@ -3760,12 +3869,12 @@ export default function TurnPipeline({
           ? String(rag.retrieval_grade.grade)
           : "grade") +
         (rankedPassLabel(pass1[0]) ? ` · ${rankedPassLabel(pass1[0])}` : ""),
-      "e-rewrite-chroma2": rag?.query_rewrite?.retried ? "retry ×1" : "",
-      "e-rewrite-llm": rag?.query_rewrite?.retried ? "" : "no retry",
-      "e-chroma2-llm":
-        rag?.query_rewrite?.retried && rankedPassLabel(rag?.pass2_hits?.[0])
-          ? rankedPassLabel(rag.pass2_hits[0])
-          : "",
+      "e-rewrite-rag": rag?.query_rewrite?.retried
+        ? "2nd retrieve · same KB"
+        : "",
+      "e-rewrite-llm": rag?.query_rewrite?.retried
+        ? `kept ${rag?.final_pass || rag?.query_rewrite?.kept || "pass2"}`
+        : "no retry",
       "e-live-fuse":
         enrichMode || (path === "live" && (hits.length || rag?.hybrid))
           ? "facts → pack"

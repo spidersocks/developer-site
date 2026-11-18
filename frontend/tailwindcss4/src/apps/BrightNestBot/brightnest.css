@@ -831,6 +831,44 @@ code,
   padding-bottom: 10px;
 }
 
+/* Pass 1 / Pass 2 tabs inside Dense · Sparse · Pack · Ranked */
+.bn-pass-tabs-wrap {
+  margin-top: 4px;
+}
+.bn-pass-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+}
+.bn-pass-tab {
+  appearance: none;
+  border: 1px solid rgba(18, 169, 188, 0.28);
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--teal-ink);
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.bn-pass-tab em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--teal);
+}
+.bn-pass-tab.is-active {
+  background: rgba(18, 169, 188, 0.14);
+  border-color: rgba(18, 169, 188, 0.55);
+}
+.bn-pass-tab.is-kept:not(.is-active) {
+  border-style: dashed;
+}
+.bn-pass-tab-note {
+  margin: 0 0 10px;
+}
+
 /* Compact expandable used inside inspector node modals */
 .bn-reveal.bn-reveal-compact {
   margin-top: 10px;
