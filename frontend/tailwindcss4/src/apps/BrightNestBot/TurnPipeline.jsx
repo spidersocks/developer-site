@@ -255,7 +255,7 @@ const SCORE_GROUPS = [
   {
     id: "tools",
     title: "Tool / dialogue",
-    blurb: "Booking, cancel, escalate — sticky FSM or seat tools",
+    blurb: "Booking, cancel, escalate",
     routes: [
       "staff_escalation",
       "cancel_dialogue",
@@ -266,7 +266,7 @@ const SCORE_GROUPS = [
   {
     id: "live",
     title: "Live info",
-    blurb: "Hours calendar, typhoon / HKO — structured facts, not FAQ prose",
+    blurb: "Hours · typhoon / HKO",
     routes: [
       "severe_weather",
       "opening_hours",
@@ -276,7 +276,7 @@ const SCORE_GROUPS = [
   {
     id: "rag",
     title: "RAG default",
-    blurb: "No tool owns the turn — retrieve centre Markdown",
+    blurb: "Centre Markdown retrieve",
     routes: ["rag", "off_domain"],
   },
 ];
@@ -827,8 +827,7 @@ function SlotDstCard({ title, dst, regexNote }) {
     <div className="bn-dst-card">
       <div className="bn-match-summary-kicker">{title}</div>
       <p className="bn-rules-hint" style={{ marginTop: 4 }}>
-        Regex / detectors first, then cheap LLM structured JSON for missing
-        slots. FSM still owns asks + tools.
+        Detectors first · cheap JSON for missing slots.
       </p>
       {how.length ? (
         <ol className="bn-select-steps">
@@ -1204,10 +1203,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Detects <code>en</code> / <code>zh-HK</code> / <code>zh-CN</code>{" "}
-            from the parent text (CJK ratio + traditional/simplified cues). That
-            code filters Chroma retrieve to matching chunks; if none hit, retrieve
-            retries without the language filter.
+            Language from parent text · filters KB retrieve (<code>en</code> /{" "}
+            <code>zh-HK</code> / <code>zh-CN</code>).
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -1283,9 +1280,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Grade pass-1 chunks (Correct / Ambiguous / Incorrect). Only if not
-            Correct and prior chat exists: cheap-rewrite once, then optional
-            pass-2 retrieve. CRAG-lite · max 1 retry.
+            Grade pass-1 · rewrite + pass-2 only if weak (max 1 retry).
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -1380,10 +1375,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Cascade selects a <strong>tool</strong> from the registry — not
-            LLM-first function calling every turn.{" "}
             {tools.blurb ||
-              "Detectors pick tools in <1ms; cheap LLM only on ambiguous RAG turns."}
+              "Tool registry cascade · detectors first, cheap LLM only if needed."}
           </p>
           <MatchSummaryCard summary={matchSummary} />
           <ul className="bn-fact-list">
@@ -1465,7 +1458,7 @@ function NodeDetail({
           {(trace?.data_sources?.consulted || []).length > 0 ? (
             <div className="bn-score-group">
               <p className="bn-rules-hint">
-                <strong>Pulled from</strong> · live stores / APIs / indexes
+                <strong>Pulled from</strong>
               </p>
               <ul className="bn-fact-list">
                 {trace.data_sources.consulted.map((s) => (
@@ -1540,10 +1533,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            L1 detector awards (not RAG similarity), split by tool registry
-            groups: <strong>Tool / dialogue</strong> · <strong>Live info</strong>{" "}
-            · <strong>RAG default</strong>. Highest overall becomes the selected
-            tool unless L2 action_policy promotes a RAG miss.
+            Detector scores by group · highest wins (unless L2 promotes RAG).
           </p>
           {groupedScores.length > 0 ? (
             groupedScores.map((g) => (
@@ -1679,10 +1669,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Tool / sticky dialogue for <code>{route || "—"}</code>. Downstream
-            nodes own the LLM work: <em>DST · cheap JSON</em> (slots),{" "}
-            <em>Final check</em> (proceed / clarify / abort),{" "}
-            <em>Staff email</em> (inbox draft on escalate).
+            Tool / sticky dialogue · <code>{route || "—"}</code>. Slots on DST ·
+            gate on Final check.
           </p>
           <ul className="bn-fact-list">
             {trace?.booking?.stage ? (
@@ -1752,9 +1740,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            <strong>Preliminary · Final check</strong> — cheap JSON gate before
-            a book / cancel / escalate side-effect. Not the parent-facing
-            DashScope generate.
+            Final check · cheap JSON gate before book / cancel / escalate.
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -1795,19 +1781,12 @@ function NodeDetail({
       const wrote = Boolean(staffMessage || mailCalls.length);
       if (!wrote) {
         return (
-          <Skipped>
-            No staff-email draft this turn (not escalate, or final check
-            clarified / aborted).
-          </Skipped>
+          <Skipped>No staff-email draft this turn.</Skipped>
         );
       }
       return (
         <>
-          <p className="bn-rules-hint">
-            <strong>Staff email draft</strong> — cheap LLM writes the Mailbox /
-            boss email body. Parent still gets a template safety reply; inbox
-            write lands on Staff desk.
-          </p>
+          <p className="bn-rules-hint">Staff email draft for Mailbox.</p>
           <ul className="bn-fact-list">
             {staffMessage?.category ? (
               <li>
@@ -1880,11 +1859,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            <strong>Preliminary · Dialogue State Tracking</strong> — cheap
-            schema JSON after regex (not the parent-facing DashScope generate).
-            Merges only supported slots; FSM templates still ask for gaps and
-            commit books/cancels. Open the cards below for the JSON prompt /
-            response.
+            DST · cheap slot JSON after regex (not parent-facing generate).
           </p>
           {bookingDst?.called ? (
             <SlotDstCard
@@ -1921,10 +1896,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Retrieve → generate. The flowchart expands hybrid as{" "}
-            <strong>Dense ∥ Sparse → channel pack (3+2) → ranked pass 1</strong>,
-            then grade / optional rewrite → pass 2. Generation still sees the
-            parent’s wording + chat history.
+            Retrieve → generate · Dense ∥ Sparse → pack → pass 1 → grade.
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -1996,11 +1968,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Live feed — show where numbers came from (HKO API, hours calendar,
-            class-register CSV). Privileged over KB when present
-            {enrichMode
-              ? " — KB enrich continues via Pack · 3+2 (not the Dense/Sparse RAG arm)."
-              : "."}
+            Live facts (HKO, hours, register)
+            {enrichMode ? " · KB enrich via Pack" : ""}.
           </p>
           {consulted.length > 0 ? (
             <div className="bn-score-group">
@@ -2083,7 +2052,7 @@ function NodeDetail({
       if (!ran) return <Skipped>Dense retrieve did not run.</Skipped>;
       return (
         <ChannelPoolPanel
-          title="Dense channel · Chroma vector search (embeddings). Click a row to expand the chunk."
+          title="Dense · Chroma (embeddings)"
           query={rag?.pass1_query || inbound}
           rows={hy?.dense_top || []}
           meta={{
@@ -2106,7 +2075,7 @@ function NodeDetail({
       if (!ran) return <Skipped>Sparse retrieve did not run.</Skipped>;
       return (
         <ChannelPoolPanel
-          title="Sparse channel · in-process BM25 over the same KB rows. Click a row to expand; matched query tokens are highlighted."
+          title="Sparse · BM25 (keyword / CJK tokens)"
           query={rag?.pass1_query || inbound}
           rows={hy?.sparse_top || []}
           meta={{
@@ -2131,9 +2100,7 @@ function NodeDetail({
       if (hy && !isChannelPack(hy)) {
         return (
           <>
-            <p className="bn-rules-hint">
-              Channel pack not used this turn — fell back to a single channel.
-            </p>
+            <p className="bn-rules-hint">Single-channel fallback this turn.</p>
             <ul className="bn-fact-list">
               <li>
                 <span>Mode</span>
@@ -2150,19 +2117,15 @@ function NodeDetail({
       const how =
         hy?.how ||
         [
-          "Dense Chroma ranks by embedding similarity (paraphrase).",
-          "BM25 ranks by keyword / CJK token overlap (exact terms).",
-          `Pack keep_k=${rag?.top_k ?? hy?.keep_k ?? 5}: take dense ranks 1–${hy?.dense_n ?? 3}, then fill from BM25 (skip duplicates).`,
-          "Age-band files may still be injected when the parent names an age.",
+          "Dense: embedding similarity",
+          "BM25: keyword / CJK overlap",
+          `Keep ${rag?.top_k ?? hy?.keep_k ?? 5}: dense top ${hy?.dense_n ?? 3}, then BM25 fill`,
         ];
       const preview = hy?.packed_preview || hy?.fused_preview || [];
       return (
         <>
           <p className="bn-rules-hint">
-            <strong>
-              How the final {rag?.top_k ?? (pass1.length || 5)} chunks are
-              chosen
-            </strong>
+            <strong>Channel pack</strong> · final {rag?.top_k ?? (pass1.length || 5)} chunks
           </p>
           <ol className="bn-select-steps">
             {how.map((line, i) => (
@@ -2170,8 +2133,7 @@ function NodeDetail({
             ))}
           </ol>
           <p className="bn-rules-hint">
-            <strong>Channel pack</strong> — dense primary for paraphrase, BM25
-            supplements for exact centre terms. No multi-flag lexical sort.
+            Dense primary · BM25 fills exact terms
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -2286,9 +2248,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            <strong>Ranked pass 1</strong> after channel pack (3 dense + BM25
-            fill). Always first with the <strong>raw parent message</strong> —
-            grade sees these chunks next.
+            Pass 1 · raw parent message after channel pack.
           </p>
           <ChromaHitsPanel
             title={
@@ -2332,10 +2292,8 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Optional second retrieve with the <strong>rewritten</strong> query
-            after pass-1 was graded not Correct. Final answer uses the better of
-            pass 1 / pass 2 (kept: {rag?.final_pass || rag?.query_rewrite?.kept || "—"}
-            ).
+            Pass 2 · rewritten query (kept:{" "}
+            {rag?.final_pass || rag?.query_rewrite?.kept || "—"}).
           </p>
           <ChromaHitsPanel
             title="Pass 2 · hybrid rewritten-query retrieve"
@@ -2357,15 +2315,12 @@ function NodeDetail({
         genCalls.length === 0;
       return (
         <>
-          <p className="bn-rules-hint">
-            Parent-facing generate via DashScope (Qwen). Slot-DST JSON lives on{" "}
-            <em>DST · cheap JSON</em> — not here.
-          </p>
+          <p className="bn-rules-hint">Parent-facing generate · DashScope.</p>
           {genCalls.length === 0 ? (
             <Skipped>
               {dstOnly
-                ? "No parent-facing LLM this turn — booking/cancel used FSM templates after DST JSON. Open the DST node for the preliminary cheap call."
-                : "No LLM call (template / deterministic reply)."}
+                ? "No parent-facing LLM — see DST for slot JSON."
+                : "No LLM call (template / deterministic)."}
             </Skipped>
           ) : (
             <div className="bn-llm-calls">
@@ -2391,18 +2346,12 @@ function NodeDetail({
         trace?.cancel?.stage === "cancelled";
       if (!wrote) {
         return (
-          <Skipped>
-            No staff-desk write this turn (SheetPro todo row / Mailbox message /
-            booking CSV).
-          </Skipped>
+          <Skipped>No staff-desk write this turn.</Skipped>
         );
       }
       return (
         <>
-          <p className="bn-rules-hint">
-            Staff desk side-effects: SheetPro admin todos, Mailbox / WhatsApp
-            staff notes, and booking/cancel CSV rows when a flow commits.
-          </p>
+          <p className="bn-rules-hint">SheetPro / Mailbox / booking writes.</p>
           <StageIO
             request={{ route, session: trace.session_id }}
             payload={{
@@ -2420,9 +2369,7 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            What the parent sees after sanitize (gap tags stripped). Free-text
-            model I/O is on <em>LLM (DashScope)</em>; booking/cancel slot JSON is
-            on <em>DST · cheap JSON</em>.
+            Parent-facing reply (sanitized). Model I/O on LLM / DST nodes.
           </p>
           <ul className="bn-fact-list">
             <li>
@@ -3382,7 +3329,7 @@ export default function TurnPipeline({
       }${trace.language ? ` · ${trace.language}` : ""}${
         liveOn ? " · live" : ""
       }`
-    : "Pinch to zoom · drag to pan · click a node";
+    : "Pinch · drag · click a node";
 
   return (
     <div className="bn-pipeline bn-pipeline--canvas">

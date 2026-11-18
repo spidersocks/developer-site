@@ -43,7 +43,7 @@ const PARENT_PROFILES = [
     id: "jason",
     label: "Demo Parent",
     short: "Jason Chan",
-    blurb: "Known family · bookings on file",
+    blurb: "Known family",
     parentName: "Demo Parent",
     childName: "Jason Chan",
     phone: "+852 9000 0000",
@@ -53,7 +53,7 @@ const PARENT_PROFILES = [
     id: "new",
     label: "New parent",
     short: "No child yet",
-    blurb: "Blank WhatsApp · nothing on file",
+    blurb: "Nothing on file",
     parentName: "",
     childName: "",
     phone: "+852 9000 9999",
@@ -691,7 +691,7 @@ export default function BrightNestBotDemo() {
         <div className="bn-brand-block">
           <img src={LOGO_SRC} alt="" className="bn-mark" />
           <div>
-            <p className="bn-eyebrow">COMP6708 A3 · technical demo</p>
+            <p className="bn-eyebrow">COMP6708 A3</p>
             <h1>
               BrightNest <span>Learning Centre</span>
             </h1>
@@ -716,19 +716,16 @@ export default function BrightNestBotDemo() {
             <div className="bn-phone-bar">
               <img src={LOGO_SRC} alt="BrightNest" />
               <div>
-                <strong>Parent chat</strong>
-                <small>messaging surface</small>
+                <strong>BrightNest</strong>
+                <small>WhatsApp</small>
               </div>
             </div>
 
             {parentGateOpen ? (
               <div className="bn-parent-gate" role="dialog" aria-label="Choose parent identity">
-                <p className="bn-parent-gate-kicker">Start a WhatsApp thread</p>
-                <h2>Who are you messaging as?</h2>
-                <p className="bn-parent-gate-copy">
-                  Pick a known demo family or a blank new parent. Chat stays locked until you choose.
-                  Reloading the page keeps your last choice; Reset brings this picker back.
-                </p>
+                <p className="bn-parent-gate-kicker">Parent chat</p>
+                <h2>Who’s messaging?</h2>
+                <p className="bn-parent-gate-copy">Choose a parent to continue.</p>
                 <div className="bn-parent-gate-actions">
                   {PARENT_PROFILES.map((p) => (
                     <button
@@ -749,7 +746,7 @@ export default function BrightNestBotDemo() {
                 </div>
               </div>
             ) : (
-              <div className="bn-profile-switch" role="group" aria-label="Demo parent profile">
+              <div className="bn-profile-switch" role="group" aria-label="Parent profile">
                 {PARENT_PROFILES.map((p) => (
                   <button
                     key={p.id}
@@ -834,9 +831,7 @@ export default function BrightNestBotDemo() {
                 className="bn-textarea"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={
-                  parentGateOpen ? "Choose a parent above to unlock chat…" : "Message as a parent…"
-                }
+                placeholder={parentGateOpen ? "Select a parent…" : "Message…"}
                 disabled={parentGateOpen || isLoading}
                 rows={1}
                 onKeyDown={(e) => {
@@ -1017,7 +1012,7 @@ export default function BrightNestBotDemo() {
                 }
               >
                 <p className="bn-staff-swipe-hint" aria-hidden="true">
-                  Swipe for apps
+                  Swipe
                 </p>
                 {staffTab === "calendar" ? (
                   <MyCalendar
@@ -1044,7 +1039,7 @@ export default function BrightNestBotDemo() {
                             value="BrightNest — Follow-up sheet"
                             aria-label="Spreadsheet title"
                           />
-                          <small>SheetPro · Parents never see this</small>
+                          <small>Staff only</small>
                         </div>
                       </div>
                       <div className="bn-sheet-share">
@@ -1105,8 +1100,7 @@ export default function BrightNestBotDemo() {
                             <tr>
                               <td className="bn-sheet-rownum">1</td>
                               <td colSpan={7} className="bn-sheet-empty">
-                                No open follow-ups. New rows appear when the assistant
-                                couldn’t answer from centre materials.
+                                No open follow-ups
                               </td>
                             </tr>
                           ) : (
@@ -1166,7 +1160,7 @@ export default function BrightNestBotDemo() {
                                     type="text"
                                     defaultValue={infoCell}
                                     key={`${t.id}-${infoCell}`}
-                                    placeholder="What should staff do next…"
+                                    placeholder="Next step…"
                                     onFocus={() =>
                                       selectSheetCell(`E${row}`, infoCell || "—")
                                     }
@@ -1265,10 +1259,7 @@ export default function BrightNestBotDemo() {
                           ) : null}
                         </div>
                         {staffMessages.length === 0 ? (
-                          <p className="bn-mail-empty">
-                            Your Primary tab is empty. New mail arrives when a parent
-                            asks for staff, is upset, or raises a safety concern.
-                          </p>
+                          <p className="bn-mail-empty">No messages</p>
                         ) : (
                           staffMessages.map((m) => {
                             const active = selectedMsg?.id === m.id;
@@ -1386,7 +1377,7 @@ export default function BrightNestBotDemo() {
                         <img src={FAMILIES_ICON} alt="" className="bn-families-logo" />
                         <div>
                           <strong>Families</strong>
-                          <small>WhatsApp number → parent → kids → upcoming classes</small>
+                          <small>Roster</small>
                         </div>
                       </div>
                       <button
@@ -1400,7 +1391,7 @@ export default function BrightNestBotDemo() {
                     <div className="bn-families-layout">
                       <div className="bn-families-list" role="listbox" aria-label="Families">
                         {familiesRoster.length === 0 ? (
-                          <p className="bn-empty">No families on the sheet yet.</p>
+                          <p className="bn-empty">No families</p>
                         ) : (
                           familiesRoster.map((f) => {
                             const active = selectedFamilyPhone === f.phone;
@@ -1435,7 +1426,7 @@ export default function BrightNestBotDemo() {
                             familiesRoster[0];
                           if (!fam) {
                             return (
-                              <p className="bn-empty">Select a family to inspect records.</p>
+                              <p className="bn-empty">Select a family</p>
                             );
                           }
                           return (
@@ -1464,7 +1455,7 @@ export default function BrightNestBotDemo() {
                                     Upcoming ({child.upcoming_count || 0})
                                   </h4>
                                   {(child.upcoming || []).length === 0 ? (
-                                    <p className="bn-empty">No upcoming classes on file.</p>
+                                    <p className="bn-empty">No upcoming classes</p>
                                   ) : (
                                     <ul className="bn-families-upcoming">
                                       {(child.upcoming || []).slice(0, 12).map((u, i) => (

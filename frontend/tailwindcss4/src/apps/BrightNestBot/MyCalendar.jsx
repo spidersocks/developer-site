@@ -261,7 +261,7 @@ export default function MyCalendar({
       </div>
 
       {!schedule ? (
-        <p className="bn-empty bn-cal-empty">Schedule API offline — restart backend to load.</p>
+        <p className="bn-empty bn-cal-empty">Schedule unavailable</p>
       ) : filteredDays.length === 0 ? (
         <p className="bn-empty bn-cal-empty">No sessions in this window.</p>
       ) : (
