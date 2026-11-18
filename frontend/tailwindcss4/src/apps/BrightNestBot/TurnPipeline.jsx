@@ -559,10 +559,17 @@ function edgeGeometry(fromId, toId) {
   } else if (fromId === "chroma2" && toId === "llm") {
     pts = [nodeAnchor("chroma2", "left"), nodeAnchor("llm", "right")];
   } else if (fromId === "live" && toId === "fuse") {
-    // Corridor up to Pack TOP — never across chroma (same Y as Live)
+    // Corridor, then ABOVE Pack top, then down into the tip — never under the card
     const s = nodeAnchor("live", "right");
     const e = nodeAnchor("fuse", "top");
-    pts = [s, { x: FSM_LLM_X, y: s.y }, { x: FSM_LLM_X, y: e.y }, e];
+    const overY = e.y - 36;
+    pts = [
+      s,
+      { x: FSM_LLM_X, y: s.y },
+      { x: FSM_LLM_X, y: overY },
+      { x: e.x, y: overY },
+      e,
+    ];
   } else if (fromId === "llm" && toId === "answer") {
     pts = [nodeAnchor("llm", "bottom"), nodeAnchor("answer", "top")];
   } else if (fromId === "sheets" && toId === "answer") {
@@ -580,16 +587,100 @@ function edgeGeometry(fromId, toId) {
 
   const split = splitArrow(pts, ARROW_SIZE);
   if (!split || split.linePts.length < 2) return null;
-  const d =
-    `M ${split.linePts[0].x} ${split.linePts[0].y}` +
-    split.linePts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
   return {
-    d,
+    linePts: split.linePts,
+    tip: split.tip,
+    arrow: split.arrow,
     labelAt: labelAlong(split.linePts, 0.28, 20),
     start: split.linePts[0],
     end: split.tip,
-    arrow: split.arrow,
+    fromId,
+    toId,
   };
+}
+
+function ptsToPath(pts) {
+  if (!pts || pts.length < 2) return "";
+  return (
+    `M ${pts[0].x} ${pts[0].y}` +
+    pts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("")
+  );
+}
+
+/**
+ * Circuit-style hop: when a horizontal run crosses a vertical run,
+ * the horizontal gets a small semicircle bridge over the junction.
+ */
+function withCrossingJumps(geometries, hopR = 7) {
+  const geos = (geometries || []).filter(Boolean);
+  const verticals = [];
+  for (const g of geos) {
+    const pts = g.linePts || [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      if (Math.abs(a.x - b.x) < 0.75 && Math.abs(a.y - b.y) > hopR * 2) {
+        verticals.push({
+          x: a.x,
+          y0: Math.min(a.y, b.y),
+          y1: Math.max(a.y, b.y),
+          edge: g,
+        });
+      }
+    }
+  }
+
+  return geos.map((g) => {
+    const pts = g.linePts || [];
+    if (pts.length < 2) return { ...g, d: ptsToPath(pts) };
+
+    const hops = [];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      if (!(Math.abs(a.y - b.y) < 0.75 && Math.abs(a.x - b.x) > hopR * 2)) continue;
+      const y = a.y;
+      const x0 = Math.min(a.x, b.x);
+      const x1 = Math.max(a.x, b.x);
+      for (const v of verticals) {
+        if (v.edge === g) continue;
+        if (v.x <= x0 + hopR || v.x >= x1 - hopR) continue;
+        if (y <= v.y0 + hopR || y >= v.y1 - hopR) continue;
+        const nearEnd =
+          Math.hypot(v.x - a.x, y - a.y) < hopR * 1.5 ||
+          Math.hypot(v.x - b.x, y - b.y) < hopR * 1.5;
+        if (nearEnd) continue;
+        hops.push({ i, x: v.x, y });
+      }
+    }
+    if (!hops.length) return { ...g, d: ptsToPath(pts) };
+
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    let cursor = pts[0];
+    for (let i = 1; i < pts.length; i++) {
+      const b = pts[i];
+      const dir = b.x >= cursor.x ? 1 : -1;
+      const segHops = hops
+        .filter((h) => h.i === i)
+        .sort((p, q) => dir * (p.x - q.x));
+      if (!segHops.length) {
+        d += ` L ${b.x} ${b.y}`;
+        cursor = b;
+        continue;
+      }
+      for (const h of segHops) {
+        const xEnter = h.x - dir * hopR;
+        const xExit = h.x + dir * hopR;
+        d += ` L ${xEnter} ${h.y}`;
+        // Semicircle bridge (sweep so the bump sits above the wire)
+        d += ` A ${hopR} ${hopR} 0 0 ${dir > 0 ? 1 : 0} ${xExit} ${h.y}`;
+      }
+      d += ` L ${b.x} ${b.y}`;
+      cursor = b;
+    }
+
+    return { ...g, d, labelAt: labelAlong(pts, 0.28, 20) };
+  });
 }
 
 function QueryHighlight({ segments, fallback, cue }) {
@@ -617,26 +708,25 @@ function QueryHighlight({ segments, fallback, cue }) {
 
 function MatchSummaryCard({ summary }) {
   if (!summary || (!summary.headline && !summary.query)) return null;
+  const cue = summary.cue || "";
+  const headline = humanizeDetectorWhy(summary.headline || "");
+  const cleanHeadline =
+    cue && !/«/.test(headline)
+      ? `Matched «${cue}»${summary.rule_label ? ` → ${summary.rule_label}` : "."}`
+      : headline;
+  const segments =
+    (summary.segments || []).some((s) => s.hit)
+      ? summary.segments
+      : segmentsFromCue(summary.query || summary.annotated, cue);
   return (
     <div className="bn-match-summary">
-      <div className="bn-match-summary-kicker">Match</div>
-      <p className="bn-match-headline">{summary.headline}</p>
+      <div className="bn-match-summary-kicker">What fired</div>
+      <p className="bn-match-headline">{cleanHeadline}</p>
       <QueryHighlight
-        segments={summary.segments}
+        segments={segments}
         fallback={summary.query || summary.annotated}
-        cue={summary.cue}
+        cue={cue}
       />
-      {summary.cue ? (
-        <p className="bn-match-cue-line">
-          Cue <code>«{summary.cue}»</code>
-          {summary.route ? (
-            <>
-              {" "}
-              → <code>{summary.route}</code>
-            </>
-          ) : null}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -1055,6 +1145,33 @@ function ChromaHitsPanel({
   );
 }
 
+/** Soft-clean detector jargon parents should never see. */
+function humanizeDetectorWhy(text) {
+  let t = String(text || "").trim();
+  if (!t) return "";
+  t = t.replace(/\bvia strong\b/gi, "hours wording");
+  t = t.replace(/\bvia holiday\b/gi, "holiday wording");
+  t = t.replace(/\bvia weak\+open\b/gi, "date + open wording");
+  t = t.replace(/\bdetect_opening_hours_intent[^\n·]*·?\s*/gi, "");
+  t = t.replace(/\bfixed\s+0\.\d+\s*·?\s*/gi, "");
+  t = t.replace(/\s{2,}/g, " ").replace(/\s·\s·/g, " · ").trim();
+  return t;
+}
+
+function segmentsFromCue(query, cue) {
+  const q = String(query || "");
+  const c = String(cue || "");
+  if (!q || !c) return [];
+  const idx = q.toLowerCase().indexOf(c.toLowerCase());
+  if (idx < 0) return [];
+  const end = idx + c.length;
+  const parts = [];
+  if (idx > 0) parts.push({ text: q.slice(0, idx), hit: false });
+  parts.push({ text: q.slice(idx, end), hit: true });
+  if (end < q.length) parts.push({ text: q.slice(end), hit: false });
+  return parts;
+}
+
 function RuleEvidence({ rule, defaultOpen = false, isWinner = false }) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   useEffect(() => {
@@ -1068,16 +1185,32 @@ function RuleEvidence({ rule, defaultOpen = false, isWinner = false }) {
         ? "winner"
         : "fired"
     : "idle";
-  const reason =
-    rule.status_reason ||
-    (rule.matched ? rule.why : rule.why_not) ||
-    rule.detail ||
-    "";
-  const checks = rule.checks || [];
   const evidence = rule.match_evidence || {};
-  const cue = evidence.cue || rule.matched_span?.text || "";
   const queryText = rule.query || evidence.full_query || "";
-  const segments = evidence.segments || [];
+  const cue =
+    evidence.cue ||
+    rule.matched_span?.text ||
+    rule.score_origin?.cue ||
+    "";
+  const segments =
+    (evidence.segments || []).some((s) => s.hit)
+      ? evidence.segments
+      : segmentsFromCue(queryText, cue);
+  const reason = humanizeDetectorWhy(
+    rule.matched
+      ? cue
+        ? `Matched «${cue}».`
+        : rule.why || rule.status_reason || rule.detail || ""
+      : rule.why_not || rule.status_reason || rule.detail || ""
+  );
+  // Only keep checks that add information (skip failed overrides that didn't apply).
+  const checks = (rule.checks || []).filter((c) => {
+    if (!c) return false;
+    if (rule.matched && !c.passed && /override|skipped/i.test(`${c.label} ${c.detail}`)) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <li
@@ -1101,33 +1234,32 @@ function RuleEvidence({ rule, defaultOpen = false, isWinner = false }) {
         <div className="bn-rule-main">
           <strong>
             {rule.label}
-            {isWinner ? <em className="bn-rule-winner-tag"> · winning</em> : null}
+            {isWinner ? <em className="bn-rule-winner-tag"> · won</em> : null}
           </strong>
-          <code>{rule.id}</code>
-          {rule.score != null ? (
-            <em>score {Number(rule.score).toFixed(2)}</em>
-          ) : null}
-          {rule.score_origin?.source && rule.score_origin.source !== "none" ? (
-            <p className="bn-rule-score-origin">
-              score from <code>{rule.score_origin.source}</code>
-              {rule.score_origin.why ? ` — ${rule.score_origin.why}` : ""}
-            </p>
-          ) : null}
           {cue ? (
             <p className="bn-rule-cue-chip">
-              cue <code>«{cue}»</code>
+              matched <code>«{cue}»</code>
+              {rule.score != null ? (
+                <em> · {Number(rule.score).toFixed(2)}</em>
+              ) : null}
             </p>
-          ) : null}
-          {reason ? <p className="bn-rule-reason">{reason}</p> : null}
+          ) : (
+            <p className="bn-rule-reason">
+              {reason || (rule.matched ? "Matched." : "Did not match.")}
+              {rule.score != null && rule.matched ? (
+                <em> · {Number(rule.score).toFixed(2)}</em>
+              ) : null}
+            </p>
+          )}
           <span className="bn-hit-expand-hint">
-            {open ? "Hide match detail" : "Show what matched"}
+            {open ? "Hide" : "Show message"}
           </span>
         </div>
       </button>
       {open ? (
         <div className="bn-rule-why">
           <div className="bn-rule-block bn-rule-block-query">
-            <span>Parent message · matched cue highlighted</span>
+            <span>Parent message</span>
             <QueryHighlight
               segments={segments}
               fallback={queryText || evidence.annotated}
@@ -1135,31 +1267,16 @@ function RuleEvidence({ rule, defaultOpen = false, isWinner = false }) {
             />
             {cue ? (
               <p className="bn-rule-cue-meta">
-                Exact cue <code>«{cue}»</code>
-                {evidence.start != null && evidence.end != null
-                  ? ` at characters [${evidence.start}:${evidence.end}]`
-                  : ""}
-                {evidence.kind ? ` · kind=${evidence.kind}` : ""}
+                Fired on <code>«{cue}»</code>
+              </p>
+            ) : rule.matched ? (
+              <p className="bn-rule-cue-meta">
+                {reason || "Matched from session / multi-signal check (no single word)."}
               </p>
             ) : (
-              <p className="bn-rule-cue-meta">
-                No single substring cue — matched by{" "}
-                {evidence.kind || "predicate / session state"}.
-              </p>
+              <p className="bn-rule-cue-meta">{reason || "No match."}</p>
             )}
           </div>
-          {rule.score_origin?.source && rule.score_origin.source !== "none" ? (
-            <div className="bn-rule-block">
-              <span>Score source</span>
-              <p>
-                <code>{rule.score_origin.source}</code>
-                {rule.score_origin.score != null
-                  ? ` = ${Number(rule.score_origin.score).toFixed(2)}`
-                  : ""}
-                {rule.score_origin.why ? ` — ${rule.score_origin.why}` : ""}
-              </p>
-            </div>
-          ) : null}
           {checks.length > 0 ? (
             <ul className="bn-rule-checks">
               {checks.map((c, i) => (
@@ -1176,7 +1293,6 @@ function RuleEvidence({ rule, defaultOpen = false, isWinner = false }) {
               ))}
             </ul>
           ) : null}
-          {reason ? <p className="bn-note">{reason}</p> : null}
         </div>
       ) : null}
     </li>
@@ -1403,18 +1519,29 @@ function NodeDetail({
         {};
       const selectedTool = tools.selected_tool || {};
       const cascade = Array.isArray(tools.cascade) ? tools.cascade : [];
-      const whyShort =
-        path === "rag"
-          ? "No tool owned this turn → RAG"
+      const branchLabel = enrichMode
+        ? `Tool + KB enrich · ${route || tools.selected || "live"}`
+        : path === "rag"
+          ? "RAG only (no tool owned this turn)"
+          : path === "fsm"
+            ? routing?.dialogue_active || routing?.cancel_active
+              ? `Sticky tool · ${route || "fsm"}`
+              : `Tool · ${route || tools.selected || "fsm"}`
+            : "—";
+      const whyShort = enrichMode
+        ? "Live / tool facts first · Pack still retrieves KB chunks"
+        : path === "rag"
+          ? "No tool ≥ threshold → retrieve → generate"
           : path === "fsm"
             ? routing?.dialogue_active || routing?.cancel_active
               ? `Sticky ${route || "fsm"}`
-              : `Tool route · ${route || "fsm"}`
+              : `Detector selected ${tools.selected || route || "tool"}`
             : "—";
       return (
         <>
           <p className="bn-rules-hint">
-            Tool registry cascade · detectors first, cheap LLM only if needed.
+            Not a hard FSM-vs-RAG fork — a live tool can win and still run Pack /
+            RAG with those facts prioritized.
           </p>
           <MatchSummaryCard summary={matchSummary} />
           <ul className="bn-fact-list">
@@ -1430,11 +1557,8 @@ function NodeDetail({
               <code>{tools.selector || "—"}</code>
             </li>
             <li>
-              <span>Branch</span>
-              <code>
-                {path === "rag" ? "RAG" : path === "fsm" ? "FSM" : "—"}
-                {route ? ` · ${route}` : ""}
-              </code>
+              <span>This turn</span>
+              <code>{branchLabel}</code>
             </li>
             <li>
               <span>Why</span>
@@ -2122,26 +2246,43 @@ function NodeDetail({
                 .filter(Boolean)
                 .join(" · "),
             }));
+      const keepK = rag?.top_k ?? hy?.keep_k ?? (pass1.length || 5);
+      const denseN = hy?.dense_n ?? 3;
+      const denseKept = hy?.dense_kept ?? 0;
+      const sparseAdded = hy?.sparse_added ?? 0;
+      const sparsePool = hy?.sparse_count ?? 0;
+      const dupes = hy?.skipped_dupes ?? 0;
+      let packWhy = "";
+      if (sparseAdded === 0 && denseKept >= Math.min(denseN, keepK)) {
+        packWhy = `Why only dense: keep=${keepK} and dense already filled ranks 1–${Math.min(
+          denseN,
+          keepK
+        )} from its pool of ${hy?.dense_count ?? "—"}. BM25 still retrieved ${sparsePool} candidates${
+          dupes ? ` (${dupes} already in the dense set)` : ""
+        }, but no empty slots remained to fill.`;
+      } else if (sparseAdded > 0) {
+        packWhy = `Dense took ranks 1–${denseKept}; BM25 filled ${sparseAdded} remaining slot${
+          sparseAdded === 1 ? "" : "s"
+        } with non-duplicate keyword hits.`;
+      }
       return (
         <>
           <p className="bn-rules-hint">
-            <strong>Channel pack</strong> · keep{" "}
-            {rag?.top_k ?? (pass1.length || 5)} · Dense primary, BM25 fills
-            gaps
+            <strong>Channel pack</strong> · keep {keepK} · take dense top{" "}
+            {denseN}, then BM25 only if slots remain
           </p>
           <ul className="bn-fact-list">
             <li>
               <span>Dense kept</span>
               <code>
-                {hy?.dense_kept ?? "—"} of top {hy?.dense_n ?? 3} (pool{" "}
-                {hy?.dense_count ?? "—"})
+                {denseKept} of top {denseN} (pool {hy?.dense_count ?? "—"})
               </code>
             </li>
             <li>
               <span>BM25 added</span>
               <code>
-                {hy?.sparse_added ?? "—"} (pool {hy?.sparse_count ?? "—"} · dupes
-                skipped {hy?.skipped_dupes ?? "—"})
+                {sparseAdded} (pool {sparsePool}
+                {dupes ? ` · ${dupes} dupes skipped` : ""})
               </code>
             </li>
             <li>
@@ -2152,6 +2293,7 @@ function NodeDetail({
               </code>
             </li>
           </ul>
+          {packWhy ? <p className="bn-note">{packWhy}</p> : null}
           {keepRows.length ? (
             <>
               <p className="bn-rules-hint">Keep order (→ pass 1)</p>
@@ -2454,13 +2596,120 @@ export default function TurnPipeline({
   const facts = trace?.opening_hours?.facts;
   const enrichMode = rag?.mode === "grounded_enrich" || grounding?.used_rag;
   const hits = route === "rag" || enrichMode ? rag?.hits || [] : [];
-  const rulesEvaluated =
+  const rulesEvaluatedRaw =
     routing?.rules_evaluated || routing?.debug?.rules_evaluated || [];
+  const hoursDebug =
+    routing?.debug?.hours_debug ||
+    routing?.hours_debug ||
+    trace?.debug?.hours ||
+    null;
+  const inboundForRules =
+    trace?.inbound_message ||
+    parentMessage ||
+    routing?.match_summary?.query ||
+    routing?.debug?.match_summary?.query ||
+    "";
+  // Backfill hours cue from detector spans / regex hits when evidence is empty.
+  const rulesEvaluated = useMemo(() => {
+    return (rulesEvaluatedRaw || []).map((rule) => {
+      if (rule?.id !== "opening_hours") return rule;
+      const existing =
+        rule.match_evidence?.cue || rule.matched_span?.text || "";
+      if (existing) return rule;
+      const span = hoursDebug?.matched_span;
+      let cue = hoursDebug?.cue || span?.text || "";
+      let matchedSpan = span || null;
+      if (!cue && Array.isArray(hoursDebug?.strong_hits)) {
+        let best = null;
+        for (const pat of hoursDebug.strong_hits) {
+          try {
+            const m = String(inboundForRules || "").match(new RegExp(pat, "i"));
+            if (m && (!best || m[0].length > best.text.length)) {
+              best = {
+                text: m[0],
+                start: m.index,
+                end: m.index + m[0].length,
+              };
+            }
+          } catch {
+            /* ignore bad pattern */
+          }
+        }
+        if (best) {
+          cue = best.text;
+          matchedSpan = best;
+        }
+      }
+      if (!cue) return rule;
+      const segments = segmentsFromCue(inboundForRules, cue);
+      return {
+        ...rule,
+        matched_span: matchedSpan || rule.matched_span,
+        why: humanizeDetectorWhy(rule.why) || `Matched «${cue}».`,
+        status_reason:
+          humanizeDetectorWhy(rule.status_reason) || `Matched «${cue}».`,
+        match_evidence: {
+          ...(rule.match_evidence || {}),
+          cue,
+          kind: "substring",
+          segments: segments.length
+            ? segments
+            : rule.match_evidence?.segments || [],
+          explanation: `The parent message contains «${cue}», so the opening-hours tool wins.`,
+          full_query: inboundForRules,
+        },
+        score_origin: rule.score_origin
+          ? {
+              ...rule.score_origin,
+              cue,
+              why: humanizeDetectorWhy(rule.score_origin.why) || `Matched «${cue}».`,
+            }
+          : rule.score_origin,
+      };
+    });
+  }, [rulesEvaluatedRaw, hoursDebug, inboundForRules]);
   const winningRule = routing?.winning_rule || routing?.debug?.winning_rule || {};
-  const matchSummary =
+  const matchSummaryRaw =
     routing?.match_summary || routing?.debug?.match_summary || {};
+  const matchSummary = useMemo(() => {
+    const hoursRule = rulesEvaluated.find((r) => r.id === "opening_hours");
+    const cue =
+      matchSummaryRaw.cue ||
+      hoursRule?.match_evidence?.cue ||
+      hoursDebug?.cue ||
+      "";
+    if (!cue && !matchSummaryRaw.headline) return matchSummaryRaw;
+    const segments =
+      (matchSummaryRaw.segments || []).some((s) => s.hit)
+        ? matchSummaryRaw.segments
+        : segmentsFromCue(
+            matchSummaryRaw.query || inboundForRules,
+            cue
+          );
+    return {
+      ...matchSummaryRaw,
+      cue: cue || matchSummaryRaw.cue,
+      segments,
+      headline: cue
+        ? `Matched «${cue}» → ${
+            matchSummaryRaw.rule_label ||
+            hoursRule?.label ||
+            "Opening hours"
+          }.`
+        : humanizeDetectorWhy(matchSummaryRaw.headline),
+      rule_id:
+        matchSummaryRaw.rule_id === "deterministic_opening_hours"
+          ? "opening_hours"
+          : matchSummaryRaw.rule_id,
+    };
+  }, [matchSummaryRaw, rulesEvaluated, hoursDebug, inboundForRules]);
   const arbiter = routing?.debug?.arbiter || {};
-  const winningRuleId = matchSummary?.rule_id || winningRule?.route || route;
+  const winningRuleId =
+    matchSummary?.rule_id ||
+    (winningRule?.route === "deterministic_opening_hours"
+      ? "opening_hours"
+      : winningRule?.route) ||
+    (route === "deterministic_opening_hours" ? "opening_hours" : route);
   const scoreLedger =
     routing?.score_ledger ||
     routing?.debug?.score_ledger ||
@@ -2534,7 +2783,13 @@ export default function TurnPipeline({
       },
       {
         id: "router",
-        label: "Router · FSM|RAG",
+        label: enrichMode
+          ? "Router · tool+KB"
+          : path === "fsm"
+            ? "Router · tool"
+            : path === "rag"
+              ? "Router · RAG"
+              : "Router",
         kind: "router",
         shape: "decision",
         status: hasTrace && path ? "done" : hasTrace ? "done" : "idle",
@@ -2856,7 +3111,8 @@ export default function TurnPipeline({
       link("arbiter", "router", "e-arb-router");
     }
     if (path === "fsm") link("router", "fsm", "e-router-fsm");
-    if (path === "rag") link("router", "rag", "e-router-rag");
+    // Live/tool enrich still runs the retrieve arm — light both branches.
+    if (path === "rag" || enrichMode) link("router", "rag", "e-router-rag");
     if (on("fsm") && on("dst")) link("fsm", "dst", "e-fsm-dst");
     if (on("dst") && on("gate")) link("dst", "gate", "e-dst-gate");
     else if (on("fsm") && on("gate")) link("fsm", "gate", "e-fsm-gate");
@@ -2935,8 +3191,9 @@ export default function TurnPipeline({
     const labels = {
       "e-rules-router": pick ? `→ ${pick}` : "",
       "e-arb-router": arbiter?.called ? arbiter.action || "keep" : "",
-      "e-router-fsm": path === "fsm" ? "FSM" : "",
-      "e-router-rag": path === "rag" ? "RAG" : "",
+      "e-router-fsm": path === "fsm" ? (enrichMode ? "tool" : "tool") : "",
+      "e-router-rag":
+        path === "rag" ? "RAG" : enrichMode ? "KB enrich" : "",
       "e-fsm-live": liveOn ? "live" : "",
       "e-fsm-dst":
         (trace?.booking?.booking_dst || trace?.booking?.arbiter_booking)?.called ||
@@ -3416,9 +3673,15 @@ export default function TurnPipeline({
             style={{ left: WORLD.minX, top: WORLD.minY }}
             aria-hidden="true"
           >
-            {EDGES.map((edge) => {
-              const geo = edgeGeometry(edge.from, edge.to);
-              if (!geo) return null;
+            {withCrossingJumps(
+              EDGES.map((edge) => {
+                const geo = edgeGeometry(edge.from, edge.to);
+                if (!geo) return null;
+                return { ...geo, edge };
+              })
+            ).map((geo) => {
+              if (!geo?.edge) return null;
+              const edge = geo.edge;
               const lit = litEdgeIds.has(edge.id);
               const label =
                 (lit && edgeLabels[edge.id]) || (lit ? edge.label : "") || "";
