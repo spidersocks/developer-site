@@ -289,7 +289,7 @@ function scoreGroupForRoute(routeId) {
   return "other";
 }
 
-function StageIO({ request, payload, defaultOpen = true }) {
+function StageIO({ request, payload, defaultOpen = false }) {
   if (!request && !payload) return null;
   const asText = (v) =>
     typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -297,13 +297,13 @@ function StageIO({ request, payload, defaultOpen = true }) {
     <div className="bn-stage-io">
       {request != null && request !== "" ? (
         <details className="bn-llm-part" open={defaultOpen}>
-          <summary>Request</summary>
+          <summary>Request (raw)</summary>
           <pre className="bn-pre bn-pre-tall">{asText(request)}</pre>
         </details>
       ) : null}
       {payload != null && payload !== "" ? (
         <details className="bn-llm-part" open={defaultOpen}>
-          <summary>Payload</summary>
+          <summary>Payload (raw)</summary>
           <pre className="bn-pre bn-pre-tall">{asText(payload)}</pre>
         </details>
       ) : null}
@@ -389,7 +389,7 @@ function dedupePts(pts, eps = 0.5) {
 
 /**
  * Stroke ends at the arrow BASE; tip sits on the node port.
- * Avoids round linecaps poking past the triangle (the "nub").
+ * Extra inset covers lit stroke-width anti-alias so the tip stays crisp.
  */
 function splitArrow(pts, size = ARROW_SIZE) {
   const raw = dedupePts(pts);
@@ -401,17 +401,21 @@ function splitArrow(pts, size = ARROW_SIZE) {
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  // Keep a usable last segment; tip sits on the port, stroke stops at base.
-  const back = Math.min(size, Math.max(7, Math.min(len * 0.5, len - 1)));
-  const base = { x: tip.x - ux * back, y: tip.y - uy * back };
+  // Tip on port; stroke stops at base, inset ~½ lit stroke so AA can't nub.
+  const back = Math.min(size, Math.max(8, Math.min(len * 0.5, len - 1)));
+  const strokeInset = 1.4;
+  const base = {
+    x: tip.x - ux * (back + strokeInset),
+    y: tip.y - uy * (back + strokeInset),
+  };
+  const wing = { x: tip.x - ux * back, y: tip.y - uy * back };
   const linePts = dedupePts([...raw.slice(0, -1), base]);
   const px = -uy;
   const py = ux;
   const half = back * 0.58;
-  // Tip slightly proud of the base so fill covers the stroke end cleanly.
-  const arrow = `M ${tip.x} ${tip.y} L ${base.x + px * half} ${
-    base.y + py * half
-  } L ${base.x - px * half} ${base.y - py * half} Z`;
+  const arrow = `M ${tip.x} ${tip.y} L ${wing.x + px * half} ${
+    wing.y + py * half
+  } L ${wing.x - px * half} ${wing.y - py * half} Z`;
   return { linePts, tip, base, arrow, ux, uy, pathLen: len };
 }
 
@@ -423,11 +427,11 @@ function pathLength(pts) {
   return total;
 }
 
-/** Label ~35% along path; skip short edges (labels collide with tips). */
-function labelAlong(pts, frac = 0.35, nudge = 14) {
+/** Label ~28% along path; skip short edges (labels collide with tips). */
+function labelAlong(pts, frac = 0.28, nudge = 20) {
   if (!pts || pts.length < 2) return null;
   const total = pathLength(pts);
-  if (total < 96) return null;
+  if (total < 110) return null;
   let target = total * frac;
   for (let i = 1; i < pts.length; i++) {
     const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
@@ -555,9 +559,9 @@ function edgeGeometry(fromId, toId) {
   } else if (fromId === "chroma2" && toId === "llm") {
     pts = [nodeAnchor("chroma2", "left"), nodeAnchor("llm", "right")];
   } else if (fromId === "live" && toId === "fuse") {
-    // Right out of live into corridor, then into pack left
+    // Corridor up to Pack TOP — never across chroma (same Y as Live)
     const s = nodeAnchor("live", "right");
-    const e = nodeAnchor("fuse", "left");
+    const e = nodeAnchor("fuse", "top");
     pts = [s, { x: FSM_LLM_X, y: s.y }, { x: FSM_LLM_X, y: e.y }, e];
   } else if (fromId === "llm" && toId === "answer") {
     pts = [nodeAnchor("llm", "bottom"), nodeAnchor("answer", "top")];
@@ -581,7 +585,7 @@ function edgeGeometry(fromId, toId) {
     split.linePts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
   return {
     d,
-    labelAt: labelAlong(split.linePts, 0.34, 16),
+    labelAt: labelAlong(split.linePts, 0.28, 20),
     start: split.linePts[0],
     end: split.tip,
     arrow: split.arrow,
@@ -1252,16 +1256,12 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">
-            Language from parent text · filters KB retrieve (<code>en</code> /{" "}
-            <code>zh-HK</code> / <code>zh-CN</code>).
+            Language from parent text · also filters KB retrieve (
+            <code>en</code> / <code>zh-HK</code> / <code>zh-CN</code>).
           </p>
           <ul className="bn-fact-list">
             <li>
-              <span>Detected</span>
-              <code>{trace.language || "—"}</code>
-            </li>
-            <li>
-              <span>KB language filter</span>
+              <span>Language</span>
               <code>{trace.language || "—"}</code>
             </li>
             <li>
@@ -1273,16 +1273,6 @@ function NodeDetail({
               </code>
             </li>
           </ul>
-          <StageIO
-            request={inbound}
-            payload={{
-              language: trace.language || null,
-              chroma_where: trace.language
-                ? { language: trace.language }
-                : null,
-              language_fallback: Boolean(rag?.language_fallback),
-            }}
-          />
         </>
       );
 
@@ -1504,39 +1494,12 @@ function NodeDetail({
             </div>
           ) : null}
           {(trace?.data_sources?.consulted || []).length > 0 ? (
-            <div className="bn-score-group">
-              <p className="bn-rules-hint">
-                <strong>Pulled from</strong>
-              </p>
-              <ul className="bn-fact-list">
-                {trace.data_sources.consulted.map((s) => (
-                  <li key={`src-${s.id}`}>
-                    <span>
-                      {s.label || s.id}
-                      {s.kind ? (
-                        <em className="bn-score-src"> · {s.kind}</em>
-                      ) : null}
-                    </span>
-                    <code>
-                      {s.status || "consulted"}
-                      {s.locator ? ` · ${s.locator}` : ""}
-                    </code>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <p className="bn-note">
+              Sources used this turn → open <strong>Live data</strong> (APIs) or{" "}
+              <strong>Dense / Sparse / Pack</strong> (KB). Scores →{" "}
+              <strong>Rules</strong>.
+            </p>
           ) : null}
-          <StageIO
-            request={{ scores: routing?.scores || {} }}
-            payload={{
-              branch: path || null,
-              route: route || null,
-              tool: tools.selected || route || null,
-              selector: tools.selector || null,
-              data_sources: trace?.data_sources || null,
-              why: whyShort,
-            }}
-          />
         </>
       );
     }
@@ -1760,15 +1723,6 @@ function NodeDetail({
               </li>
             ) : null}
           </ul>
-          <StageIO
-            request={{ route, message: inbound }}
-            payload={{
-              booking: trace?.booking || null,
-              cancel: trace?.cancel || null,
-              escalation: trace?.escalation || trace?.debug?.escalation || null,
-              grounding: grounding || null,
-            }}
-          />
         </>
       );
 
@@ -1806,10 +1760,6 @@ function NodeDetail({
               </li>
             ) : null}
           </ul>
-          <StageIO
-            request={{ kind: route, message: inbound }}
-            payload={finalCheck || null}
-          />
           {gateCalls.map((c, i) => (
             <LlmCallCard
               key={`gate-llm-${i}`}
@@ -1858,10 +1808,6 @@ function NodeDetail({
               </li>
             ) : null}
           </ul>
-          <StageIO
-            request={{ parent: inbound, route }}
-            payload={staffMessage || null}
-          />
           {mailCalls.map((c, i) => (
             <LlmCallCard
               key={`staffmail-llm-${i}`}
@@ -1982,23 +1928,6 @@ function NodeDetail({
               <code>{rag?.gap_reason || "—"}</code>
             </li>
           </ul>
-          <StageIO
-            request={{
-              parent: inbound,
-              retrieval_query: rag?.retrieval_query || inbound,
-              language: trace.language,
-            }}
-            payload={{
-              hit_count: rag?.hit_count ?? hits.length,
-              top_k: rag?.top_k ?? null,
-              pool_k: rag?.pool_k ?? null,
-              pool_returned: rag?.pool_returned ?? null,
-              rank1_score: rag?.rank1_score ?? rag?.top_score ?? null,
-              max_score: rag?.max_score ?? null,
-              gap_reason: rag?.gap_reason || null,
-              query_rewrite: rag?.query_rewrite || null,
-            }}
-          />
         </>
       );
 
@@ -2010,44 +1939,51 @@ function NodeDetail({
         trace?.data_sources ||
         routing?.tools?.data_sources ||
         null;
-      const consulted = Array.isArray(sources?.consulted)
+      const LIVE_SRC = new Set([
+        "hours_calendar",
+        "hko_opendata",
+        "sqlite_families",
+        "csv_roster",
+      ]);
+      const LIVE_KIND = new Set(["rules_engine", "http_api", "sqlite", "csv"]);
+      const consulted = (Array.isArray(sources?.consulted)
         ? sources.consulted
-        : [];
+        : []
+      ).filter(
+        (s) =>
+          LIVE_SRC.has(s.id) ||
+          LIVE_KIND.has(s.kind) ||
+          /hko|hours|calendar|weather/i.test(
+            `${s.id || ""} ${s.label || ""} ${s.kind || ""}`
+          )
+      );
+      const resolvedWhen = facts?.datetime
+        ? String(facts.datetime).replace(/\.\d+/, "").replace("T", " ")
+        : "—";
       return (
         <>
           <p className="bn-rules-hint">
-            Live facts inject into retrieve context
-            {enrichMode ? " · Pack still runs" : ""}.
+            Live APIs / calendars for this tool
+            {enrichMode ? " · KB enrich is on Dense → Pack" : ""}.
           </p>
           {consulted.length > 0 ? (
-            <div className="bn-score-group">
-              <p className="bn-rules-hint">
-                <strong>Data sources consulted</strong>
-              </p>
-              <ul className="bn-fact-list">
-                {consulted.map((s) => (
-                  <li key={s.id || s.label}>
-                    <span>
-                      {s.label || s.id}
-                      {s.kind ? (
-                        <em className="bn-score-src"> · {s.kind}</em>
-                      ) : null}
-                    </span>
-                    <code>
-                      {s.status || "consulted"}
-                      {s.locator ? ` · ${s.locator}` : ""}
-                      {s.detail ? ` — ${s.detail}` : ""}
-                    </code>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul className="bn-fact-list">
+              {consulted.map((s) => (
+                <li key={s.id || s.label}>
+                  <span>{s.label || s.id}</span>
+                  <code>
+                    {s.status || "consulted"}
+                    {s.detail ? ` · ${s.detail}` : ""}
+                  </code>
+                </li>
+              ))}
+            </ul>
           ) : null}
           {facts ? (
             <ul className="bn-fact-list">
               <li>
                 <span>Resolved</span>
-                <code>{facts.datetime || "—"}</code>
+                <code>{resolvedWhen}</code>
               </li>
               <li>
                 <span>Window</span>
@@ -2083,17 +2019,6 @@ function NodeDetail({
               </li>
             </ul>
           ) : null}
-          <StageIO
-            request={{ route, message: inbound }}
-            payload={{
-              live_doc: grounding?.live_doc
-                ? `${grounding.live_doc_chars || "?"} chars`
-                : false,
-              data_sources: sources,
-              facts: facts || null,
-              opening_hours: trace?.opening_hours || null,
-            }}
-          />
         </>
       );
     }
@@ -2166,128 +2091,82 @@ function NodeDetail({
           </>
         );
       }
-      const how =
-        hy?.how ||
-        [
-          "Dense: embedding similarity",
-          "BM25: keyword / CJK overlap",
-          `Keep ${rag?.top_k ?? hy?.keep_k ?? 5}: dense top ${hy?.dense_n ?? 3}, then BM25 fill`,
-        ];
       const preview = hy?.packed_preview || hy?.fused_preview || [];
+      const keepRows =
+        preview.length > 0
+          ? preview.slice(0, 8).map((row) => ({
+              key: `fp-${row.rank}-${row.source}`,
+              rank: row.rank,
+              title: row.title || row.source || "chunk",
+              why: [
+                row.slot || null,
+                row.dense_rank != null ? `dense #${row.dense_rank}` : null,
+                row.sparse_rank != null ? `BM25 #${row.sparse_rank}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            }))
+          : pass1.map((h, i) => ({
+              key: `kept-${h.source}-${i}`,
+              rank: h.rank ?? i + 1,
+              title: h.title || h.source || "hit",
+              why: [
+                h.pack?.slot || h.rerank?.why || "packed",
+                h.fusion?.dense_rank != null
+                  ? `dense #${h.fusion.dense_rank}`
+                  : null,
+                h.fusion?.sparse_rank != null
+                  ? `BM25 #${h.fusion.sparse_rank}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+            }));
       return (
         <>
           <p className="bn-rules-hint">
-            <strong>Channel pack</strong> · final {rag?.top_k ?? (pass1.length || 5)} chunks
-          </p>
-          <ol className="bn-select-steps">
-            {how.map((line, i) => (
-              <li key={`fuse-how-${i}`}>{line}</li>
-            ))}
-          </ol>
-          <p className="bn-rules-hint">
-            Dense primary · BM25 fills exact terms
+            <strong>Channel pack</strong> · keep{" "}
+            {rag?.top_k ?? (pass1.length || 5)} · Dense primary, BM25 fills
+            gaps
           </p>
           <ul className="bn-fact-list">
             <li>
-              <span>Dense slots</span>
+              <span>Dense kept</span>
               <code>
-                ranks 1–{hy?.dense_n ?? 3} (kept {hy?.dense_kept ?? "—"})
+                {hy?.dense_kept ?? "—"} of top {hy?.dense_n ?? 3} (pool{" "}
+                {hy?.dense_count ?? "—"})
               </code>
             </li>
             <li>
-              <span>BM25 fill</span>
+              <span>BM25 added</span>
               <code>
-                remaining slots · added {hy?.sparse_added ?? "—"} · dupes skipped{" "}
-                {hy?.skipped_dupes ?? "—"}
-              </code>
-            </li>
-            <li>
-              <span>Pools</span>
-              <code>
-                dense {hy?.dense_count ?? "—"} · BM25 {hy?.sparse_count ?? "—"}
+                {hy?.sparse_added ?? "—"} (pool {hy?.sparse_count ?? "—"} · dupes
+                skipped {hy?.skipped_dupes ?? "—"})
               </code>
             </li>
             <li>
               <span>In pack</span>
               <code>
-                both {hy?.both ?? 0} · dense {hy?.dense_only ?? 0} · BM25{" "}
-                {hy?.sparse_only ?? 0}
-              </code>
-            </li>
-            <li>
-              <span>Keep</span>
-              <code>
-                top_k {rag?.top_k ?? hy?.keep_k ?? "—"} · packed{" "}
-                {hy?.packed_count ?? "—"} · pool{" "}
-                {rag?.pool_returned ?? "—"}/{rag?.pool_k ?? "—"}
+                both {hy?.both ?? 0} · dense-only {hy?.dense_only ?? 0} ·
+                BM25-only {hy?.sparse_only ?? 0}
               </code>
             </li>
           </ul>
-          {preview.length ? (
+          {keepRows.length ? (
             <>
-              <p className="bn-rules-hint">Packed keep order</p>
+              <p className="bn-rules-hint">Keep order (→ pass 1)</p>
               <ul className="bn-fact-list">
-                {preview.slice(0, 8).map((row) => (
-                  <li key={`fp-${row.rank}-${row.source}`}>
+                {keepRows.map((row) => (
+                  <li key={row.key}>
                     <span>
-                      #{row.rank} {row.title || row.source || "chunk"}
+                      #{row.rank} {row.title}
                     </span>
-                    <code>
-                      {row.slot || "slot"}
-                      {row.dense_rank != null ? ` · d#${row.dense_rank}` : ""}
-                      {row.sparse_rank != null ? ` · s#${row.sparse_rank}` : ""}
-                      {row.channels ? ` · ${row.channels}` : ""}
-                    </code>
+                    <code>{row.why || "packed"}</code>
                   </li>
                 ))}
               </ul>
             </>
           ) : null}
-          {pass1.length ? (
-            <>
-              <p className="bn-rules-hint">
-                Kept for pass 1 — why each row is in the pack
-              </p>
-              <ul className="bn-fact-list">
-                {pass1.map((h, i) => (
-                  <li key={`kept-${h.source}-${i}`}>
-                    <span>
-                      #{h.rank ?? i + 1} {h.title || h.source || "hit"}
-                    </span>
-                    <code>
-                      {h.pack?.slot || h.rerank?.why || "packed"}
-                      {h.fusion?.dense_rank != null
-                        ? ` · d#${h.fusion.dense_rank}`
-                        : ""}
-                      {h.fusion?.sparse_rank != null
-                        ? ` · s#${h.fusion.sparse_rank}`
-                        : ""}
-                    </code>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
-          <StageIO
-            request={{
-              query: rag?.pass1_query || inbound,
-              dense_n: hy?.dense_n ?? 3,
-              keep_k: hy?.keep_k ?? rag?.top_k ?? null,
-            }}
-            payload={{
-              hybrid: hy || null,
-              kept_top_k: rag?.top_k ?? null,
-              pool_returned: rag?.pool_returned ?? null,
-              kept: pass1.map((h) => ({
-                rank: h.rank,
-                source: h.source,
-                slot: h.pack?.slot ?? null,
-                dense_rank: h.fusion?.dense_rank ?? null,
-                sparse_rank: h.fusion?.sparse_rank ?? null,
-                order: h.rerank?.why || null,
-              })),
-            }}
-          />
         </>
       );
     }
@@ -2404,15 +2283,35 @@ function NodeDetail({
       return (
         <>
           <p className="bn-rules-hint">SheetPro / Mailbox / booking writes.</p>
-          <StageIO
-            request={{ route, session: trace.session_id }}
-            payload={{
-              admin_todo: adminTodo || null,
-              staff_message: staffMessage || null,
-              booking: trace?.booking?.booking || null,
-              cancel: trace?.cancel || null,
-            }}
-          />
+          <ul className="bn-fact-list">
+            {adminTodo ? (
+              <li>
+                <span>SheetPro</span>
+                <code>{adminTodo.title || adminTodo.id || "todo written"}</code>
+              </li>
+            ) : null}
+            {staffMessage ? (
+              <li>
+                <span>Mailbox</span>
+                <code>
+                  {staffMessage.category || "draft"}
+                  {staffMessage.priority ? ` · ${staffMessage.priority}` : ""}
+                </code>
+              </li>
+            ) : null}
+            {trace?.booking?.booking ? (
+              <li>
+                <span>Booking</span>
+                <code>{trace.booking.stage || "booked"}</code>
+              </li>
+            ) : null}
+            {trace?.cancel?.cancelled || trace?.cancel?.stage === "cancelled" ? (
+              <li>
+                <span>Cancel</span>
+                <code>cancelled</code>
+              </li>
+            ) : null}
+          </ul>
         </>
       );
     }
@@ -3060,9 +2959,9 @@ export default function TurnPipeline({
       "e-rag-dense": "vectors",
       "e-rag-sparse": "keywords",
       "e-dense-fuse":
-        hy?.dense_count != null ? `${hy.dense_count} hits` : "dense",
+        hy?.dense_count != null ? `dense ${hy.dense_count}` : "dense",
       "e-sparse-fuse":
-        hy?.sparse_count != null ? `${hy.sparse_count} hits` : "BM25",
+        hy?.sparse_count != null ? `BM25 ${hy.sparse_count}` : "BM25",
       "e-fuse-chroma": isChannelPack(hy, rag) ? "3+2 pack" : "fuse",
       "e-chroma-rewrite":
         (rag?.retrieval_grade?.grade
