@@ -70,33 +70,33 @@ function isMainLlmCall(call) {
  */
 const LAYOUT = {
   parent: { x: 0, y: 0, w: 156, h: 42 },
-  lang: { x: 0, y: 72, w: 148, h: 42 },
-  memory: { x: 0, y: 150, w: 148, h: 72 },
-  rules: { x: 0, y: 250, w: 146, h: 46 },
-  router: { x: 0, y: 380, w: 128, h: 128 },
-  arbiter: { x: 210, y: 380, w: 120, h: 46 },
-  fsm: { x: -280, y: 560, w: 140, h: 46 },
-  rag: { x: 280, y: 560, w: 140, h: 46 },
-  dst: { x: -280, y: 650, w: 168, h: 46 },
-  gate: { x: -280, y: 740, w: 168, h: 46 },
-  staffmail: { x: -280, y: 830, w: 168, h: 46 },
-  live: { x: -280, y: 930, w: 148, h: 46 },
-  dense: { x: 180, y: 680, w: 136, h: 76 },
-  sparse: { x: 420, y: 680, w: 136, h: 76 },
-  fuse: { x: 300, y: 820, w: 148, h: 48 },
-  chroma: { x: 300, y: 930, w: 148, h: 76 },
-  rewrite: { x: 300, y: 1040, w: 152, h: 48 },
-  chroma2: { x: 460, y: 1160, w: 148, h: 76 },
-  sheets: { x: -280, y: 1160, w: 168, h: 76 },
-  llm: { x: -40, y: 1160, w: 160, h: 48 },
-  answer: { x: 0, y: 1280, w: 156, h: 42 },
+  lang: { x: 0, y: 68, w: 148, h: 42 },
+  memory: { x: 0, y: 140, w: 148, h: 68 },
+  rules: { x: 0, y: 230, w: 146, h: 46 },
+  router: { x: 0, y: 350, w: 120, h: 120 },
+  arbiter: { x: 200, y: 350, w: 118, h: 44 },
+  fsm: { x: -270, y: 520, w: 140, h: 44 },
+  rag: { x: 270, y: 520, w: 140, h: 44 },
+  dst: { x: -270, y: 600, w: 160, h: 44 },
+  gate: { x: -270, y: 680, w: 160, h: 44 },
+  staffmail: { x: -270, y: 760, w: 160, h: 44 },
+  live: { x: -270, y: 840, w: 148, h: 44 },
+  dense: { x: 170, y: 620, w: 130, h: 70 },
+  sparse: { x: 400, y: 620, w: 130, h: 70 },
+  fuse: { x: 285, y: 740, w: 148, h: 46 },
+  chroma: { x: 285, y: 840, w: 148, h: 70 },
+  rewrite: { x: 285, y: 940, w: 152, h: 46 },
+  chroma2: { x: 450, y: 1040, w: 140, h: 70 },
+  sheets: { x: -270, y: 1040, w: 160, h: 70 },
+  llm: { x: -30, y: 1040, w: 156, h: 46 },
+  answer: { x: 0, y: 1150, w: 156, h: 42 },
 };
 
 /** Corridor X between FSM column and RAG arm (FSM/DST → LLM). */
 const FSM_LLM_X = -140;
 /** Left gutter — elbows around the FSM stack without crossing boxes. */
 const LIVE_GUTTER_X = -430;
-const ARROW_SIZE = 10;
+const ARROW_SIZE = 11;
 
 const EDGES = [
   { id: "e-parent-lang", from: "parent", to: "lang" },
@@ -135,9 +135,9 @@ const EDGES = [
   { id: "e-sheets-answer", from: "sheets", to: "answer" },
 ];
 
-const WORLD = { minX: -480, minY: -28, maxX: 560, maxY: 1360 };
+const WORLD = { minX: -460, minY: -28, maxX: 540, maxY: 1220 };
 /** Default Fit: top of the spine (parent → router), not the whole flowchart. */
-const FIT_FOCUS = { minX: -360, minY: -24, maxX: 280, maxY: 540 };
+const FIT_FOCUS = { minX: -340, minY: -24, maxX: 260, maxY: 500 };
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 const PAN_MARGIN = 72;
@@ -401,44 +401,48 @@ function splitArrow(pts, size = ARROW_SIZE) {
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  const back = Math.min(size, Math.max(4, len - 2));
+  // Keep a usable last segment; tip sits on the port, stroke stops at base.
+  const back = Math.min(size, Math.max(7, Math.min(len * 0.5, len - 1)));
   const base = { x: tip.x - ux * back, y: tip.y - uy * back };
   const linePts = dedupePts([...raw.slice(0, -1), base]);
   const px = -uy;
   const py = ux;
-  const half = back * 0.55;
+  const half = back * 0.58;
+  // Tip slightly proud of the base so fill covers the stroke end cleanly.
   const arrow = `M ${tip.x} ${tip.y} L ${base.x + px * half} ${
     base.y + py * half
   } L ${base.x - px * half} ${base.y - py * half} Z`;
-  return { linePts, tip, base, arrow, ux, uy };
+  return { linePts, tip, base, arrow, ux, uy, pathLen: len };
 }
 
-/** Label ~40% along path length, nudged off the stroke. */
-function labelAlong(pts, frac = 0.4, nudge = 12) {
-  if (!pts || pts.length < 2) return { x: 0, y: 0 };
+function pathLength(pts) {
   let total = 0;
-  const segs = [];
-  for (let i = 1; i < pts.length; i++) {
-    const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-    segs.push(d);
-    total += d;
+  for (let i = 1; i < (pts || []).length; i++) {
+    total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
   }
+  return total;
+}
+
+/** Label ~35% along path; skip short edges (labels collide with tips). */
+function labelAlong(pts, frac = 0.35, nudge = 14) {
+  if (!pts || pts.length < 2) return null;
+  const total = pathLength(pts);
+  if (total < 96) return null;
   let target = total * frac;
   for (let i = 1; i < pts.length; i++) {
-    const d = segs[i - 1];
+    const d = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     if (target <= d || i === pts.length - 1) {
-      const t = d ? target / d : 0;
+      const t = d ? Math.min(0.85, target / d) : 0;
       const x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t;
       const y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t;
       const dx = pts[i].x - pts[i - 1].x;
       const dy = pts[i].y - pts[i - 1].y;
       const len = Math.hypot(dx, dy) || 1;
-      // Prefer upward/left offset so labels sit away from arrowheads.
       return { x: x - (dy / len) * nudge, y: y + (dx / len) * nudge - 4 };
     }
     target -= d;
   }
-  return { x: pts[0].x, y: pts[0].y - nudge };
+  return null;
 }
 
 function orthoVia(start, end, midX) {
@@ -577,7 +581,7 @@ function edgeGeometry(fromId, toId) {
     split.linePts.slice(1).map((p) => ` L ${p.x} ${p.y}`).join("");
   return {
     d,
-    labelAt: labelAlong(split.linePts, 0.38, 14),
+    labelAt: labelAlong(split.linePts, 0.34, 16),
     start: split.linePts[0],
     end: split.tip,
     arrow: split.arrow,
@@ -3476,7 +3480,7 @@ export default function TurnPipeline({
           <button
             type="button"
             className="bn-flow-fit"
-            onClick={fitView}
+            onClick={() => (trace ? fitLitPath() : fitView())}
             title="Fit to view"
             aria-label="Fit to view"
           >
@@ -3529,7 +3533,7 @@ export default function TurnPipeline({
                       className={`bn-pipe-arrow${lit ? " is-lit" : ""}`}
                     />
                   ) : null}
-                  {label ? (
+                  {label && geo.labelAt ? (
                     <text
                       x={geo.labelAt.x}
                       y={geo.labelAt.y}

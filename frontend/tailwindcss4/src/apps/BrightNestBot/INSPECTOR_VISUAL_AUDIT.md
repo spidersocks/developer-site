@@ -1,50 +1,46 @@
 # System inspector visual audit
 
 Date: 2026-11-18  
-Scope: every major route lit on the diagram + geometry of edges/arrowheads/labels.
+Method: live browser probes + screenshot + getBoundingClientRect visibility checks.
 
-## Issues found (pre-fix)
+## Issues found
 
-1. **Live data invisible / line-to-nowhere**  
-   Live was parked at `x: -470`, outside the default Fit focus (`minX: -320`). Fit + initial view cropped the node; the FSM→Live edge looked like it ended in empty space.
+### P0 — Live data “line to nowhere”
+- **Symptom:** Lit edge toward Live; Live node not in the viewport.
+- **Cause:** Live sat far left (`x: -470`) then later below the Fit focus; Fit framed only the top spine.
+- **Fix:** Live on FSM column under Staff email; auto-`fitLitPath` after each turn; Fit button frames lit nodes when a trace exists; tighter vertical spacing.
 
-2. **Arrowhead “nub”**  
-   Stroke used `stroke-linecap: round` and ended at the same point as the triangle tip, so the round cap stuck out past the tip.
+### P0 — Arrowhead nub
+- **Symptom:** Stroke sticks out past the triangle tip.
+- **Cause:** `stroke-linecap: round` + stroke ended at the tip.
+- **Fix:** Stroke ends at arrow **base**; tip on port; `stroke-linecap: butt`.
 
-3. **Labels glued to arrowheads**  
-   Labels used the midpoint of the *point list* (often the last elbow near the tip), not a fraction of path length.
+### P1 — Labels glued to tips
+- **Symptom:** “FSM” / pack labels sit on the arrowhead.
+- **Cause:** Label at midpoint of point list (often last elbow).
+- **Fix:** Place at ~34% path length with perpendicular nudge; omit labels on short edges (&lt;96px).
 
-4. **Dense/Sparse → Pack 3+2 nonsense**  
-   Both edges dropped to `fuse.top` then ran horizontally along the pack’s top edge toward center, overlapping the node chrome and appearing to point at each other.
+### P1 — Dense/Sparse → Pack 3+2
+- **Symptom:** Both edges ran along Pack’s top edge and pointed at each other.
+- **Cause:** Both targeted `fuse` top center then horizontal.
+- **Fix:** Dense → Pack **left** port; Sparse → Pack **right** port.
 
-5. **FSM→Live through boxes (earlier)**  
-   Vertical edge through dst/gate/staffmail (addressed by gutter elbows; Live restored onto the column under staffmail).
+### P1 — Enrich looked like RAG skipped
+- **Symptom:** Pack lit while RAG/Dense/Sparse showed skipped.
+- **Fix:** Enrich lights full retrieve arm (earlier commit).
 
-## Route matrix (expected lighting)
+## Route retest matrix
 
-| Probe | Expect route | Must light | Must NOT look skipped incorrectly |
-| --- | --- | --- | --- |
-| Open now / hours | `opening_hours` / deterministic | FSM, Live, RAG+Dense+Sparse+Pack (enrich), LLM | RAG/Pack while enrich runs |
-| Typhoon T8 | `severe_weather` | FSM, Live, enrich retrieve | Live visible |
-| Seats left | `booking_tool` | FSM, Live | — |
-| Book a class | `booking_dialogue` | FSM, DST (± gate) | — |
-| Speak to person | `staff_escalation` | FSM, gate, staffmail, sheets | — |
-| Phonics fees | `rag` | RAG, Dense, Sparse, Pack, … | FSM tools |
-| Fish breathe | `rag` + refuse | RAG arm | Live |
+| # | Probe | Expect route | Expect lit | Visual |
+| --- | --- | --- | --- | --- |
+| 1 | Is the centre open now? | opening_hours | FSM, Live, RAG+Dense+Sparse+Pack, LLM | Live on-screen |
+| 2 | Typhoon signal 8? | severe_weather | FSM, Live, enrich retrieve | Live on-screen |
+| 3 | Seats left Saturday phonics? | booking_tool | FSM, Live | Live on-screen |
+| 4 | Book a class for Jason | booking_dialogue | FSM, DST | No Live required |
+| 5 | Call me ASAP allergic reaction | staff_escalation | FSM, gate, staffmail, sheets | — |
+| 6 | How much is phonics? | rag | RAG dual-channel → Pack sides | No FSM tools |
+| 7 | How do fish breathe? | rag refuse | RAG arm | No Live |
 
-## Fixes applied
+## Retest log
 
-- Live back on FSM column (`y: 930`); FSM→Live via left gutter.
-- Arrow: stroke ends at triangle **base**; tip on port; `stroke-linecap: butt`.
-- Labels at ~38% path length with perpendicular nudge.
-- Dense → Pack **left**, Sparse → Pack **right** (no shared top rail).
-
-## Retest checklist
-
-- [ ] Hours / open now — Live visible, enrich pack lit, crisp arrows
-- [ ] Typhoon — Live + enrich
-- [ ] Seats — Live
-- [ ] Booking — DST path
-- [ ] Escalation — staffmail/sheets
-- [ ] RAG fees — dual-channel into Pack from sides
-- [ ] Off-topic — RAG refuse, no Live
+_(filled during browser pass)_
