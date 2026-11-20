@@ -135,7 +135,7 @@
   height: 148px;
   max-height: 118%;
   display: block;
-  z-index: 1;
+  z-index: 2;
   object-fit: cover;
   object-position: center top;
   filter: drop-shadow(0 6px 8px rgba(30, 80, 120, 0.25));
@@ -194,68 +194,13 @@
   pointer-events: auto;
 }
 
-/* Empty nest — soft oval on the floor */
-.plazaNestShadow {
-  position: fixed;
-  z-index: 10035;
-  pointer-events: none;
-  border-radius: 50%;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(40, 70, 100, 0.1) 0%,
-    rgba(40, 70, 100, 0.04) 55%,
-    transparent 75%
-  );
-  filter: blur(1px);
-}
-
-/* Faint figure-shaped shadow where the asset used to stand */
-.plazaHomeSilhouette {
-  position: fixed;
-  z-index: 10038;
-  pointer-events: none;
-  object-fit: contain;
-  object-position: bottom center;
-  opacity: 0.07;
-  /* Black silhouette following the PNG alpha — reads as a soft cutout shadow */
-  filter: brightness(0) blur(0.5px);
-  animation: plazaGhostIn 0.22s ease-out both;
-}
-
-/* Clickable recall target after a yeet — still faint, but hittable */
-.plazaHomeSilhouetteRecall {
-  pointer-events: auto !important;
-  /* Wii pointer (same as the page), not grab and not the OS arrow */
-  cursor: url("/plaza/wii-pointer.png") 10 2, auto !important;
-  opacity: 0.11;
-  transition: opacity 0.15s ease;
-}
-
-.plazaHomeSilhouetteRecall:hover {
-  opacity: 0.2;
-}
-
-/* Beat `.page * { cursor: inherit }` for in-banner silhouettes */
-.page .plazaHomeSilhouetteRecall,
-.page .plazaHomeSilhouetteRecall:hover {
-  cursor: url("/plaza/wii-pointer.png") 10 2, auto !important;
-}
-
-/* Banner-local silhouette — absolute so header overflow:hidden clips it */
+/* Nest-local marks only — same layout parent as the real asset (scroll/zoom safe).
+   Never position:fixed; that stuck ghosts to the viewport on mobile. */
 .plazaHomeSilhouetteLocal,
 .plazaNestShadowLocal,
 .plazaSnapGhostLocal {
   position: absolute;
   pointer-events: none;
-  object-fit: contain;
-  object-position: bottom center;
-}
-
-.plazaHomeSilhouetteLocal {
-  z-index: 0;
-  opacity: 0.07;
-  filter: brightness(0) blur(0.5px);
-  animation: plazaGhostIn 0.22s ease-out both;
 }
 
 .plazaNestShadowLocal {
@@ -270,23 +215,71 @@
   filter: blur(1px);
 }
 
-.plazaSnapGhostLocal {
-  z-index: 1;
-  opacity: 0.26;
-  filter: drop-shadow(0 3px 3px rgba(40, 70, 100, 0.1));
-  animation: plazaGhostIn 0.18s ease-out both;
-}
-
-/* Brighter twin at home when inside snap radius */
-.plazaSnapGhost {
-  position: fixed;
-  z-index: 10040;
-  pointer-events: none;
+/* Mii nest ghost — fills the locked footprint like the resting sprite */
+.plazaNestGhostFill {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   object-position: bottom center;
-  opacity: 0.26;
-  filter: drop-shadow(0 4px 4px rgba(40, 70, 100, 0.12));
-  animation: plazaGhostIn 0.18s ease-out both;
+}
+
+.plazaHomeSilhouetteLocal {
+  z-index: 2;
+  opacity: 0.14;
+  filter: brightness(0) blur(0.5px);
+  animation: plazaGhostFade 0.2s ease-out;
+}
+
+.plazaSnapGhostLocal {
+  z-index: 3;
+  opacity: 0.45;
+  filter: drop-shadow(0 3px 3px rgba(40, 70, 100, 0.1));
+  animation: plazaGhostFade 0.16s ease-out;
+}
+
+/* Banner cutout ghost keeps .heroCutout framing so header overflow clips identically */
+.heroCutout.plazaHomeSilhouetteLocal {
+  z-index: 2;
+  opacity: 0.18;
+  filter: brightness(0) blur(0.5px);
+  cursor: inherit;
+}
+
+.heroCutout.plazaSnapGhostLocal {
+  z-index: 3;
+  opacity: 0.45;
+  filter: drop-shadow(0 3px 3px rgba(40, 70, 100, 0.12));
+}
+
+/* Clickable recall target after a yeet — still faint, but hittable */
+.plazaHomeSilhouetteRecall {
+  pointer-events: auto !important;
+  cursor: url("/plaza/wii-pointer.png") 10 2, auto !important;
+  opacity: 0.2;
+  transition: opacity 0.15s ease;
+}
+
+.plazaHomeSilhouetteRecall:hover {
+  opacity: 0.32;
+}
+
+.page .plazaHomeSilhouetteRecall,
+.page .plazaHomeSilhouetteRecall:hover {
+  cursor: url("/plaza/wii-pointer.png") 10 2, auto !important;
+}
+
+/* Banner free sprite while snapping home — nest-absolute so overflow:hidden clips */
+.plazaBannerSnapClip {
+  object-fit: cover !important;
+  object-position: center top !important;
+  z-index: 3;
+  margin: 0 !important;
+  max-height: none !important;
+  max-width: none !important;
+  bottom: auto !important;
+  right: auto !important;
 }
 
 /* Layout lock — pixel footprint from props only; never follows lift scale */
@@ -342,19 +335,18 @@
   overflow: visible;
 }
 
-@keyframes plazaGhostIn {
+/* Fade from 0 → class opacity (no fill-mode:both — that locked opacity at 0.38
+   and fought the near/far class swap, so the preview often looked missing). */
+@keyframes plazaGhostFade {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 0.38;
   }
 }
 
 
 .headerContent {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1161,14 +1153,6 @@
     left: -22px;
     bottom: -14px;
     height: 132px;
-    /* Soft bottom fade only on smaller screens where the bar is shorter */
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      #000 0%,
-      #000 82%,
-      transparent 100%
-    );
-    mask-image: linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
   }
 
   .headerContent {

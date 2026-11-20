@@ -430,6 +430,8 @@ export default function DraggablePlazaSprite({
   const [displaySrc, setDisplaySrc] = useState(src);
   const [spinning, setSpinning] = useState(false);
   const [spinDeg, setSpinDeg] = useState(0);
+  // Mirror of homeRef — refs alone don't re-render the snap preview
+  const [homeBox, setHomeBox] = useState(null);
 
   const clearAnimTimer = () => {
     if (animTimer.current) {
@@ -587,6 +589,16 @@ export default function DraggablePlazaSprite({
     };
   }, [blinkSrc, src]);
 
+  const setHome = (box) => {
+    if (box) {
+      homeRef.current = { ...box };
+      setHomeBox({ ...box });
+    } else {
+      homeRef.current = null;
+      setHomeBox(null);
+    }
+  };
+
   const liveHomeBox = () => {
     const nest = nestRef.current;
     if (reserveSpace && nest) return unscaledBox(nest, null);
@@ -609,7 +621,7 @@ export default function DraggablePlazaSprite({
     // the nest instead (drag near home stays fully visible / portaled).
     const finishIntoNest = () => {
       freeRef.current = null;
-      homeRef.current = null;
+      setHome(null);
       setFree(null);
       setLift(0);
       setPhase("idle");
@@ -626,7 +638,7 @@ export default function DraggablePlazaSprite({
       setFree({ ...target });
       setLift(0);
       snapRaf.current = requestAnimationFrame(() => {
-        homeRef.current = null;
+        setHome(null);
         freeRef.current = null;
         setFree(null);
         setPhase("idle");
@@ -642,12 +654,6 @@ export default function DraggablePlazaSprite({
       }
 
       const t = Math.min(1, (now - t0) / SNAP_MS);
-      // Banner: hand off to clipped nest before the final home pose paints unclipped
-      if (!reserveSpace && t >= 0.78) {
-        finishIntoNest();
-        return;
-      }
-
       const e = easeOutCubic(t);
       const pos = {
         width: from.width + (target.width - from.width) * e,
@@ -655,6 +661,13 @@ export default function DraggablePlazaSprite({
         left: from.left + (target.left - from.left) * e,
         top: from.top + (target.top - from.top) * e,
       };
+
+      // Banner: remount into clipped nest before the overflowing home pose wins
+      if (!reserveSpace && (t >= 0.72 || distToHome(pos, target) < 18)) {
+        finishIntoNest();
+        return;
+      }
+
       freeRef.current = pos;
       setFree(pos);
       setLift(startLift * (1 - e));
@@ -891,15 +904,16 @@ export default function DraggablePlazaSprite({
 
     const startedFree = Boolean(free);
     if (!homeRef.current || !free) {
-      homeRef.current = { ...box };
+      setHome(box);
     }
+    const homeAtStart = homeRef.current || box;
 
     const start = free
       ? {
           left: free.left,
           top: free.top,
-          width: homeRef.current.width,
-          height: homeRef.current.height,
+          width: homeAtStart.width,
+          height: homeAtStart.height,
         }
       : { ...box };
 
@@ -913,7 +927,7 @@ export default function DraggablePlazaSprite({
       startY: e.clientY,
       startedFree,
       committed: startedFree, // already loose → dragging immediately
-      homeBox: { ...homeRef.current },
+      homeBox: { ...homeAtStart },
       startPos: { ...start },
       samples: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }],
     };
@@ -934,7 +948,7 @@ export default function DraggablePlazaSprite({
       if (d.committed) return;
       d.committed = true;
       stopSpin();
-      if (!homeRef.current) homeRef.current = { ...d.homeBox };
+      if (!homeRef.current) setHome(d.homeBox);
       const pos = {
         ...d.startPos,
         left: ev.clientX - d.offsetX,
@@ -1076,13 +1090,22 @@ export default function DraggablePlazaSprite({
   // Snap/fall drive transform in JS — skip CSS lift classes that hard-cut
   const useCssLift = dragging && phase === "idle";
   const isFalling = phase === "landing" || phase === "fallingOff";
+  // Banner snap only: paint inside the nest so header overflow clips — never
+  // park an unclipped overflowing home pose (drag near home stays portaled).
+  const bannerSnapClip = Boolean(
+    !reserveSpace && free && phase === "snapping" && nestRef.current
+  );
+  const nestRect = bannerSnapClip
+    ? nestRef.current.getBoundingClientRect()
+    : null;
 
   const imgClass = [
     className,
     styles.plazaDraggable,
     styles.plazaSpriteImg,
     useCssLift ? styles.plazaDragging : "",
-    free ? styles.plazaFreed : "",
+    free && !bannerSnapClip ? styles.plazaFreed : "",
+    bannerSnapClip ? styles.plazaBannerSnapClip : "",
     isFalling ? styles.plazaLanding : "",
     phase === "snapping" ? styles.plazaSnapping : "",
     useCssLift && nearHome ? styles.plazaNearHome : "",
@@ -1090,8 +1113,6 @@ export default function DraggablePlazaSprite({
   ]
     .filter(Boolean)
     .join(" ");
-
-  const home = homeRef.current;
 
   let motionTransform;
   if (phase === "snapping") {
@@ -1112,36 +1133,56 @@ export default function DraggablePlazaSprite({
     ? `drop-shadow(0 ${Math.max(4, 8 + Math.max(0, -fallY) * 0.55)}px ${5 + Math.max(0, -fallY) * 0.2}px rgba(40, 70, 100, ${0.18 + lift * 0.12}))`
     : undefined;
 
-  const imgStyle = free
-    ? {
-        position: "fixed",
-        left: free.left,
-        top: free.top,
-        width: free.width,
-        height: free.height,
-        zIndex: 10050,
-        margin: 0,
-        bottom: "auto",
-        right: "auto",
-        maxHeight: "none",
-        maxWidth: "none",
-        // No CSS left/top transition — position is rAF-smoothed
-        transition: "none",
-        transform: motionTransform,
-        filter: shadowFilter,
-        pointerEvents: phase === "fallingOff" ? "none" : undefined,
-        willChange:
-          phase === "snapping" || isFalling || spinning
-            ? "left, top, transform, filter"
-            : undefined,
-      }
-    : spinning || spinDeg
-      ? {
-          transform: motionTransform,
-          transition: "none",
-          willChange: "transform",
-        }
-      : undefined;
+  let imgStyle;
+  if (free && bannerSnapClip && nestRect) {
+    imgStyle = {
+      position: "absolute",
+      left: free.left - nestRect.left,
+      top: free.top - nestRect.top,
+      width: free.width,
+      height: free.height,
+      zIndex: 3,
+      margin: 0,
+      bottom: "auto",
+      right: "auto",
+      maxHeight: "none",
+      maxWidth: "none",
+      transition: "none",
+      transform: motionTransform,
+      filter: shadowFilter,
+      willChange: "left, top, transform, filter",
+    };
+  } else if (free) {
+    imgStyle = {
+      position: "fixed",
+      left: free.left,
+      top: free.top,
+      width: free.width,
+      height: free.height,
+      zIndex: 10050,
+      margin: 0,
+      bottom: "auto",
+      right: "auto",
+      maxHeight: "none",
+      maxWidth: "none",
+      transition: "none",
+      transform: motionTransform,
+      filter: shadowFilter,
+      pointerEvents: phase === "fallingOff" ? "none" : undefined,
+      willChange:
+        phase === "snapping" || isFalling || spinning
+          ? "left, top, transform, filter"
+          : undefined,
+    };
+  } else if (spinning || spinDeg) {
+    imgStyle = {
+      transform: motionTransform,
+      transition: "none",
+      willChange: "transform",
+    };
+  } else {
+    imgStyle = undefined;
+  }
 
   const img = (
     <img
@@ -1166,7 +1207,7 @@ export default function DraggablePlazaSprite({
     clearSnapRaf();
     clearAnimTimer();
     freeRef.current = null;
-    homeRef.current = null;
+    setHome(null);
     setFree(null);
     setFallY(0);
     setLift(0);
@@ -1175,42 +1216,71 @@ export default function DraggablePlazaSprite({
     setPhase("idle");
   };
 
-  // Silhouette while away (including yeeted-off). Brighter twin when snap-near.
-  const showHomeMark =
-    home && (free || phase === "fallingOff" || phase === "gone");
+  // Silhouette while away — nest-local only (scrolls/zooms with the real asset).
+  const showHomeMark = Boolean(
+    homeBox && (free || phase === "fallingOff" || phase === "gone")
+  );
   const canRecall = phase === "gone";
+  const near = Boolean(free && nearHome && (dragging || phase === "idle"));
 
-  const renderHomeMark = (local) => {
-    if (!showHomeMark || !home) return null;
-    let left = home.left;
-    let top = home.top;
-    if (local && nestRef.current) {
-      const nr = nestRef.current.getBoundingClientRect();
-      left = home.left - nr.left;
-      top = home.top - nr.top;
-    }
-    const near = dragging && nearHome;
+  const renderHomeMark = () => {
+    if (!showHomeMark) return null;
     const silClass = near
-      ? local
-        ? styles.plazaSnapGhostLocal
-        : styles.plazaSnapGhost
-      : local
-        ? styles.plazaHomeSilhouetteLocal
-        : styles.plazaHomeSilhouette;
+      ? styles.plazaSnapGhostLocal
+      : styles.plazaHomeSilhouetteLocal;
+
+    if (reserveSpace) {
+      return (
+        <>
+          <div
+            className={styles.plazaNestShadowLocal}
+            style={{
+              left: "12%",
+              top: "78%",
+              width: "76%",
+              height: "12%",
+            }}
+            aria-hidden="true"
+          />
+          <img
+            key={near ? "snap-ghost" : "home-sil"}
+            className={[
+              styles.plazaNestGhostFill,
+              silClass,
+              canRecall ? styles.plazaHomeSilhouetteRecall : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            src={src}
+            alt={canRecall ? "Where did he go?" : ""}
+            title={canRecall ? "Where did he go?" : undefined}
+            draggable={false}
+            onPointerDown={canRecall ? recallHome : undefined}
+          />
+        </>
+      );
+    }
+
+    // Banner: same .heroCutout offsets as the resting asset → header clips it
     return (
       <>
         <div
-          className={local ? styles.plazaNestShadowLocal : styles.plazaNestShadow}
+          className={styles.plazaNestShadowLocal}
           style={{
-            left: left + home.width * 0.12,
-            top: top + home.height * 0.78,
-            width: home.width * 0.76,
-            height: Math.max(10, home.height * 0.12),
+            left: "4%",
+            top: "78%",
+            width: "42%",
+            height: "14%",
           }}
           aria-hidden="true"
         />
         <img
-          className={[silClass, canRecall ? styles.plazaHomeSilhouetteRecall : ""]
+          key={near ? "snap-ghost" : "home-sil"}
+          className={[
+            className,
+            silClass,
+            canRecall ? styles.plazaHomeSilhouetteRecall : "",
+          ]
             .filter(Boolean)
             .join(" ")}
           src={src}
@@ -1218,22 +1288,10 @@ export default function DraggablePlazaSprite({
           title={canRecall ? "Where did he go?" : undefined}
           draggable={false}
           onPointerDown={canRecall ? recallHome : undefined}
-          style={{
-            left,
-            top,
-            width: home.width,
-            height: home.height,
-          }}
         />
       </>
     );
   };
-
-  // About card: portal to body. Banner cutout: keep inside nest so header clips it.
-  const nestHint =
-    showHomeMark && reserveSpace && typeof document !== "undefined"
-      ? createPortal(renderHomeMark(false), document.body)
-      : null;
 
   const dustLayer =
     dust && typeof document !== "undefined"
@@ -1249,6 +1307,9 @@ export default function DraggablePlazaSprite({
         )
       : null;
 
+  const homeMark = showHomeMark ? renderHomeMark() : null;
+  const showFreePortal = Boolean(free) && !bannerSnapClip;
+
   if (reserveSpace) {
     return (
       <>
@@ -1262,13 +1323,12 @@ export default function DraggablePlazaSprite({
           }}
           data-plaza-nest=""
         >
-          {/* Invisible spacer — guarantees flex/card height even if img portals out */}
           <span className={styles.plazaNestSpacer} aria-hidden="true" />
+          {homeMark}
           {!free && phase !== "gone" ? img : null}
         </div>
-        {nestHint}
         {dustLayer}
-        {free && typeof document !== "undefined"
+        {showFreePortal && typeof document !== "undefined"
           ? createPortal(img, document.body)
           : null}
       </>
@@ -1278,13 +1338,11 @@ export default function DraggablePlazaSprite({
   return (
     <>
       <div ref={nestRef} className={styles.plazaSpriteNestLoose}>
-        {/* Clipped by .header overflow:hidden — silhouette can't spill out of the banner */}
-        {renderHomeMark(true)}
-        {!free && phase !== "gone" ? img : null}
+        {homeMark}
+        {(!free && phase !== "gone") || bannerSnapClip ? img : null}
       </div>
-      {nestHint}
       {dustLayer}
-      {free && typeof document !== "undefined"
+      {showFreePortal && typeof document !== "undefined"
         ? createPortal(img, document.body)
         : null}
     </>
