@@ -9,7 +9,7 @@
  */
 
 /** @typedef {{ id: string, label: string, durationSec: number, cue?: string }} Segment */
-/** @typedef {{ id: string, name: string, title: string, routineId: string, intent: string, segments: Segment[] }} Session */
+/** @typedef {{ id: string, name: string, title: string, routineId: string, space: string, intent: string, segments: Segment[] }} Session */
 
 /** @type {Session[]} */
 export const SESSIONS = [
@@ -18,6 +18,7 @@ export const SESSIONS = [
     name: "demo-smoke",
     title: "Demo Smoke",
     routineId: "DEMO",
+    space: "Anywhere",
     intent: "Short segments to verify OBS Browser Source + auto-advance.",
     segments: [
       { id: "demo-s1", label: "Settle in", durationSec: 5, cue: "Overlay check" },
@@ -31,6 +32,7 @@ export const SESSIONS = [
     name: "r1-floor-unwind",
     title: "Floor Unwind",
     routineId: "R1",
+    space: "Floor mat",
     intent: "Gentle floor mobility to downshift before sleep.",
     segments: [
       { id: "r1-s1", label: "Settle & breathe", durationSec: 45, cue: "Lie down, soft belly breaths" },
@@ -48,6 +50,7 @@ export const SESSIONS = [
     name: "r2-from-bed-stretch",
     title: "From-Bed Stretch",
     routineId: "R2",
+    space: "Bedside",
     intent: "Low-effort stretches you can do sitting or standing by the bed.",
     segments: [
       { id: "r2-s1", label: "Seated neck rolls", durationSec: 40, cue: "Tiny circles" },
@@ -66,6 +69,7 @@ export const SESSIONS = [
     name: "r3-small-space-strength",
     title: "Small-Space Strength",
     routineId: "R3",
+    space: "Hotel footprint",
     intent: "Quiet standing strength in a hotel-room footprint.",
     segments: [
       { id: "r3-s1", label: "March in place", durationSec: 50, cue: "Warm the hips" },
@@ -83,6 +87,7 @@ export const SESSIONS = [
     name: "r4-hip-back-release",
     title: "Hip & Back Release",
     routineId: "R4",
+    space: "Floor mat",
     intent: "Target hips and low back after a desk day.",
     segments: [
       { id: "r4-s1", label: "World's greatest stretch L", durationSec: 50 },
@@ -101,6 +106,7 @@ export const SESSIONS = [
     name: "r5-wind-down-circuit",
     title: "Wind-Down Circuit",
     routineId: "R5",
+    space: "Open floor",
     intent: "Short mixed circuit that ends in stillness.",
     segments: [
       { id: "r5-s1", label: "Box breath ×4", durationSec: 64, cue: "4·4·4·4" },
