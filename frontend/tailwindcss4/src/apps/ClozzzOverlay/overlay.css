@@ -1,0 +1,256 @@
+/* Clozzz OBS Browser Source — transparent canvas, high-contrast type */
+
+:root {
+  --clozzz-ink: #f4f7fb;
+  --clozzz-ink-dim: rgba(244, 247, 251, 0.72);
+  --clozzz-ink-faint: rgba(244, 247, 251, 0.48);
+  --clozzz-accent: #7ec8e3;
+  --clozzz-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.8);
+  --clozzz-font-display: "Outfit", "Segoe UI", sans-serif;
+  --clozzz-font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  overflow: hidden;
+  color: var(--clozzz-ink);
+  font-family: var(--clozzz-font-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.clozzz-overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.75rem;
+  text-shadow: var(--clozzz-shadow);
+  pointer-events: none;
+  user-select: none;
+}
+
+.clozzz-overlay--picker {
+  pointer-events: auto;
+  justify-content: flex-start;
+  max-width: 42rem;
+}
+
+/* Picker / unknown-session pages are not OBS sources — use a readable dark stage. */
+html.clozzz-stage-dark,
+html.clozzz-stage-dark body,
+html.clozzz-stage-dark #root {
+  background: #0b1018 !important;
+}
+
+/* Optional local/OBS check: /clozzz-overlay/demo?preview=1 */
+html.clozzz-stage-preview,
+html.clozzz-stage-preview body,
+html.clozzz-stage-preview #root {
+  background:
+    radial-gradient(ellipse at 30% 20%, #1a2a38 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 70%, #152018 0%, transparent 45%),
+    #101820 !important;
+}
+
+.clozzz-kicker {
+  margin: 0;
+  font-size: clamp(0.75rem, 1.4vw, 0.95rem);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--clozzz-accent);
+}
+
+.clozzz-current {
+  margin: 0;
+  max-width: 16ch;
+  font-size: clamp(2.4rem, 6.5vw, 5.5rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.clozzz-cue {
+  margin: 0;
+  max-width: 28rem;
+  font-size: clamp(0.95rem, 1.8vw, 1.25rem);
+  font-weight: 400;
+  color: var(--clozzz-ink-dim);
+}
+
+.clozzz-timer {
+  margin: 0.35rem 0 0;
+  font-family: var(--clozzz-font-mono);
+  font-size: clamp(2.8rem, 8vw, 6.5rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.clozzz-timer--warn {
+  color: #ffd38a;
+}
+
+.clozzz-timer--done {
+  color: var(--clozzz-accent);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  letter-spacing: 0.02em;
+}
+
+.clozzz-progress {
+  width: min(22rem, 55vw);
+  height: 4px;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.clozzz-progress__bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--clozzz-accent), #c8e9f5);
+  transition: transform 0.2s linear;
+}
+
+.clozzz-meta {
+  margin: 0.5rem 0 0;
+  font-size: clamp(0.75rem, 1.2vw, 0.9rem);
+  color: var(--clozzz-ink-faint);
+  font-weight: 500;
+}
+
+.clozzz-next {
+  position: absolute;
+  right: clamp(1.25rem, 3vw, 2.5rem);
+  bottom: clamp(1.25rem, 3vw, 2.5rem);
+  text-align: right;
+  max-width: min(18rem, 42vw);
+}
+
+.clozzz-next__label {
+  margin: 0;
+  font-size: clamp(0.7rem, 1.1vw, 0.8rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--clozzz-ink-faint);
+  font-weight: 500;
+}
+
+.clozzz-next__title {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1rem, 2vw, 1.45rem);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--clozzz-ink-dim);
+}
+
+.clozzz-next__time {
+  margin: 0.15rem 0 0;
+  font-family: var(--clozzz-font-mono);
+  font-size: clamp(0.8rem, 1.3vw, 0.95rem);
+  color: var(--clozzz-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.clozzz-picker-title {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.clozzz-picker-lead {
+  margin: 0 0 1.5rem;
+  color: var(--clozzz-ink-dim);
+  font-size: 1rem;
+  max-width: 36rem;
+  text-shadow: var(--clozzz-shadow);
+}
+
+.clozzz-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.clozzz-session-list a {
+  display: block;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 12, 18, 0.55);
+  color: var(--clozzz-ink);
+  text-decoration: none;
+  text-shadow: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  pointer-events: auto;
+}
+
+.clozzz-session-list a:hover {
+  border-color: var(--clozzz-accent);
+  background: rgba(8, 12, 18, 0.75);
+  color: var(--clozzz-ink);
+}
+
+.clozzz-session-list strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.clozzz-session-list span {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--clozzz-ink-dim);
+}
+
+.clozzz-error {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.clozzz-error a {
+  color: var(--clozzz-accent);
+  pointer-events: auto;
+}
+
+@keyframes clozzz-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.clozzz-anim {
+  animation: clozzz-fade-in 0.35s ease-out both;
+}

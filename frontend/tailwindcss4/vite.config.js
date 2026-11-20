@@ -21,10 +21,33 @@ const brightnestProxy = (env) => {
   }
 }
 
+/** Dev/preview parity with vercel.json MPA rewrites for Clozzz overlay. */
+function clozzzOverlayRewrite() {
+  const rewrite = (req, _res, next) => {
+    const url = req.url || ''
+    if (url === '/clozzz-overlay' || url.startsWith('/clozzz-overlay?')) {
+      req.url = url.replace('/clozzz-overlay', '/clozzz-overlay.html')
+    } else if (url.startsWith('/clozzz-overlay/')) {
+      const q = url.includes('?') ? url.slice(url.indexOf('?')) : ''
+      req.url = `/clozzz-overlay.html${q}`
+    }
+    next()
+  }
+  return {
+    name: 'clozzz-overlay-rewrite',
+    configureServer(server) {
+      server.middlewares.use(rewrite)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite)
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), clozzzOverlayRewrite()],
     server: {
       proxy: brightnestProxy(env),
     },
@@ -40,7 +63,8 @@ export default defineConfig(({ mode }) => {
           poke: 'poke-team-predictor.html',
           podcast: 'podcast-project.html',
           littleScholarsBot: 'little-scholars-bot.html',
-          comp6708A3Demo: 'comp6708-a3-demo.html'
+          comp6708A3Demo: 'comp6708-a3-demo.html',
+          clozzzOverlay: 'clozzz-overlay.html',
         }
       }
     }
