@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { SESSIONS, findSession, sessionTotalSec } from "./routines.js";
+import {
+  FALLBACK_CATALOG,
+  findSessionIn,
+  formatDuration,
+  sessionTotalSec,
+} from "./routines.js";
+import { fetchCatalog } from "./api.js";
+import Editor, { loadEditorCatalog } from "./Editor.jsx";
 import "./overlay.css";
 
 function formatClock(totalSec) {
@@ -9,11 +16,9 @@ function formatClock(totalSec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function formatDuration(totalSec) {
-  if (totalSec < 60) return `${totalSec}s`;
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return s ? `${m}m ${s}s` : `${m}m`;
+export function isEditorPath(location = window.location) {
+  const path = location.pathname.replace(/\/+$/, "");
+  return /\/clozzz-overlay(?:\.html)?\/edit$/i.test(path);
 }
 
 /** Session key from `?session=` or trailing path after /clozzz-overlay[/].html. */
@@ -24,11 +29,14 @@ export function readSessionKey(location = window.location) {
   const path = location.pathname.replace(/\/+$/, "");
   const match = path.match(/\/clozzz-overlay(?:\.html)?(?:\/([^/]+))?$/i);
   if (match?.[1]) {
+    let key = match[1];
     try {
-      return decodeURIComponent(match[1]);
+      key = decodeURIComponent(match[1]);
     } catch {
-      return match[1];
+      /* keep raw */
     }
+    if (key.toLowerCase() === "edit") return null;
+    return key;
   }
   return null;
 }
@@ -110,7 +118,7 @@ function TimerIcon() {
   );
 }
 
-function SessionPicker() {
+function SessionPicker({ routines }) {
   useStageClass("dark");
   return (
     <div className="clozzz-overlay clozzz-overlay--picker">
@@ -119,11 +127,14 @@ function SessionPicker() {
       <p className="clozzz-picker-lead">
         Pick a named session for Browser Source, or open{" "}
         <code>/clozzz-overlay/&lt;id-or-name&gt;</code> (or{" "}
-        <code>?session=</code>) directly. Timers auto-advance; no on-screen
-        controls in v1.
+        <code>?session=</code>) directly. Edit catalog at{" "}
+        <a href="/clozzz-overlay/edit">
+          <code>/clozzz-overlay/edit</code>
+        </a>
+        .
       </p>
       <ul className="clozzz-session-list">
-        {SESSIONS.map((session) => {
+        {routines.map((session) => {
           const total = sessionTotalSec(session);
           return (
             <li key={session.id}>
@@ -266,20 +277,91 @@ function RunningOverlay({ session }) {
   );
 }
 
-export default function Overlay() {
-  const [sessionKey, setSessionKey] = useState(() => readSessionKey());
+function useCatalog() {
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const sync = () => setSessionKey(readSessionKey());
+    let cancelled = false;
+    fetchCatalog()
+      .then((data) => {
+        if (!cancelled && data?.routines?.length) setCatalog(data);
+      })
+      .catch(() => {
+        /* keep bundled fallback */
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { catalog, ready };
+}
+
+function EditorApp() {
+  useStageClass("dark");
+  const [catalog, setCatalog] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadEditorCatalog(FALLBACK_CATALOG).then((data) => {
+      if (!cancelled) setCatalog(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!catalog) {
+    return (
+      <div className="clozzz-overlay clozzz-overlay--picker">
+        <BrandLockup />
+        <p className="clozzz-picker-lead">Loading routine editor…</p>
+      </div>
+    );
+  }
+
+  return <Editor initialCatalog={catalog} />;
+}
+
+export default function Overlay() {
+  const [sessionKey, setSessionKey] = useState(() => readSessionKey());
+  const [editing, setEditing] = useState(() => isEditorPath());
+  const { catalog, ready } = useCatalog();
+
+  useEffect(() => {
+    const sync = () => {
+      setSessionKey(readSessionKey());
+      setEditing(isEditorPath());
+    };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
 
-  if (!sessionKey) {
-    return <SessionPicker />;
+  if (editing) {
+    return <EditorApp />;
   }
 
-  const session = findSession(sessionKey);
+  if (!ready) {
+    if (sessionKey) {
+      return <div className="clozzz-overlay clozzz-overlay--live" aria-busy="true" />;
+    }
+    return (
+      <div className="clozzz-overlay clozzz-overlay--picker">
+        <BrandLockup />
+        <p className="clozzz-picker-lead">Loading sessions…</p>
+      </div>
+    );
+  }
+
+  if (!sessionKey) {
+    return <SessionPicker routines={catalog.routines} />;
+  }
+
+  const session = findSessionIn(catalog.routines, sessionKey);
   if (!session) {
     return <SessionNotFound keyTried={sessionKey} />;
   }
