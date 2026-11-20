@@ -430,6 +430,8 @@ export default function DraggablePlazaSprite({
   const [displaySrc, setDisplaySrc] = useState(src);
   const [spinning, setSpinning] = useState(false);
   const [spinDeg, setSpinDeg] = useState(0);
+  // Yeet fly-off tumble (deg) — separate from click twirl
+  const [yeetRot, setYeetRot] = useState(0);
   // Mirror of homeRef — refs alone don't re-render the snap preview
   const [homeBox, setHomeBox] = useState(null);
 
@@ -804,22 +806,27 @@ export default function DraggablePlazaSprite({
   };
 
   /**
-   * Fly off-screen with the release momentum + gravity. Gone until refresh.
+   * Fly off-screen with the release momentum + gravity. Gone until recall.
    * Only used when the *landing* would hang off the viewport — not for every flick.
+   * Spins while leaving; no dust (we're not hitting anything).
    */
   const runFlyOff = (startLift = 1, vx0 = 0, vy0 = 0) => {
     clearSnapRaf();
     clearAnimTimer();
+    stopSpin();
     setPhase("fallingOff");
     setNearHome(false);
     setFallY(0);
     setLift(startLift);
+    setYeetRot(0);
     // Keep homeRef so the silhouette stays behind
-    // Preserve throw direction — do NOT force a huge downward boost
     let vx = vx0;
     let vy = vy0;
+    let rot = 0;
+    const spinDir = vx >= 0 ? 1 : -1;
+    // Faster tumble with a harder fling, always readable
+    const spinRate = 480 + Math.min(520, Math.abs(vx) * 0.18);
     let last = performance.now();
-    let dustFired = false;
 
     const tick = (now) => {
       const dt = Math.min(0.033, (now - last) / 1000);
@@ -827,11 +834,13 @@ export default function DraggablePlazaSprite({
       const pos = freeRef.current;
       if (!pos) {
         setPhase("gone");
+        setYeetRot(0);
         snapRaf.current = 0;
         return;
       }
 
       vy += THROW_GRAVITY * dt;
+      rot += spinDir * spinRate * dt;
       const next = {
         ...pos,
         left: pos.left + vx * dt,
@@ -839,24 +848,15 @@ export default function DraggablePlazaSprite({
       };
       freeRef.current = next;
       setFree(next);
+      setYeetRot(rot);
       setLift((prev) => Math.max(0, prev - dt * 2.2));
-
-      if (!dustFired && wouldBeOffscreen(next)) {
-        dustFired = true;
-        // Poof near the edge they crossed
-        const edge = {
-          ...next,
-          left: clamp(next.left, 8, window.innerWidth - next.width - 8),
-          top: clamp(next.top, 8, window.innerHeight - next.height * 0.35),
-        };
-        spawnDust(edge);
-      }
 
       if (fullyOffscreen(next)) {
         freeRef.current = null;
         setFree(null);
         setFallY(0);
         setLift(0);
+        setYeetRot(0);
         setPhase("gone");
         snapRaf.current = 0;
         return;
@@ -1120,8 +1120,10 @@ export default function DraggablePlazaSprite({
       lift > 0.001
         ? `scale(${1 + 0.06 * lift}) translateY(${-6 * lift}px)`
         : "none";
+  } else if (phase === "fallingOff") {
+    motionTransform = `translateY(${fallY}px) rotate(${yeetRot}deg) scale(${1 + 0.05 * lift})`;
   } else if (isFalling) {
-    // Drag height → overshoot below release (or clean off the page)
+    // Drag height → overshoot below release
     motionTransform = `translateY(${fallY}px) scale(${1 + 0.05 * lift})`;
   } else if (spinning || spinDeg) {
     motionTransform = `rotate(${spinDeg}deg)`;
@@ -1167,6 +1169,7 @@ export default function DraggablePlazaSprite({
       maxWidth: "none",
       transition: "none",
       transform: motionTransform,
+      transformOrigin: phase === "fallingOff" ? "center center" : undefined,
       filter: shadowFilter,
       pointerEvents: phase === "fallingOff" ? "none" : undefined,
       willChange:
