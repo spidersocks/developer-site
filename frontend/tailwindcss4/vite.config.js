@@ -21,10 +21,40 @@ const brightnestProxy = (env) => {
   }
 }
 
+/**
+ * Dev/preview: map /clozzz-overlay and /clozzz-overlay/:session to the MPA
+ * directory entry (dist/clozzz-overlay/index.html). Vite's SPA fallback would
+ * otherwise steal these paths to /index.html (plaza).
+ */
+function clozzzOverlayRewrite() {
+  const rewrite = (req, _res, next) => {
+    const url = req.url || ''
+    const qIndex = url.indexOf('?')
+    const path = qIndex >= 0 ? url.slice(0, qIndex) : url
+    const query = qIndex >= 0 ? url.slice(qIndex) : ''
+    if (path === '/clozzz-overlay' || path === '/clozzz-overlay/') {
+      req.url = `/clozzz-overlay/index.html${query}`
+    } else if (path.startsWith('/clozzz-overlay/')) {
+      // Keep deep session URLs on the overlay entry (not plaza SPA).
+      req.url = `/clozzz-overlay/index.html${query}`
+    }
+    next()
+  }
+  return {
+    name: 'clozzz-overlay-rewrite',
+    configureServer(server) {
+      server.middlewares.use(rewrite)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite)
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), clozzzOverlayRewrite()],
     server: {
       proxy: brightnestProxy(env),
     },
@@ -40,7 +70,8 @@ export default defineConfig(({ mode }) => {
           poke: 'poke-team-predictor.html',
           podcast: 'podcast-project.html',
           littleScholarsBot: 'little-scholars-bot.html',
-          comp6708A3Demo: 'comp6708-a3-demo.html'
+          comp6708A3Demo: 'comp6708-a3-demo.html',
+          clozzzOverlay: 'clozzz-overlay/index.html',
         }
       }
     }

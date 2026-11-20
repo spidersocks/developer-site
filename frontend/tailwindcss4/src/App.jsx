@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/react";
 import Resume from "./pages/Resume";
 import LittleScholarsBotDemo from "./apps/LittleScholarsBot/LittleScholarsBotDemo";
 import BrightNestBotDemo from "./apps/BrightNestBot/BrightNestBotDemo";
+import ClozzzOverlay from "./apps/ClozzzOverlay/Overlay.jsx";
 import PlazaHome from "./pages/homeLab/Home2";
 
 const STETHOSCRIBE_HEALTH_URL = "https://medical-scribe-1j17.onrender.com/healthz";
@@ -100,6 +101,10 @@ export default function App() {
           {/* BrightNest COMP6708 A3 Demo (MPA + Vercel rewrite is primary) */}
           <Route path="/COMP6708_A3_Demo" element={<BrightNestBotDemo />} />
           <Route path="/COMP6708_A3_Demo/*" element={<BrightNestBotDemo />} />
+          {/* Clozzz OBS overlay (MPA clozzz-overlay.html is primary; SPA routes
+              keep /clozzz-overlay off the plaza catch-all if rewrite misses) */}
+          <Route path="/clozzz-overlay" element={<ClozzzOverlay />} />
+          <Route path="/clozzz-overlay/*" element={<ClozzzOverlay />} />
           
           {/* 800m Calculator (with language support) */}
           <Route path="/800m-calculator" element={<EightHundredCalculatorApp lang="en" />} />

@@ -172,6 +172,18 @@
       "destination": "/comp6708-a3-demo.html"
     },
     {
+      "source": "/clozzz-overlay",
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
+      "source": "/clozzz-overlay/",
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
+      "source": "/clozzz-overlay/:path*",
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
       "source": "/brightnest-api",
       "destination": "http://47.242.157.72:8000/"
     },
