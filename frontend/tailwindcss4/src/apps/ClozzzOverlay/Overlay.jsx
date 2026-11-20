@@ -248,12 +248,6 @@ function RunningOverlay({ session }) {
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
       <header className="clozzz-corner clozzz-corner--tl">
         <BrandLockup backed />
-        {/* Mat/space badge is setup-only; hide once the exercise is running. */}
-        <MetaChips
-          routineId={session.routineId}
-          space={session.space}
-          showSpace={false}
-        />
       </header>
 
       <div className="clozzz-corner clozzz-corner--tr">
