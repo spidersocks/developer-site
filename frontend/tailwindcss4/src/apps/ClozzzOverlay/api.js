@@ -59,8 +59,4 @@ export function reorderRoutines(ids) {
   });
 }
 
-export function resetCatalogToSeed() {
-  return request("/routines/seed", { method: "POST" });
-}
-
 export { API_BASE };
