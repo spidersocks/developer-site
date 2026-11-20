@@ -82,33 +82,6 @@ function BrandLockup({ backed = false }) {
   );
 }
 
-function MetaChips({ routineId, space, showSpace = true }) {
-  return (
-    <div className="clozzz-chips" aria-label="Session meta">
-      <span className="clozzz-chip clozzz-chip--routine">{routineId}</span>
-      {showSpace ? (
-        <span className="clozzz-chip clozzz-chip--space">
-          <svg
-            className="clozzz-chip__icon"
-            viewBox="0 0 16 16"
-            width="14"
-            height="14"
-            aria-hidden="true"
-          >
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.25"
-              d="M2.5 13.5h11M4 13.5V5.8L8 2.5l4 3.3v7.7M6.2 13.5V9.2h3.6v4.3"
-            />
-          </svg>
-          {space}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
 function TimerIcon() {
   return (
     <svg
