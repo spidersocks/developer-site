@@ -12,7 +12,6 @@ import {
   fetchCatalog,
   reorderRoutines,
   resetCatalogToSeed,
-  saveCatalog,
   saveRoutine,
 } from "./api.js";
 import "./editor.css";
@@ -24,6 +23,18 @@ function cloneCatalog(catalog) {
   return JSON.parse(JSON.stringify(catalog));
 }
 
+function formatLastEdited(iso) {
+  if (!iso) return "Not saved yet";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Not saved yet";
+  return `Last edited ${d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
 function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }) {
   return (
     <div className="ce-modal-backdrop" role="dialog" aria-modal="true">
@@ -31,7 +42,7 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
         <h3>{title}</h3>
         <p>{body}</p>
         <div className="ce-modal__actions">
-          <button type="button" className="ce-btn ce-btn--ghost" onClick={onCancel}>
+          <button type="button" className="ce-btn" onClick={onCancel}>
             Cancel
           </button>
           <button
@@ -59,13 +70,16 @@ export default function Editor({ initialCatalog }) {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [toast, setToast] = useState("");
+  const [draggingRoutine, setDraggingRoutine] = useState(null);
+  const [overRoutine, setOverRoutine] = useState(null);
+  const [draggingSegment, setDraggingSegment] = useState(null);
+  const [overSegment, setOverSegment] = useState(null);
   const dragRoutine = useRef(null);
   const dragSegment = useRef(null);
-  const fileRef = useRef(null);
 
   useEffect(() => {
     if (!toast) return undefined;
-    const t = window.setTimeout(() => setToast(""), 2600);
+    const t = window.setTimeout(() => setToast(""), 2400);
     return () => window.clearTimeout(t);
   }, [toast]);
 
@@ -87,7 +101,6 @@ export default function Editor({ initialCatalog }) {
       routines: catalog.routines.map((r) => {
         if (r.id !== id) return r;
         const merged = { ...r, ...patch };
-        // Keep URL slug loosely aligned with title for unsaved routines.
         if (r.localOnly && patch.title != null) {
           merged.name = `${r.id}-${slugify(patch.title)}`;
         }
@@ -105,27 +118,8 @@ export default function Editor({ initialCatalog }) {
       const saved = await saveRoutine(toServerRoutine(routine));
       setCatalog(cloneCatalog(saved));
       setOpenId(routine.id);
-      setStatus({ kind: "ok", text: "Saved." });
+      setStatus({ kind: "ok", text: "Saved" });
       setToast("Saved");
-    } catch (err) {
-      setStatus({ kind: "err", text: err.message || "Save failed" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function persistWholeCatalog(nextCatalog, message) {
-    setBusy(true);
-    setStatus({ kind: "idle", text: "Saving…" });
-    try {
-      const payload = {
-        ...nextCatalog,
-        routines: nextCatalog.routines.map(toServerRoutine),
-      };
-      const saved = await saveCatalog(payload);
-      applyLocal(saved, { recordUndo: true });
-      setStatus({ kind: "ok", text: message || "Saved." });
-      setToast(message || "Saved");
     } catch (err) {
       setStatus({ kind: "err", text: err.message || "Save failed" });
     } finally {
@@ -137,24 +131,9 @@ export default function Editor({ initialCatalog }) {
     setUndoStack((stack) => {
       if (!stack.length) return stack;
       const prev = stack[stack.length - 1];
-      setBusy(true);
-      saveCatalog({
-        ...prev,
-        routines: prev.routines.filter((r) => !r.localOnly).map(toServerRoutine),
-      })
-        .then((saved) => {
-          // Re-attach any local-only drafts that were in the undo snapshot.
-          const locals = prev.routines.filter((r) => r.localOnly);
-          const merged = {
-            ...saved,
-            routines: [...saved.routines, ...locals.filter((l) => !saved.routines.some((s) => s.id === l.id))],
-          };
-          setCatalog(cloneCatalog(merged));
-          setStatus({ kind: "ok", text: "Undone." });
-          setToast("Undone");
-        })
-        .catch((err) => setStatus({ kind: "err", text: err.message || "Undo failed" }))
-        .finally(() => setBusy(false));
+      setCatalog(cloneCatalog(prev));
+      setStatus({ kind: "ok", text: "Undone locally — save a routine to sync" });
+      setToast("Undone");
       return stack.slice(0, -1);
     });
   }
@@ -163,7 +142,7 @@ export default function Editor({ initialCatalog }) {
     const routine = blankRoutine(catalog.routines);
     applyLocal({ ...catalog, routines: [...catalog.routines, routine] });
     setOpenId(routine.id);
-    setToast("Draft routine created — save when ready");
+    setToast("Draft created");
   }
 
   function handleDuplicate(routine) {
@@ -176,6 +155,7 @@ export default function Editor({ initialCatalog }) {
       title: `${routine.title} (copy)`,
       segments: routine.segments.map((s) => ({ ...s, id: newId("seg") })),
       localOnly: true,
+      updatedAt: undefined,
     };
     applyLocal({ ...catalog, routines: [...catalog.routines, copy] });
     setOpenId(copy.id);
@@ -185,8 +165,8 @@ export default function Editor({ initialCatalog }) {
     setConfirm({
       title: "Delete routine?",
       body: routine.localOnly
-        ? `Remove draft “${routine.title}”? It was never saved to the server.`
-        : `Delete “${routine.title}” from the server?`,
+        ? `Remove draft “${routine.title}”? It was never saved.`
+        : `Delete “${routine.title}”?`,
       confirmLabel: "Delete",
       danger: true,
       run: async () => {
@@ -206,7 +186,6 @@ export default function Editor({ initialCatalog }) {
           const saved = await deleteRoutine(routine.id);
           setCatalog(cloneCatalog(saved));
           if (openId === routine.id) setOpenId(null);
-          setStatus({ kind: "ok", text: "Deleted." });
           setToast("Deleted");
         } catch (err) {
           setStatus({ kind: "err", text: err.message || "Delete failed" });
@@ -220,7 +199,7 @@ export default function Editor({ initialCatalog }) {
   function requestResetSeed() {
     setConfirm({
       title: "Reset to defaults?",
-      body: "Replace the whole catalog with the bundled DEMO + R1–R5 seed.",
+      body: "Replace the catalog with the bundled DEMO + R1–R5 seed.",
       confirmLabel: "Reset",
       danger: true,
       run: async () => {
@@ -231,8 +210,7 @@ export default function Editor({ initialCatalog }) {
           const saved = await resetCatalogToSeed();
           setCatalog(cloneCatalog(saved));
           setOpenId(null);
-          setStatus({ kind: "ok", text: "Reset to seed." });
-          setToast("Reset to seed");
+          setToast("Reset to defaults");
         } catch (err) {
           setStatus({ kind: "err", text: err.message || "Reset failed" });
         } finally {
@@ -242,37 +220,13 @@ export default function Editor({ initialCatalog }) {
     });
   }
 
-  function handleExport() {
-    const payload = {
-      ...catalog,
-      routines: catalog.routines.map(toServerRoutine),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `clozzz-routines-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setToast("Exported JSON");
-  }
-
-  async function handleImportFile(file) {
-    try {
-      const parsed = JSON.parse(await file.text());
-      await persistWholeCatalog(parsed, "Imported catalog.");
-      setOpenId(null);
-    } catch (err) {
-      setStatus({ kind: "err", text: err.message || "Import failed" });
-    }
-  }
-
   async function onRoutineDrop(targetId) {
     const fromId = dragRoutine.current;
     dragRoutine.current = null;
+    setDraggingRoutine(null);
+    setOverRoutine(null);
     if (!fromId || fromId === targetId) return;
+
     const ids = catalog.routines.map((r) => r.id);
     const from = ids.indexOf(fromId);
     const to = ids.indexOf(targetId);
@@ -283,7 +237,9 @@ export default function Editor({ initialCatalog }) {
     applyLocal(nextLocal);
 
     const serverIds = ids.filter((id) => !byId[id].localOnly);
-    if (serverIds.length !== catalog.routines.filter((r) => !r.localOnly).length) {
+    if (
+      serverIds.length !== catalog.routines.filter((r) => !r.localOnly).length
+    ) {
       return;
     }
     setBusy(true);
@@ -297,7 +253,6 @@ export default function Editor({ initialCatalog }) {
           ...locals.filter((l) => !saved.routines.some((s) => s.id === l.id)),
         ],
       });
-      setToast("Order updated");
     } catch (err) {
       setStatus({ kind: "err", text: err.message || "Reorder failed" });
     } finally {
@@ -329,6 +284,8 @@ export default function Editor({ initialCatalog }) {
     if (!routine) return;
     const fromId = dragSegment.current;
     dragSegment.current = null;
+    setDraggingSegment(null);
+    setOverSegment(null);
     if (!fromId || fromId === targetId) return;
     const list = routine.segments.map((s) => s.id);
     const from = list.indexOf(fromId);
@@ -364,46 +321,21 @@ export default function Editor({ initialCatalog }) {
       <div className="clozzz-editor__shell">
         <header className="clozzz-editor__top">
           <div className="clozzz-editor__brand">
-            <img src="/clozzz/clozzz-logo.png" alt="" width="44" height="44" />
-            <div>
-              <h1>Clozzz routines</h1>
-              <p>Click a routine to edit · open its OBS link when you stream</p>
-            </div>
+            <img src="/clozzz/clozzz-logo.png" alt="" width="32" height="32" />
+            <h1>Evening exercise routines</h1>
           </div>
           <div className="clozzz-editor__actions">
             <button
               type="button"
-              className="ce-btn"
+              className="ce-btn ce-btn--subtle"
               disabled={!undoStack.length || busy}
               onClick={handleUndo}
             >
               Undo
             </button>
-            <button type="button" className="ce-btn" disabled={busy} onClick={handleExport}>
-              Export
-            </button>
             <button
               type="button"
-              className="ce-btn"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              Import
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) handleImportFile(file);
-              }}
-            />
-            <button
-              type="button"
-              className="ce-btn ce-btn--danger"
+              className="ce-btn ce-btn--subtle"
               disabled={busy}
               onClick={requestResetSeed}
             >
@@ -415,7 +347,7 @@ export default function Editor({ initialCatalog }) {
               disabled={busy}
               onClick={handleNew}
             >
-              New routine
+              New
             </button>
           </div>
           {status.text ? (
@@ -437,7 +369,7 @@ export default function Editor({ initialCatalog }) {
           <div className="ce-empty">
             <p>No routines yet.</p>
             <button type="button" className="ce-btn ce-btn--primary" onClick={handleNew}>
-              Create one
+              New
             </button>
           </div>
         ) : (
@@ -447,42 +379,73 @@ export default function Editor({ initialCatalog }) {
               return (
                 <li
                   key={routine.id}
-                  className={`ce-item${open ? " is-open" : ""}`}
-                  draggable
-                  onDragStart={() => {
-                    dragRoutine.current = routine.id;
+                  className={`ce-item${open ? " is-open" : ""}${
+                    draggingRoutine === routine.id ? " is-dragging" : ""
+                  }${overRoutine === routine.id && draggingRoutine !== routine.id ? " is-drag-over" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggingRoutine && draggingRoutine !== routine.id) {
+                      setOverRoutine(routine.id);
+                    }
                   }}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragLeave={() => {
+                    if (overRoutine === routine.id) setOverRoutine(null);
+                  }}
                   onDrop={() => onRoutineDrop(routine.id)}
                 >
-                  <button
-                    type="button"
-                    className="ce-item__summary"
-                    onClick={() => setOpenId(open ? null : routine.id)}
-                    aria-expanded={open}
-                  >
-                    <span className="ce-drag-handle" title="Drag to reorder" aria-hidden="true">
+                  <div className="ce-item__row">
+                    <button
+                      type="button"
+                      className="ce-drag-handle"
+                      title="Drag to reorder"
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        dragRoutine.current = routine.id;
+                        setDraggingRoutine(routine.id);
+                      }}
+                      onDragEnd={() => {
+                        dragRoutine.current = null;
+                        setDraggingRoutine(null);
+                        setOverRoutine(null);
+                      }}
+                      aria-label={`Reorder ${routine.title}`}
+                    >
                       ⋮⋮
-                    </span>
-                    <span>
-                      <strong>{routine.title}</strong>
-                      <span>
+                    </button>
+                    <div className="ce-item__main">
+                      <p className="ce-item__title">{routine.title}</p>
+                      <p className="ce-item__meta">
                         {routine.segments.length} exercises ·{" "}
-                        {formatDuration(sessionTotalSec(routine))}
-                        {routine.localOnly ? " · unsaved draft" : ""}
-                      </span>
-                    </span>
-                    <span className="ce-item__chevron" aria-hidden="true">
-                      ›
-                    </span>
-                  </button>
+                        {formatDuration(sessionTotalSec(routine))} ·{" "}
+                        {routine.localOnly
+                          ? "Not saved yet"
+                          : formatLastEdited(routine.updatedAt)}
+                      </p>
+                    </div>
+                    <div className="ce-item__actions">
+                      {!routine.localOnly ? (
+                        <a className="ce-btn ce-btn--link" href={obsPath(routine)}>
+                          Open
+                        </a>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="ce-btn ce-btn--link"
+                        onClick={() => setOpenId(open ? null : routine.id)}
+                        aria-expanded={open}
+                      >
+                        {open ? "Done" : "Edit"}
+                      </button>
+                    </div>
+                  </div>
 
                   {open ? (
                     <div className="ce-item__body">
                       <div className="ce-item__toolbar">
                         <button
                           type="button"
-                          className="ce-btn ce-btn--primary ce-btn--small"
+                          className="ce-btn ce-btn--primary"
                           disabled={busy}
                           onClick={() => persistRoutine(routine)}
                         >
@@ -490,7 +453,7 @@ export default function Editor({ initialCatalog }) {
                         </button>
                         <button
                           type="button"
-                          className="ce-btn ce-btn--small"
+                          className="ce-btn"
                           disabled={busy}
                           onClick={() => handleDuplicate(routine)}
                         >
@@ -498,15 +461,13 @@ export default function Editor({ initialCatalog }) {
                         </button>
                         <button
                           type="button"
-                          className="ce-btn ce-btn--danger ce-btn--small"
+                          className="ce-btn ce-btn--danger"
                           disabled={busy}
                           onClick={() => requestDelete(routine)}
                         >
                           Delete
                         </button>
-                        {routine.localOnly ? (
-                          <span className="ce-badge">Draft</span>
-                        ) : null}
+                        {routine.localOnly ? <span className="ce-badge">Draft</span> : null}
                       </div>
 
                       <div className="ce-fields">
@@ -542,21 +503,12 @@ export default function Editor({ initialCatalog }) {
                         </div>
                       </div>
 
-                      <div className="ce-meta" style={{ marginTop: "0.75rem" }}>
-                        <span>
-                          OBS link{" "}
-                          <a href={obsPath(routine)}>
-                            <code>{obsPath(routine)}</code>
-                          </a>
-                        </span>
-                      </div>
-
                       <div className="ce-segments">
                         <div className="ce-segments__head">
                           <h3>Exercises</h3>
                           <button
                             type="button"
-                            className="ce-btn ce-btn--small"
+                            className="ce-btn ce-btn--subtle"
                             onClick={() => addSegment(routine.id)}
                           >
                             Add exercise
@@ -566,17 +518,38 @@ export default function Editor({ initialCatalog }) {
                           {routine.segments.map((seg) => (
                             <li
                               key={seg.id}
-                              className="ce-segment"
-                              draggable
-                              onDragStart={() => {
-                                dragSegment.current = seg.id;
+                              className={`ce-segment${
+                                draggingSegment === seg.id ? " is-dragging" : ""
+                              }${
+                                overSegment === seg.id && draggingSegment !== seg.id
+                                  ? " is-drag-over"
+                                  : ""
+                              }`}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                if (draggingSegment && draggingSegment !== seg.id) {
+                                  setOverSegment(seg.id);
+                                }
                               }}
-                              onDragOver={(e) => e.preventDefault()}
                               onDrop={() => onSegmentDrop(routine.id, seg.id)}
                             >
-                              <span className="ce-drag-handle" aria-hidden="true">
+                              <button
+                                type="button"
+                                className="ce-drag-handle"
+                                draggable
+                                onDragStart={() => {
+                                  dragSegment.current = seg.id;
+                                  setDraggingSegment(seg.id);
+                                }}
+                                onDragEnd={() => {
+                                  dragSegment.current = null;
+                                  setDraggingSegment(null);
+                                  setOverSegment(null);
+                                }}
+                                aria-label={`Reorder ${seg.label}`}
+                              >
                                 ⋮⋮
-                              </span>
+                              </button>
                               <input
                                 aria-label="Exercise name"
                                 value={seg.label}
@@ -620,7 +593,7 @@ export default function Editor({ initialCatalog }) {
                               <div className="ce-seg-actions">
                                 <button
                                   type="button"
-                                  className="ce-btn ce-btn--small"
+                                  className="ce-btn ce-btn--subtle"
                                   onClick={() => {
                                     const idx = routine.segments.findIndex(
                                       (s) => s.id === seg.id
@@ -639,7 +612,7 @@ export default function Editor({ initialCatalog }) {
                                 </button>
                                 <button
                                   type="button"
-                                  className="ce-btn ce-btn--danger ce-btn--small"
+                                  className="ce-btn ce-btn--danger"
                                   onClick={() => requestDeleteSegment(routine, seg.id)}
                                 >
                                   Del

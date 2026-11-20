@@ -56,8 +56,8 @@ html.clozzz-stage-editor #root {
   min-height: 100%;
   overflow: auto !important;
   overflow-x: hidden !important;
-  background: #f4f2fb !important;
-  color: #1a1630;
+  background: #faf9f8 !important;
+  color: #242424;
 }
 
 *,
