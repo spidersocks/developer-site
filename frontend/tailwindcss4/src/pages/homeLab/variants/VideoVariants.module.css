@@ -27,21 +27,10 @@
   .head {
     gap: 6px;
   }
-
-  .caption {
-    -webkit-line-clamp: 2;
-  }
 }
 
 .sidebar .head {
   flex-wrap: wrap;
-}
-
-.sidebar .caption {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .head {
@@ -190,6 +179,22 @@
   font-size: 11px;
   line-height: 1.3;
   color: #4d7890;
+  /* Cap at two lines; longer titles scroll instead of overflowing */
+  max-height: calc(1.3em * 2 + 14px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(80, 140, 180, 0.45) transparent;
+}
+
+.caption::-webkit-scrollbar {
+  width: 4px;
+}
+
+.caption::-webkit-scrollbar-thumb {
+  background: rgba(80, 140, 180, 0.45);
+  border-radius: 4px;
 }
 
 .captionLabel {

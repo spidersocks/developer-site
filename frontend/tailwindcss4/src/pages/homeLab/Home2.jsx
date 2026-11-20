@@ -9,6 +9,7 @@ import { VideoMini } from "./variants/VideoVariants";
 import MobileChrome from "./MobileChrome";
 import MarqueePill from "./MarqueePill";
 import ProjectStrip from "./ProjectStrip";
+import DraggablePlazaSprite from "./DraggablePlazaSprite";
 import styles from "./Home2.module.css";
 
 const MARQUEE = [
@@ -127,6 +128,8 @@ export default function Home2() {
   const resumeImgRef = useRef(null);
   const timelineDragRef = useRef(null);
   const timelineCoastRef = useRef(0);
+  // Keep newest events in view until the user scrolls away from the bottom.
+  const timelinePinnedRef = useRef(true);
   const featured = projects[0];
   const rest = projects.slice(1);
 
@@ -164,13 +167,21 @@ export default function Home2() {
         const timelineCapped = Number.isFinite(timelineNext)
           ? Math.max(64, timelineNext)
           : null;
-        setTimelineMax((prev) => (prev === timelineCapped ? prev : timelineCapped));
+        // Ignore 1–2px thrash from sibling resize / scrollbar subpixels
+        setTimelineMax((prev) => {
+          if (timelineCapped == null) return null;
+          if (prev != null && Math.abs(prev - timelineCapped) <= 2) return prev;
+          return timelineCapped;
+        });
 
         // Height of everything in the left column except the preview image
         // (order-independent: Contact can sit above Resume).
         const leftExtras = left.offsetHeight - resumeImg.offsetHeight;
         const resumeNext = Math.max(96, Math.round(targetH - leftExtras));
-        setResumeHeight((prev) => (prev === resumeNext ? prev : resumeNext));
+        setResumeHeight((prev) => {
+          if (prev != null && Math.abs(prev - resumeNext) <= 2) return prev;
+          return resumeNext;
+        });
       });
     };
 
@@ -203,8 +214,17 @@ export default function Home2() {
 
   useLayoutEffect(() => {
     const list = logRef.current;
-    if (list) list.scrollTop = list.scrollHeight;
+    if (!list || !timelinePinnedRef.current) return;
+    list.scrollTop = list.scrollHeight;
   }, [timelineMax]);
+
+  const onTimelineScroll = () => {
+    const list = logRef.current;
+    if (!list) return;
+    const maxScroll = list.scrollHeight - list.clientHeight;
+    // Stick to bottom while near it; unpin when the user scrolls up
+    timelinePinnedRef.current = maxScroll <= 0 || list.scrollTop >= maxScroll - 6;
+  };
 
   useEffect(() => {
     if (!timelineGrabbing) return undefined;
@@ -272,17 +292,19 @@ export default function Home2() {
       const coast = (now) => {
         const dt = Math.min(0.048, (now - prev) / 1000);
         prev = now;
-        list.scrollTop -= velocity * dt;
-        velocity *= Math.exp(-DECAY * dt);
-
-        const maxScroll = list.scrollHeight - list.clientHeight;
-        if (list.scrollTop <= 0 || list.scrollTop >= maxScroll) {
-          list.scrollTop = Math.max(0, Math.min(maxScroll, list.scrollTop));
+        const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+        const next = list.scrollTop - velocity * dt;
+        if (next <= 0.5 || next >= maxScroll - 0.5) {
+          list.scrollTop = next <= 0.5 ? 0 : maxScroll;
           timelineCoastRef.current = 0;
+          onTimelineScroll();
           return;
         }
+        list.scrollTop = next;
+        velocity *= Math.exp(-DECAY * dt);
         if (Math.abs(velocity) < 18) {
           timelineCoastRef.current = 0;
+          onTimelineScroll();
           return;
         }
         timelineCoastRef.current = requestAnimationFrame(coast);
@@ -341,12 +363,13 @@ export default function Home2() {
       <MobileChrome contacts={CONTACTS} />
       <div className={styles.shell}>
         <header className={styles.header}>
-          <img
+          <DraggablePlazaSprite
             className={styles.heroCutout}
             src="/plaza/sean-cutout.webp"
             alt=""
             width="170"
             height="148"
+            onGrabChange={setHandGrabbing}
           />
           <div className={styles.headerContent}>
             <div className={styles.brandRow}>
@@ -421,12 +444,15 @@ export default function Home2() {
                   University. I study how exercise and sleep relate, under Professor
                   Fiona Yan Liu.
                 </p>
-                <img
+                <DraggablePlazaSprite
                   className={styles.welcomeMii}
                   src="/plaza/sean-mii.webp"
+                  blinkSrc="/plaza/sean-mii-blink.webp"
                   alt=""
                   width="72"
                   height="135"
+                  reserveSpace
+                  onGrabChange={setHandGrabbing}
                 />
               </div>
             </section>
@@ -480,6 +506,7 @@ export default function Home2() {
                   timelineMax != null ? { maxHeight: `${timelineMax}px` } : undefined
                 }
                 onPointerDown={onTimelinePointerDown}
+                onScroll={onTimelineScroll}
               >
                 {lifeEvents.map((event) => (
                   <li key={`${event.year}-${event.title}`}>

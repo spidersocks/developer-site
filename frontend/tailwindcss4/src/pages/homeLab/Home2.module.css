@@ -141,10 +141,216 @@
   filter: drop-shadow(0 6px 8px rgba(30, 80, 120, 0.25));
   pointer-events: auto;
   user-select: none;
+  -webkit-user-drag: none;
   transform-origin: bottom left;
   transition: transform 0.28s ease;
   will-change: transform;
 }
+
+/* Open hand · grab fist — free-drag plaza sprites */
+.plazaDraggable {
+  cursor: url("/plaza/wii-hand-open.png") 16 17, grab !important;
+  touch-action: none;
+}
+
+.plazaDragging {
+  cursor: url("/plaza/wii-hand-grab.png") 16 18, grabbing !important;
+  transform: scale(1.06) translateY(-6px) !important;
+  transition:
+    transform 0.14s ease-out,
+    filter 0.14s ease-out !important;
+  /* Tall soft shadow while lifted (Mii in hand) */
+  filter: drop-shadow(0 22px 10px rgba(40, 70, 100, 0.28));
+}
+
+.plazaNearHome {
+  transform: scale(1.03) translateY(-3px) !important;
+  filter: drop-shadow(0 12px 8px rgba(40, 70, 100, 0.22));
+}
+
+.plazaFreed {
+  object-fit: contain !important;
+  filter: drop-shadow(0 8px 6px rgba(40, 70, 100, 0.22));
+  transform-origin: bottom center;
+}
+
+/* Fall/settle motion is rAF-driven — CSS only locks transform origin */
+.plazaLanding {
+  transition: none !important;
+  transform-origin: bottom center;
+}
+
+/* Snap lift is eased in JS — avoid a hard transform cut that causes a double-jump */
+.plazaSnapping {
+  transition: none !important;
+  filter: drop-shadow(0 6px 8px rgba(30, 80, 120, 0.25));
+}
+
+/* Click twirl — rotation angle is rAF-driven (stackable / speed-up).
+   transition:none so ending at rotate(0) doesn't CSS-tween backwards. */
+.plazaSpinning {
+  transform-origin: center center !important;
+  transition: none !important;
+  pointer-events: auto;
+}
+
+/* Empty nest — soft oval on the floor */
+.plazaNestShadow {
+  position: fixed;
+  z-index: 10035;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(40, 70, 100, 0.1) 0%,
+    rgba(40, 70, 100, 0.04) 55%,
+    transparent 75%
+  );
+  filter: blur(1px);
+}
+
+/* Faint figure-shaped shadow where the asset used to stand */
+.plazaHomeSilhouette {
+  position: fixed;
+  z-index: 10038;
+  pointer-events: none;
+  object-fit: contain;
+  object-position: bottom center;
+  opacity: 0.07;
+  /* Black silhouette following the PNG alpha — reads as a soft cutout shadow */
+  filter: brightness(0) blur(0.5px);
+  animation: plazaGhostIn 0.22s ease-out both;
+}
+
+/* Clickable recall target after a yeet — still faint, but hittable */
+.plazaHomeSilhouetteRecall {
+  pointer-events: auto !important;
+  /* Wii pointer (same as the page), not grab and not the OS arrow */
+  cursor: url("/plaza/wii-pointer.png") 10 2, auto !important;
+  opacity: 0.11;
+  transition: opacity 0.15s ease;
+}
+
+.plazaHomeSilhouetteRecall:hover {
+  opacity: 0.2;
+}
+
+/* Beat `.page * { cursor: inherit }` for in-banner silhouettes */
+.page .plazaHomeSilhouetteRecall,
+.page .plazaHomeSilhouetteRecall:hover {
+  cursor: url("/plaza/wii-pointer.png") 10 2, auto !important;
+}
+
+/* Banner-local silhouette — absolute so header overflow:hidden clips it */
+.plazaHomeSilhouetteLocal,
+.plazaNestShadowLocal,
+.plazaSnapGhostLocal {
+  position: absolute;
+  pointer-events: none;
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+.plazaHomeSilhouetteLocal {
+  z-index: 0;
+  opacity: 0.07;
+  filter: brightness(0) blur(0.5px);
+  animation: plazaGhostIn 0.22s ease-out both;
+}
+
+.plazaNestShadowLocal {
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(40, 70, 100, 0.1) 0%,
+    rgba(40, 70, 100, 0.04) 55%,
+    transparent 75%
+  );
+  filter: blur(1px);
+}
+
+.plazaSnapGhostLocal {
+  z-index: 1;
+  opacity: 0.26;
+  filter: drop-shadow(0 3px 3px rgba(40, 70, 100, 0.1));
+  animation: plazaGhostIn 0.18s ease-out both;
+}
+
+/* Brighter twin at home when inside snap radius */
+.plazaSnapGhost {
+  position: fixed;
+  z-index: 10040;
+  pointer-events: none;
+  object-fit: contain;
+  object-position: bottom center;
+  opacity: 0.26;
+  filter: drop-shadow(0 4px 4px rgba(40, 70, 100, 0.12));
+  animation: plazaGhostIn 0.18s ease-out both;
+}
+
+/* Layout lock — pixel footprint from props only; never follows lift scale */
+.plazaSpriteNest {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-end;
+  box-sizing: border-box;
+  overflow: visible;
+  min-width: 0;
+}
+
+.plazaNestSpacer {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.plazaSpriteNestLoose {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.plazaSpriteNestLoose .plazaSpriteImg {
+  pointer-events: auto;
+}
+
+.plazaSpriteImg {
+  display: block;
+}
+
+/* Home sprite fills nest; transforms are paint-only */
+.plazaSpriteNest .plazaSpriteImg:not(.plazaFreed) {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+/* Canvas dust — behind the sprite (sprite is 10050), at the feet */
+.plazaDustCanvas {
+  position: fixed;
+  z-index: 10042;
+  pointer-events: none;
+  overflow: visible;
+}
+
+@keyframes plazaGhostIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.38;
+  }
+}
+
 
 .headerContent {
   position: relative;
@@ -584,16 +790,15 @@
 }
 
 .welcomeMii {
-  flex: 0 0 auto;
-  align-self: flex-end;
-  width: 72px;
-  max-width: 28%;
-  height: auto;
-  display: block;
-  margin-bottom: 2px;
+  /* Visual only — layout footprint is .plazaSpriteNest */
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  margin: 0;
   image-rendering: auto;
   pointer-events: auto;
   user-select: none;
+  -webkit-user-drag: none;
   transform-origin: bottom center;
   transition: transform 0.28s ease;
   will-change: transform;
@@ -804,6 +1009,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
   list-style: none;
   background: linear-gradient(180deg, #f7fcff, #e7f4fb);
   color: #35586c;
@@ -1034,9 +1240,11 @@
     align-items: center;
   }
 
-  .welcomeMii {
-    width: 56px;
-    max-width: 22%;
+  /* Nest owns footprint — don't resize the img (that used to grow the card) */
+  .welcome .plazaSpriteNest {
+    width: 56px !important;
+    height: 105px !important;
+    flex: 0 0 56px !important;
   }
 
   .projectRow {
@@ -1262,8 +1470,10 @@
     line-height: 1.4;
   }
 
-  .welcomeMii {
-    width: 56px;
+  .welcome .plazaSpriteNest {
+    width: 56px !important;
+    height: 105px !important;
+    flex: 0 0 56px !important;
   }
 
   .projectCarousel {
@@ -1290,11 +1500,11 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .heroCutout:hover {
+  .heroCutout.plazaDraggable:hover:not(.plazaDragging):not(.plazaFreed) {
     transform: scale(1.05);
   }
 
-  .welcomeMii:hover {
+  .welcomeMii.plazaDraggable:hover:not(.plazaDragging):not(.plazaFreed) {
     transform: scale(1.06);
   }
 
@@ -1322,8 +1532,9 @@
     border-color: var(--wii-hover) !important;
   }
 
-  .heroCutout,
-  .welcomeMii {
+  /* Still allow dragging sprites on touch; other hover toys stay off */
+  .heroCutout:not(.plazaDraggable),
+  .welcomeMii:not(.plazaDraggable) {
     pointer-events: none;
   }
 
