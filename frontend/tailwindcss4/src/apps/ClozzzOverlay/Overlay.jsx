@@ -62,9 +62,9 @@ function timerBand(progress, remainingSec, done) {
   return "calm";
 }
 
-function BrandLockup() {
+function BrandLockup({ backed = false }) {
   return (
-    <div className="clozzz-brand">
+    <div className={`clozzz-brand${backed ? " clozzz-brand--backed" : ""}`}>
       <span className="clozzz-brand__mark" aria-hidden="true">
         <img
           className="clozzz-brand__logo"
@@ -114,22 +114,22 @@ function TimerIcon() {
     <svg
       className="clozzz-timer__icon"
       viewBox="0 0 24 24"
-      width="22"
-      height="22"
+      width="24"
+      height="24"
       aria-hidden="true"
     >
       <circle
         cx="12"
         cy="13"
-        r="7.25"
+        r="7"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="2.15"
       />
       <path
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.4"
+        strokeWidth="2.15"
         strokeLinecap="round"
         d="M12 9.5v3.7l2.2 1.4M9.5 4.2h5"
       />
@@ -246,8 +246,8 @@ function RunningOverlay({ session }) {
 
   return (
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
-      <header className="clozzz-corner clozzz-corner--tl clozzz-corner--tl-quiet">
-        <BrandLockup />
+      <header className="clozzz-corner clozzz-corner--tl">
+        <BrandLockup backed />
         {/* Mat/space badge is setup-only; hide once the exercise is running. */}
         <MetaChips
           routineId={session.routineId}
