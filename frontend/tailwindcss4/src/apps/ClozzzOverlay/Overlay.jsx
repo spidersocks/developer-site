@@ -82,27 +82,29 @@ function BrandLockup() {
   );
 }
 
-function MetaChips({ routineId, space }) {
+function MetaChips({ routineId, space, showSpace = true }) {
   return (
     <div className="clozzz-chips" aria-label="Session meta">
       <span className="clozzz-chip clozzz-chip--routine">{routineId}</span>
-      <span className="clozzz-chip clozzz-chip--space">
-        <svg
-          className="clozzz-chip__icon"
-          viewBox="0 0 16 16"
-          width="14"
-          height="14"
-          aria-hidden="true"
-        >
-          <path
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.25"
-            d="M2.5 13.5h11M4 13.5V5.8L8 2.5l4 3.3v7.7M6.2 13.5V9.2h3.6v4.3"
-          />
-        </svg>
-        {space}
-      </span>
+      {showSpace ? (
+        <span className="clozzz-chip clozzz-chip--space">
+          <svg
+            className="clozzz-chip__icon"
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+            aria-hidden="true"
+          >
+            <path
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              d="M2.5 13.5h11M4 13.5V5.8L8 2.5l4 3.3v7.7M6.2 13.5V9.2h3.6v4.3"
+            />
+          </svg>
+          {space}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -244,9 +246,14 @@ function RunningOverlay({ session }) {
 
   return (
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
-      <header className="clozzz-corner clozzz-corner--tl">
+      <header className="clozzz-corner clozzz-corner--tl clozzz-corner--tl-quiet">
         <BrandLockup />
-        <MetaChips routineId={session.routineId} space={session.space} />
+        {/* Mat/space badge is setup-only; hide once the exercise is running. */}
+        <MetaChips
+          routineId={session.routineId}
+          space={session.space}
+          showSpace={false}
+        />
       </header>
 
       <div className="clozzz-corner clozzz-corner--tr">
@@ -266,40 +273,28 @@ function RunningOverlay({ session }) {
       <section className="clozzz-corner clozzz-corner--bl clozzz-current-panel">
         {done ? (
           <>
-            <p className="clozzz-panel-label">Session</p>
             <h1 className="clozzz-current clozzz-anim" key="done-title">
               Routine complete
             </h1>
-            <p className="clozzz-panel-meta">
-              {session.segments.length} segments ·{" "}
+            <p className="clozzz-exercise-count">
+              {session.segments.length} exercises ·{" "}
               {formatDuration(sessionTotalSec(session))}
             </p>
           </>
         ) : (
           <>
-            <p className="clozzz-panel-label">Now</p>
             <h1 className="clozzz-current clozzz-anim" key={current.id}>
               {current.label}
             </h1>
-            <p className="clozzz-panel-meta">
-              {index + 1} / {session.segments.length}
+            <p className="clozzz-exercise-count">
+              Exercise {index + 1} of {session.segments.length}
+            </p>
+            <p className="clozzz-up-next">
+              {next ? `Up next: ${next.label}` : "Up next: Rest"}
             </p>
           </>
         )}
       </section>
-
-      {next ? (
-        <aside className="clozzz-corner clozzz-corner--br clozzz-next">
-          <p className="clozzz-panel-label">Next</p>
-          <p className="clozzz-next__title">{next.label}</p>
-          <p className="clozzz-next__time">{formatClock(next.durationSec)}</p>
-        </aside>
-      ) : done ? (
-        <aside className="clozzz-corner clozzz-corner--br clozzz-next clozzz-next--done">
-          <p className="clozzz-panel-label">Next</p>
-          <p className="clozzz-next__title">Rest</p>
-        </aside>
-      ) : null}
     </div>
   );
 }
