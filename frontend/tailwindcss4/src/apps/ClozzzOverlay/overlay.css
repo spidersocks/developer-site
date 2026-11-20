@@ -1,13 +1,27 @@
-/* Clozzz OBS Browser Source — transparent canvas, high-contrast type */
+/* Clozzz Sleep OBS overlay — night indigo / cream moon, corner glass chrome */
 
 :root {
-  --clozzz-ink: #f4f7fb;
-  --clozzz-ink-dim: rgba(244, 247, 251, 0.72);
-  --clozzz-ink-faint: rgba(244, 247, 251, 0.48);
-  --clozzz-accent: #7ec8e3;
-  --clozzz-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.8);
-  --clozzz-font-display: "Outfit", "Segoe UI", sans-serif;
-  --clozzz-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --clozzz-cream: #f3ead7;
+  --clozzz-cream-soft: rgba(243, 234, 215, 0.78);
+  --clozzz-cream-faint: rgba(243, 234, 215, 0.48);
+  --clozzz-gold: #e4c989;
+  --clozzz-gold-deep: #c9a45a;
+  --clozzz-indigo: #1a1430;
+  --clozzz-indigo-mid: #2a2150;
+  --clozzz-violet: #6e5bb8;
+  --clozzz-glass: rgba(18, 12, 36, 0.52);
+  --clozzz-glass-strong: rgba(14, 10, 30, 0.62);
+  --clozzz-stroke: rgba(243, 234, 215, 0.22);
+  --clozzz-stroke-strong: rgba(228, 201, 137, 0.38);
+  --clozzz-warn: #f0b56a;
+  --clozzz-critical: #f08a6a;
+  --clozzz-font-display: "Cormorant Garamond", "Times New Roman", serif;
+  --clozzz-font-sans: "Source Sans 3", "Segoe UI", sans-serif;
+  --clozzz-pad: clamp(1.1rem, 2.8vw, 2.25rem);
+  --clozzz-radius-pill: 999px;
+  --clozzz-radius-panel: 1.35rem;
+  --clozzz-blur: blur(16px) saturate(1.15);
+  --clozzz-shadow: 0 10px 36px rgba(4, 2, 16, 0.45);
 }
 
 html,
@@ -19,8 +33,8 @@ body,
   height: 100%;
   background: transparent !important;
   overflow: hidden;
-  color: var(--clozzz-ink);
-  font-family: var(--clozzz-font-display);
+  color: var(--clozzz-cream);
+  font-family: var(--clozzz-font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -36,156 +50,376 @@ body,
   height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: clamp(1.25rem, 3vw, 2.5rem);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 0.75rem;
-  text-shadow: var(--clozzz-shadow);
+  padding: var(--clozzz-pad);
   pointer-events: none;
   user-select: none;
 }
 
+.clozzz-overlay--live {
+  display: block;
+}
+
 .clozzz-overlay--picker {
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
   justify-content: flex-start;
+  align-items: flex-start;
+  gap: 0.85rem;
   max-width: 42rem;
 }
 
-/* Picker / unknown-session pages are not OBS sources — use a readable dark stage. */
+/* Picker / unknown-session — readable dark stage (not OBS). */
 html.clozzz-stage-dark,
 html.clozzz-stage-dark body,
 html.clozzz-stage-dark #root {
-  background: #0b1018 !important;
+  background: #100c1c !important;
 }
 
-/* Optional local/OBS check: /clozzz-overlay/demo?preview=1 */
+/* Optional local/OBS check: /clozzz-overlay/demo?preview=1 — no full aurora. */
 html.clozzz-stage-preview,
 html.clozzz-stage-preview body,
 html.clozzz-stage-preview #root {
   background:
-    radial-gradient(ellipse at 30% 20%, #1a2a38 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 70%, #152018 0%, transparent 45%),
-    #101820 !important;
+    radial-gradient(ellipse at 18% 12%, rgba(70, 48, 120, 0.35) 0%, transparent 42%),
+    radial-gradient(ellipse at 88% 78%, rgba(36, 56, 90, 0.28) 0%, transparent 40%),
+    #0c0a14 !important;
 }
 
-.clozzz-kicker {
-  margin: 0;
-  font-size: clamp(0.75rem, 1.4vw, 0.95rem);
-  font-weight: 500;
-  letter-spacing: 0.14em;
+/* ——— Corner anchors — keep camera clear ——— */
+
+.clozzz-corner {
+  position: absolute;
+  z-index: 1;
+}
+
+.clozzz-corner--tl {
+  top: var(--clozzz-pad);
+  left: var(--clozzz-pad);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  max-width: min(28rem, 46vw);
+}
+
+.clozzz-corner--tr {
+  top: var(--clozzz-pad);
+  right: var(--clozzz-pad);
+}
+
+.clozzz-corner--bl {
+  bottom: var(--clozzz-pad);
+  left: var(--clozzz-pad);
+  max-width: min(30rem, 48vw);
+}
+
+.clozzz-corner--br {
+  bottom: var(--clozzz-pad);
+  right: var(--clozzz-pad);
+  max-width: min(18rem, 36vw);
+  text-align: right;
+}
+
+/* ——— Brand ——— */
+
+.clozzz-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.clozzz-brand__mark {
+  display: grid;
+  place-items: center;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(160deg, rgba(42, 33, 80, 0.85), rgba(18, 12, 36, 0.9));
+  border: 1px solid var(--clozzz-stroke-strong);
+  box-shadow: var(--clozzz-shadow);
+  color: var(--clozzz-indigo);
+  backdrop-filter: var(--clozzz-blur);
+  -webkit-backdrop-filter: var(--clozzz-blur);
+}
+
+.clozzz-brand__mark svg {
+  width: 1.55rem;
+  height: 1.55rem;
+}
+
+.clozzz-moon-disc {
+  fill: transparent;
+}
+
+.clozzz-moon-crescent,
+.clozzz-moon-star {
+  fill: var(--clozzz-gold);
+}
+
+.clozzz-moon-star--sm {
+  opacity: 0.85;
+}
+
+.clozzz-brand__name {
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.45rem, 2.6vw, 2rem);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--clozzz-cream);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* ——— Meta chips (R# + space) ——— */
+
+.clozzz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.clozzz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.72rem;
+  border-radius: var(--clozzz-radius-pill);
+  border: 1px solid var(--clozzz-stroke);
+  background: var(--clozzz-glass);
+  backdrop-filter: var(--clozzz-blur);
+  -webkit-backdrop-filter: var(--clozzz-blur);
+  font-size: clamp(0.68rem, 1.05vw, 0.78rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--clozzz-accent);
+  color: var(--clozzz-cream-soft);
+  box-shadow: 0 6px 20px rgba(4, 2, 16, 0.28);
 }
 
-.clozzz-current {
-  margin: 0;
-  max-width: 16ch;
-  font-size: clamp(2.4rem, 6.5vw, 5.5rem);
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+.clozzz-chip--routine {
+  border-color: var(--clozzz-stroke-strong);
+  color: var(--clozzz-gold);
 }
 
-.clozzz-cue {
-  margin: 0;
-  max-width: 28rem;
-  font-size: clamp(0.95rem, 1.8vw, 1.25rem);
-  font-weight: 400;
-  color: var(--clozzz-ink-dim);
+.clozzz-chip__icon {
+  flex-shrink: 0;
+  opacity: 0.85;
 }
+
+/* ——— Timer (top-right) ——— */
 
 .clozzz-timer {
-  margin: 0.35rem 0 0;
-  font-family: var(--clozzz-font-mono);
-  font-size: clamp(2.8rem, 8vw, 6.5rem);
-  font-weight: 700;
+  /* Nested under .clozzz-corner--tr so absolute corner anchor is not overridden. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 1.15rem 0.7rem 0.95rem;
+  border-radius: var(--clozzz-radius-pill);
+  border: 1px solid var(--clozzz-stroke);
+  background: var(--clozzz-glass-strong);
+  backdrop-filter: var(--clozzz-blur);
+  -webkit-backdrop-filter: var(--clozzz-blur);
+  box-shadow: var(--clozzz-shadow);
+  color: var(--clozzz-cream);
+  overflow: hidden;
+  transform-origin: top right;
+  transition: color 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+
+.clozzz-timer__icon {
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.clozzz-timer__value {
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(2rem, 4.6vw, 3.35rem);
+  font-weight: 600;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  min-width: 4.2ch;
 }
 
-.clozzz-timer--warn {
-  color: #ffd38a;
-}
-
-.clozzz-timer--done {
-  color: var(--clozzz-accent);
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  letter-spacing: 0.02em;
-}
-
-.clozzz-progress {
-  width: min(22rem, 55vw);
-  height: 4px;
-  margin-top: 0.35rem;
+.clozzz-timer__ring {
+  position: absolute;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.28rem;
+  height: 2px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(243, 234, 215, 0.12);
   overflow: hidden;
 }
 
-.clozzz-progress__bar {
+.clozzz-timer__ring::after {
+  content: "";
+  display: block;
   height: 100%;
   width: 100%;
   transform-origin: left center;
-  background: linear-gradient(90deg, var(--clozzz-accent), #c8e9f5);
-  transition: transform 0.2s linear;
+  transform: scaleX(var(--clozzz-progress, 1));
+  background: linear-gradient(90deg, var(--clozzz-gold-deep), var(--clozzz-cream));
+  transition: transform 0.2s linear, background 0.45s ease;
 }
 
-.clozzz-meta {
-  margin: 0.5rem 0 0;
-  font-size: clamp(0.75rem, 1.2vw, 0.9rem);
-  color: var(--clozzz-ink-faint);
-  font-weight: 500;
+.clozzz-timer--calm {
+  color: var(--clozzz-cream);
+  border-color: var(--clozzz-stroke);
 }
+
+.clozzz-timer--late {
+  color: var(--clozzz-gold);
+  border-color: rgba(228, 201, 137, 0.42);
+}
+
+.clozzz-timer--late .clozzz-timer__ring::after {
+  background: linear-gradient(90deg, var(--clozzz-gold-deep), var(--clozzz-warn));
+}
+
+.clozzz-timer--warn {
+  color: var(--clozzz-warn);
+  border-color: rgba(240, 181, 106, 0.5);
+  box-shadow: var(--clozzz-shadow), 0 0 22px rgba(240, 181, 106, 0.18);
+}
+
+.clozzz-timer--warn .clozzz-timer__ring::after {
+  background: linear-gradient(90deg, #d98a3c, var(--clozzz-warn));
+}
+
+.clozzz-timer--critical {
+  color: var(--clozzz-critical);
+  border-color: rgba(240, 138, 106, 0.55);
+  box-shadow: var(--clozzz-shadow), 0 0 26px rgba(240, 138, 106, 0.22);
+  animation: clozzz-timer-pulse 1.1s ease-in-out infinite;
+}
+
+.clozzz-timer--critical .clozzz-timer__ring::after {
+  background: linear-gradient(90deg, #c45a3a, var(--clozzz-critical));
+}
+
+.clozzz-timer--done {
+  color: var(--clozzz-gold);
+  border-color: var(--clozzz-stroke-strong);
+}
+
+@keyframes clozzz-timer-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+}
+
+/* ——— Current panel (bottom-left) ——— */
+
+.clozzz-current-panel {
+  padding: 0.95rem 1.25rem 1.05rem;
+  border-radius: var(--clozzz-radius-panel);
+  border: 1px solid var(--clozzz-stroke);
+  background:
+    linear-gradient(145deg, rgba(42, 33, 80, 0.42), rgba(14, 10, 30, 0.58));
+  backdrop-filter: var(--clozzz-blur);
+  -webkit-backdrop-filter: var(--clozzz-blur);
+  box-shadow: var(--clozzz-shadow);
+}
+
+.clozzz-panel-label {
+  margin: 0;
+  font-size: clamp(0.65rem, 1vw, 0.74rem);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--clozzz-cream-faint);
+}
+
+.clozzz-current {
+  margin: 0.2rem 0 0;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.85rem, 4.2vw, 3.15rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: 0.005em;
+  color: var(--clozzz-cream);
+}
+
+.clozzz-panel-meta {
+  margin: 0.4rem 0 0;
+  font-size: clamp(0.72rem, 1.1vw, 0.84rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--clozzz-cream-faint);
+}
+
+/* ——— Next (bottom-right, secondary) ——— */
 
 .clozzz-next {
-  position: absolute;
-  right: clamp(1.25rem, 3vw, 2.5rem);
-  bottom: clamp(1.25rem, 3vw, 2.5rem);
-  text-align: right;
-  max-width: min(18rem, 42vw);
+  padding: 0.7rem 0.95rem 0.8rem;
+  border-radius: calc(var(--clozzz-radius-panel) - 0.15rem);
+  border: 1px solid rgba(243, 234, 215, 0.14);
+  background: rgba(14, 10, 30, 0.42);
+  backdrop-filter: blur(12px) saturate(1.05);
+  -webkit-backdrop-filter: blur(12px) saturate(1.05);
+  box-shadow: 0 8px 24px rgba(4, 2, 16, 0.3);
+  opacity: 0.88;
 }
 
-.clozzz-next__label {
-  margin: 0;
-  font-size: clamp(0.7rem, 1.1vw, 0.8rem);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--clozzz-ink-faint);
-  font-weight: 500;
+.clozzz-next .clozzz-panel-label {
+  font-size: clamp(0.6rem, 0.95vw, 0.68rem);
 }
 
 .clozzz-next__title {
-  margin: 0.2rem 0 0;
-  font-size: clamp(1rem, 2vw, 1.45rem);
+  margin: 0.15rem 0 0;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.05rem, 2vw, 1.45rem);
   font-weight: 600;
-  line-height: 1.2;
-  color: var(--clozzz-ink-dim);
+  line-height: 1.15;
+  color: var(--clozzz-cream-soft);
 }
 
 .clozzz-next__time {
-  margin: 0.15rem 0 0;
-  font-family: var(--clozzz-font-mono);
-  font-size: clamp(0.8rem, 1.3vw, 0.95rem);
-  color: var(--clozzz-ink-faint);
+  margin: 0.2rem 0 0;
+  font-size: clamp(0.7rem, 1.05vw, 0.8rem);
+  font-weight: 500;
+  letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
+  color: var(--clozzz-cream-faint);
+}
+
+.clozzz-next--done {
+  opacity: 0.7;
+}
+
+/* ——— Picker pages ——— */
+
+.clozzz-overlay--picker .clozzz-brand {
+  margin-bottom: 0.35rem;
 }
 
 .clozzz-picker-title {
-  margin: 0 0 0.35rem;
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  font-weight: 700;
+  margin: 0;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.9rem, 4vw, 2.7rem);
+  font-weight: 600;
   line-height: 1.1;
+  color: var(--clozzz-cream);
 }
 
 .clozzz-picker-lead {
-  margin: 0 0 1.5rem;
-  color: var(--clozzz-ink-dim);
+  margin: 0 0 0.75rem;
+  color: var(--clozzz-cream-soft);
   font-size: 1rem;
   max-width: 36rem;
-  text-shadow: var(--clozzz-shadow);
+  line-height: 1.45;
+}
+
+.clozzz-picker-lead code {
+  font-size: 0.9em;
+  color: var(--clozzz-gold);
 }
 
 .clozzz-session-list {
@@ -200,50 +434,53 @@ html.clozzz-stage-preview #root {
 
 .clozzz-session-list a {
   display: block;
-  padding: 0.85rem 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 10px;
-  background: rgba(8, 12, 18, 0.55);
-  color: var(--clozzz-ink);
+  padding: 0.9rem 1.05rem;
+  border: 1px solid var(--clozzz-stroke);
+  border-radius: 1rem;
+  background: var(--clozzz-glass);
+  color: var(--clozzz-cream);
   text-decoration: none;
-  text-shadow: none;
+  backdrop-filter: var(--clozzz-blur);
+  -webkit-backdrop-filter: var(--clozzz-blur);
   transition: border-color 0.15s ease, background 0.15s ease;
   pointer-events: auto;
 }
 
 .clozzz-session-list a:hover {
-  border-color: var(--clozzz-accent);
-  background: rgba(8, 12, 18, 0.75);
-  color: var(--clozzz-ink);
+  border-color: var(--clozzz-stroke-strong);
+  background: rgba(42, 33, 80, 0.55);
+  color: var(--clozzz-cream);
 }
 
 .clozzz-session-list strong {
   display: block;
-  font-size: 1.05rem;
+  font-family: var(--clozzz-font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
 }
 
 .clozzz-session-list span {
   display: block;
-  margin-top: 0.2rem;
+  margin-top: 0.25rem;
   font-size: 0.85rem;
-  color: var(--clozzz-ink-dim);
+  color: var(--clozzz-cream-faint);
 }
 
 .clozzz-error {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  margin: 0.5rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 500;
 }
 
 .clozzz-error a {
-  color: var(--clozzz-accent);
+  color: var(--clozzz-gold);
   pointer-events: auto;
 }
 
 @keyframes clozzz-fade-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -252,5 +489,24 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-anim {
-  animation: clozzz-fade-in 0.35s ease-out both;
+  animation: clozzz-fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (max-width: 720px) {
+  .clozzz-corner--tl,
+  .clozzz-corner--bl {
+    max-width: calc(100% - 2 * var(--clozzz-pad));
+  }
+
+  .clozzz-corner--br {
+    max-width: min(14rem, 44vw);
+  }
+
+  .clozzz-timer__value {
+    font-size: clamp(1.6rem, 8vw, 2.2rem);
+  }
+
+  .clozzz-current {
+    font-size: clamp(1.5rem, 7vw, 2.2rem);
+  }
 }
