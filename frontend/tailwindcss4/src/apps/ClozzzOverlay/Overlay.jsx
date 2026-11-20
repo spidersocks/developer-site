@@ -3,6 +3,7 @@ import {
   FALLBACK_CATALOG,
   findSessionIn,
   formatDuration,
+  normalizeCatalog,
   sessionTotalSec,
 } from "./routines.js";
 import { fetchCatalog } from "./api.js";
@@ -205,16 +206,17 @@ function RunningOverlay({ session }) {
       </header>
 
       <div className="clozzz-corner clozzz-corner--tr">
-        <div className={`clozzz-timer clozzz-timer--${band}`}>
+        <div
+          className={`clozzz-timer clozzz-timer--${band}`}
+          style={{
+            /* Elapsed fraction: gold border fills as time elapses. */
+            "--clozzz-elapsed": done ? 1 : Math.min(1, Math.max(0, 1 - progress)),
+          }}
+        >
           <TimerIcon />
           <span className="clozzz-timer__value">
             {done ? "0:00" : formatClock(remainingSec)}
           </span>
-          <span
-            className="clozzz-timer__ring"
-            style={{ "--clozzz-progress": progress }}
-            aria-hidden="true"
-          />
         </div>
       </div>
 
@@ -248,14 +250,16 @@ function RunningOverlay({ session }) {
 }
 
 function useCatalog() {
-  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
+  const [catalog, setCatalog] = useState(() => normalizeCatalog(FALLBACK_CATALOG));
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetchCatalog()
       .then((data) => {
-        if (!cancelled && data?.routines?.length) setCatalog(data);
+        if (!cancelled && data?.routines?.length) {
+          setCatalog(normalizeCatalog(data));
+        }
       })
       .catch(() => {
         /* keep bundled fallback */

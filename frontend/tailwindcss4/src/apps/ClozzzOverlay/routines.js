@@ -4,8 +4,26 @@
  */
 
 /** @typedef {{ id: string, label: string, durationSec: number }} Segment */
-/** @typedef {{ id: string, name: string, title: string, routineId: string, space: string, intent: string, segments: Segment[] }} Session */
+/** @typedef {{ id: string, name: string, title: string, routineId: string, space: string, description: string, segments: Segment[] }} Session */
 /** @typedef {{ schemaVersion: number, updatedAt?: string, routines: Session[] }} Catalog */
+
+/** Migrate legacy `intent` → `description` on read. */
+export function normalizeRoutine(routine) {
+  if (!routine || typeof routine !== "object") return routine;
+  const description = String(
+    routine.description ?? routine.intent ?? ""
+  ).trim();
+  const { intent: _legacyIntent, ...rest } = routine;
+  return { ...rest, description };
+}
+
+export function normalizeCatalog(catalog) {
+  if (!catalog || typeof catalog !== "object") return catalog;
+  const routines = Array.isArray(catalog.routines)
+    ? catalog.routines.map(normalizeRoutine)
+    : [];
+  return { ...catalog, routines };
+}
 
 /** @type {Catalog} */
 export const FALLBACK_CATALOG = {
@@ -17,7 +35,7 @@ export const FALLBACK_CATALOG = {
       title: "Demo Smoke",
       routineId: "DEMO",
       space: "Anywhere",
-      intent: "Short segments to verify OBS Browser Source + auto-advance.",
+      description: "Short segments to verify OBS Browser Source + auto-advance.",
       segments: [
         { id: "demo-s1", label: "Settle in", durationSec: 5 },
         { id: "demo-s2", label: "Reach overhead", durationSec: 5 },
@@ -31,7 +49,7 @@ export const FALLBACK_CATALOG = {
       title: "Floor Unwind",
       routineId: "R1",
       space: "Floor mat",
-      intent: "Gentle floor mobility to downshift before sleep.",
+      description: "Gentle floor mobility to downshift before sleep.",
       segments: [
         { id: "r1-s1", label: "Settle & breathe", durationSec: 45 },
         { id: "r1-s2", label: "Knee rocks", durationSec: 60 },
@@ -49,7 +67,7 @@ export const FALLBACK_CATALOG = {
       title: "From-Bed Stretch",
       routineId: "R2",
       space: "Bedside",
-      intent: "Low-effort stretches you can do sitting or standing by the bed.",
+      description: "Low-effort stretches you can do sitting or standing by the bed.",
       segments: [
         { id: "r2-s1", label: "Seated neck rolls", durationSec: 40 },
         { id: "r2-s2", label: "Shoulder shrugs", durationSec: 40 },
@@ -68,7 +86,7 @@ export const FALLBACK_CATALOG = {
       title: "Small-Space Strength",
       routineId: "R3",
       space: "Hotel footprint",
-      intent: "Quiet standing strength in a hotel-room footprint.",
+      description: "Quiet standing strength in a hotel-room footprint.",
       segments: [
         { id: "r3-s1", label: "March in place", durationSec: 50 },
         { id: "r3-s2", label: "Bodyweight squats", durationSec: 70 },
@@ -86,7 +104,7 @@ export const FALLBACK_CATALOG = {
       title: "Hip & Back Release",
       routineId: "R4",
       space: "Floor mat",
-      intent: "Target hips and low back after a desk day.",
+      description: "Target hips and low back after a desk day.",
       segments: [
         { id: "r4-s1", label: "World's greatest stretch L", durationSec: 50 },
         { id: "r4-s2", label: "World's greatest stretch R", durationSec: 50 },
@@ -105,7 +123,7 @@ export const FALLBACK_CATALOG = {
       title: "Wind-Down Circuit",
       routineId: "R5",
       space: "Open floor",
-      intent: "Short mixed circuit that ends in stillness.",
+      description: "Short mixed circuit that ends in stillness.",
       segments: [
         { id: "r5-s1", label: "Box breath ×4", durationSec: 64 },
         { id: "r5-s2", label: "Arm circles", durationSec: 40 },
@@ -209,7 +227,7 @@ export function blankRoutine(existing = [], overrides = {}) {
     title,
     routineId: overrides.routineId || routineId,
     space: overrides.space || "",
-    intent: overrides.intent || "",
+    description: overrides.description || overrides.intent || "",
     segments: overrides.segments || [
       { id: newId("seg"), label: "New exercise", durationSec: 60 },
     ],

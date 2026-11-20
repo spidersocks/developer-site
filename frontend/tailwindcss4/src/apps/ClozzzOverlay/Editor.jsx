@@ -338,11 +338,11 @@ function EditRoutineModal({
               />
             </div>
             <div className="ce-field">
-              <label htmlFor="ce-edit-intent">Intent</label>
+              <label htmlFor="ce-edit-description">Description</label>
               <textarea
-                id="ce-edit-intent"
-                value={draft.intent}
-                onChange={(e) => patchDraft({ intent: e.target.value })}
+                id="ce-edit-description"
+                value={draft.description || ""}
+                onChange={(e) => patchDraft({ description: e.target.value })}
               />
             </div>
           </div>
