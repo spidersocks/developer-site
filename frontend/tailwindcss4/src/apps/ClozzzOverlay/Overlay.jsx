@@ -62,37 +62,18 @@ function timerBand(progress, remainingSec, done) {
   return "calm";
 }
 
-function MoonMark({ className = "" }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 40 40"
-      width="40"
-      height="40"
-      aria-hidden="true"
-    >
-      <circle cx="20" cy="20" r="19" fill="currentColor" className="clozzz-moon-disc" />
-      <path
-        className="clozzz-moon-crescent"
-        d="M24.2 8.6c-5.9.4-10.5 5.4-10.5 11.4 0 6.3 5.1 11.4 11.4 11.4 1.7 0 3.3-.4 4.7-1C27.2 32.8 23 35 18.3 35 10.6 35 4.3 28.7 4.3 21S10.6 7 18.3 7c2.1 0 4.1.5 5.9 1.6z"
-      />
-      <path
-        className="clozzz-moon-star"
-        d="M30.2 11.2l1.1 2.4 2.6.3-1.9 1.8.5 2.6-2.3-1.3-2.3 1.3.5-2.6-1.9-1.8 2.6-.3z"
-      />
-      <path
-        className="clozzz-moon-star clozzz-moon-star--sm"
-        d="M33.8 18.4l.55 1.2 1.3.15-.95.9.25 1.3-1.15-.65-1.15.65.25-1.3-.95-.9 1.3-.15z"
-      />
-    </svg>
-  );
-}
-
 function BrandLockup() {
   return (
     <div className="clozzz-brand">
       <span className="clozzz-brand__mark" aria-hidden="true">
-        <MoonMark />
+        <img
+          className="clozzz-brand__logo"
+          src="/clozzz/clozzz-logo.png"
+          alt=""
+          width="40"
+          height="40"
+          decoding="async"
+        />
       </span>
       <span className="clozzz-brand__text">
         <span className="clozzz-brand__name">Clozzz Sleep</span>
