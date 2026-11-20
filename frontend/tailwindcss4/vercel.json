@@ -173,11 +173,15 @@
     },
     {
       "source": "/clozzz-overlay",
-      "destination": "/clozzz-overlay.html"
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
+      "source": "/clozzz-overlay/",
+      "destination": "/clozzz-overlay/index.html"
     },
     {
       "source": "/clozzz-overlay/:path*",
-      "destination": "/clozzz-overlay.html"
+      "destination": "/clozzz-overlay/index.html"
     },
     {
       "source": "/brightnest-api",

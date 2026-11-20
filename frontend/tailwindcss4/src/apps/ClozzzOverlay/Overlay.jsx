@@ -35,9 +35,7 @@ export function readSessionKey(location = window.location) {
 
 function sessionHref(key) {
   const path = window.location.pathname;
-  if (/clozzz-overlay\.html/i.test(path)) {
-    return `?session=${encodeURIComponent(key)}`;
-  }
+  // Prefer clean session paths; query form works for file:// / odd hosts.
   return `/clozzz-overlay/${encodeURIComponent(key)}`;
 }
 
@@ -93,10 +91,7 @@ function SessionPicker() {
 
 function SessionNotFound({ keyTried }) {
   useStageClass("dark");
-  const home =
-    /clozzz-overlay\.html/i.test(window.location.pathname)
-      ? window.location.pathname
-      : "/clozzz-overlay";
+  const home = "/clozzz-overlay";
   return (
     <div className="clozzz-overlay clozzz-overlay--picker">
       <p className="clozzz-kicker">Clozzz</p>

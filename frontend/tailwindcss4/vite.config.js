@@ -21,15 +21,22 @@ const brightnestProxy = (env) => {
   }
 }
 
-/** Dev/preview parity with vercel.json MPA rewrites for Clozzz overlay. */
+/**
+ * Dev/preview: map /clozzz-overlay and /clozzz-overlay/:session to the MPA
+ * directory entry (dist/clozzz-overlay/index.html). Vite's SPA fallback would
+ * otherwise steal these paths to /index.html (plaza).
+ */
 function clozzzOverlayRewrite() {
   const rewrite = (req, _res, next) => {
     const url = req.url || ''
-    if (url === '/clozzz-overlay' || url.startsWith('/clozzz-overlay?')) {
-      req.url = url.replace('/clozzz-overlay', '/clozzz-overlay.html')
-    } else if (url.startsWith('/clozzz-overlay/')) {
-      const q = url.includes('?') ? url.slice(url.indexOf('?')) : ''
-      req.url = `/clozzz-overlay.html${q}`
+    const qIndex = url.indexOf('?')
+    const path = qIndex >= 0 ? url.slice(0, qIndex) : url
+    const query = qIndex >= 0 ? url.slice(qIndex) : ''
+    if (path === '/clozzz-overlay' || path === '/clozzz-overlay/') {
+      req.url = `/clozzz-overlay/index.html${query}`
+    } else if (path.startsWith('/clozzz-overlay/')) {
+      // Keep deep session URLs on the overlay entry (not plaza SPA).
+      req.url = `/clozzz-overlay/index.html${query}`
     }
     next()
   }
@@ -64,7 +71,7 @@ export default defineConfig(({ mode }) => {
           podcast: 'podcast-project.html',
           littleScholarsBot: 'little-scholars-bot.html',
           comp6708A3Demo: 'comp6708-a3-demo.html',
-          clozzzOverlay: 'clozzz-overlay.html',
+          clozzzOverlay: 'clozzz-overlay/index.html',
         }
       }
     }
