@@ -56,17 +56,6 @@ function parseMmSs(raw) {
   return Math.max(1, minutes * 60 + seconds);
 }
 
-function PencilIcon() {
-  return (
-    <svg className="ce-icon" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M11.7 1.3a1.5 1.5 0 0 1 2.1 2.1L5.4 12 2 13l1-3.4 8.7-8.3Zm-8 9.9.5 1.6 1.6.5 7.8-7.8-2.1-2.1-7.8 7.8Z"
-      />
-    </svg>
-  );
-}
-
 function MoreIcon() {
   return (
     <svg className="ce-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -361,9 +350,6 @@ function EditRoutineModal({
           <div className="ce-segments">
             <div className="ce-segments__head">
               <h3>Exercises · {formatDuration(sessionTotalSec(draft))}</h3>
-              <button type="button" className="ce-btn ce-btn--subtle" onClick={addSegment}>
-                Add exercise
-              </button>
             </div>
             <ul className="ce-segment-list">
               {draft.segments.map((seg) => (
@@ -433,6 +419,18 @@ function EditRoutineModal({
                   />
                 </li>
               ))}
+              <li className="ce-add-row">
+                <button
+                  type="button"
+                  className="ce-add-row__btn"
+                  onClick={addSegment}
+                >
+                  <span className="ce-add-row__plus" aria-hidden="true">
+                    +
+                  </span>
+                  Add exercise
+                </button>
+              </li>
             </ul>
           </div>
         </div>
@@ -669,16 +667,6 @@ export default function Editor({ initialCatalog }) {
             <img src="/clozzz/clozzz-logo.png" alt="" width="32" height="32" />
             <h1>Evening exercise routines</h1>
           </div>
-          <div className="clozzz-editor__actions">
-            <button
-              type="button"
-              className="ce-btn ce-btn--primary"
-              disabled={busy || !!editDraft}
-              onClick={handleNew}
-            >
-              New
-            </button>
-          </div>
           {status.text ? (
             <div
               className={`clozzz-editor__status${
@@ -694,145 +682,148 @@ export default function Editor({ initialCatalog }) {
           ) : null}
         </header>
 
-        {!catalog.routines.length ? (
-          <div className="ce-empty">
-            <p>No routines yet.</p>
-            <button type="button" className="ce-btn ce-btn--primary" onClick={handleNew}>
-              New
-            </button>
-          </div>
-        ) : (
-          <ul className="ce-list">
-            {catalog.routines.map((routine) => {
-              const renaming = renamingId === routine.id;
-              return (
-                <li
-                  key={routine.id}
-                  className={`ce-item${
-                    draggingRoutine === routine.id ? " is-dragging" : ""
-                  }${
-                    overRoutine === routine.id && draggingRoutine !== routine.id
-                      ? " is-drag-over"
-                      : ""
-                  }`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (draggingRoutine && draggingRoutine !== routine.id) {
-                      setOverRoutine(routine.id);
-                    }
-                  }}
-                  onDragLeave={() => {
-                    if (overRoutine === routine.id) setOverRoutine(null);
-                  }}
-                  onDrop={() => onRoutineDrop(routine.id)}
-                >
-                  <div className="ce-item__row">
-                    <button
-                      type="button"
-                      className="ce-drag-handle"
-                      title="Drag to reorder"
-                      draggable
-                      onDragStart={(e) => {
-                        e.stopPropagation();
-                        dragRoutine.current = routine.id;
-                        setDraggingRoutine(routine.id);
-                      }}
-                      onDragEnd={() => {
-                        dragRoutine.current = null;
-                        setDraggingRoutine(null);
-                        setOverRoutine(null);
-                      }}
-                      aria-label={`Reorder ${routine.title}`}
-                    >
-                      ⋮⋮
-                    </button>
-                    <div className="ce-item__main">
-                      {renaming ? (
-                        <input
-                          ref={renameInputRef}
-                          className="ce-item__rename"
-                          value={renameDraft}
-                          aria-label="Routine title"
-                          onChange={(e) => setRenameDraft(e.target.value)}
-                          onBlur={() => commitRename(routine)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              commitRename(routine);
-                            }
-                            if (e.key === "Escape") {
-                              e.preventDefault();
-                              setRenamingId(null);
-                              setRenameDraft(routine.title);
-                            }
-                          }}
-                        />
-                      ) : (
-                        <p
-                          className="ce-item__title"
-                          title="Double-click to rename"
-                          onDoubleClick={(e) => {
+        <ul className="ce-list">
+          {catalog.routines.map((routine) => {
+            const renaming = renamingId === routine.id;
+            const renameChars = Math.max(renameDraft.length, 1);
+            return (
+              <li
+                key={routine.id}
+                className={`ce-item${
+                  draggingRoutine === routine.id ? " is-dragging" : ""
+                }${
+                  overRoutine === routine.id && draggingRoutine !== routine.id
+                    ? " is-drag-over"
+                    : ""
+                }`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggingRoutine && draggingRoutine !== routine.id) {
+                    setOverRoutine(routine.id);
+                  }
+                }}
+                onDragLeave={() => {
+                  if (overRoutine === routine.id) setOverRoutine(null);
+                }}
+                onDrop={() => onRoutineDrop(routine.id)}
+              >
+                <div className="ce-item__row">
+                  <button
+                    type="button"
+                    className="ce-drag-handle"
+                    title="Drag to reorder"
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      dragRoutine.current = routine.id;
+                      setDraggingRoutine(routine.id);
+                    }}
+                    onDragEnd={() => {
+                      dragRoutine.current = null;
+                      setDraggingRoutine(null);
+                      setOverRoutine(null);
+                    }}
+                    aria-label={`Reorder ${routine.title}`}
+                  >
+                    ⋮⋮
+                  </button>
+                  <div className="ce-item__main">
+                    {renaming ? (
+                      <input
+                        ref={renameInputRef}
+                        className="ce-item__rename"
+                        value={renameDraft}
+                        size={renameChars}
+                        style={{ width: `calc(${renameChars}ch + 0.8rem)` }}
+                        aria-label="Routine title"
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onBlur={() => commitRename(routine)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
                             e.preventDefault();
-                            beginRename(routine);
-                          }}
-                        >
-                          {routine.title}
-                        </p>
-                      )}
-                      <p className="ce-item__meta">
-                        {routine.segments.length} exercises ·{" "}
-                        {formatDuration(sessionTotalSec(routine))} ·{" "}
-                        {routine.localOnly
-                          ? "Not saved yet"
-                          : formatLastEdited(routine.updatedAt)}
-                      </p>
-                    </div>
-                    <div className="ce-item__actions">
-                      {!routine.localOnly ? (
-                        <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
-                          Open
-                        </a>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="ce-edit-link"
-                        disabled={!!editDraft}
-                        onClick={() => openEdit(routine)}
-                      >
-                        <PencilIcon />
-                        <span>Edit</span>
-                      </button>
-                      <OverflowMenu
-                        open={menuKey === `routine:${routine.id}`}
-                        onToggle={() =>
-                          setMenuKey((k) =>
-                            k === `routine:${routine.id}`
-                              ? null
-                              : `routine:${routine.id}`
-                          )
-                        }
-                        onClose={() => setMenuKey(null)}
-                        items={[
-                          {
-                            label: "Duplicate",
-                            disabled: busy || !!editDraft,
-                            onSelect: () => handleDuplicate(routine),
-                          },
-                          {
-                            label: "Delete",
-                            danger: true,
-                            disabled: busy || !!editDraft,
-                            onSelect: () => requestDelete(routine),
-                          },
-                        ]}
+                            commitRename(routine);
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setRenamingId(null);
+                            setRenameDraft(routine.title);
+                          }
+                        }}
                       />
-                    </div>
+                    ) : (
+                      <p
+                        className="ce-item__title"
+                        title="Double-click to rename"
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          beginRename(routine);
+                        }}
+                      >
+                        {routine.title}
+                      </p>
+                    )}
+                    <p className="ce-item__meta">
+                      {routine.segments.length} exercises ·{" "}
+                      {formatDuration(sessionTotalSec(routine))} ·{" "}
+                      {routine.localOnly
+                        ? "Not saved yet"
+                        : formatLastEdited(routine.updatedAt)}
+                    </p>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                  <div className="ce-item__actions">
+                    {!routine.localOnly ? (
+                      <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
+                        Open
+                      </a>
+                    ) : null}
+                    <OverflowMenu
+                      open={menuKey === `routine:${routine.id}`}
+                      onToggle={() =>
+                        setMenuKey((k) =>
+                          k === `routine:${routine.id}`
+                            ? null
+                            : `routine:${routine.id}`
+                        )
+                      }
+                      onClose={() => setMenuKey(null)}
+                      items={[
+                        {
+                          label: "Edit",
+                          disabled: busy || !!editDraft,
+                          onSelect: () => openEdit(routine),
+                        },
+                        {
+                          label: "Duplicate",
+                          disabled: busy || !!editDraft,
+                          onSelect: () => handleDuplicate(routine),
+                        },
+                        {
+                          label: "Delete",
+                          danger: true,
+                          disabled: busy || !!editDraft,
+                          onSelect: () => requestDelete(routine),
+                        },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+          <li className="ce-add-row ce-add-row--list">
+            <button
+              type="button"
+              className="ce-add-row__btn"
+              disabled={busy || !!editDraft}
+              onClick={handleNew}
+            >
+              <span className="ce-add-row__plus" aria-hidden="true">
+                +
+              </span>
+              Add new routine
+            </button>
+          </li>
+        </ul>
       </div>
 
       {editDraft ? (
