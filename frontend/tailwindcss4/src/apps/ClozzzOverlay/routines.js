@@ -170,21 +170,55 @@ export function newId(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
 }
 
+export function slugify(text) {
+  return String(text || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "routine";
+}
+
 /**
- * @param {Partial<Session>} [overrides]
- * @returns {Session}
+ * Next R# / r# ids from existing routines (skips DEMO-style labels).
+ * @param {Session[]} routines
  */
-export function blankRoutine(overrides = {}) {
-  const id = overrides.id || newId("routine");
+export function nextRoutineCodes(routines = []) {
+  let max = 0;
+  for (const r of routines) {
+    for (const raw of [r.routineId, r.id]) {
+      const m = String(raw || "").match(/(\d+)/);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+  }
+  const n = max + 1;
+  return { n, routineId: `R${n}`, id: `r${n}` };
+}
+
+/**
+ * @param {Session[]} [existing]
+ * @param {Partial<Session>} [overrides]
+ * @returns {Session & { localOnly?: boolean }}
+ */
+export function blankRoutine(existing = [], overrides = {}) {
+  const { routineId, id } = nextRoutineCodes(existing);
+  const title = overrides.title || "New routine";
   return {
-    id,
-    name: overrides.name || id,
-    title: overrides.title || "New routine",
-    routineId: overrides.routineId || "R?",
+    id: overrides.id || id,
+    name: overrides.name || `${id}-${slugify(title)}`,
+    title,
+    routineId: overrides.routineId || routineId,
     space: overrides.space || "",
     intent: overrides.intent || "",
     segments: overrides.segments || [
       { id: newId("seg"), label: "New exercise", durationSec: 60 },
     ],
+    localOnly: true,
   };
+}
+
+/** Strip client-only flags before sending to the API. */
+export function toServerRoutine(routine) {
+  const { localOnly, dirty, ...rest } = routine;
+  return rest;
 }

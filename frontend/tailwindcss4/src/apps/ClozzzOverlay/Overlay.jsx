@@ -6,7 +6,7 @@ import {
   sessionTotalSec,
 } from "./routines.js";
 import { fetchCatalog } from "./api.js";
-import Editor, { loadEditorCatalog } from "./Editor.jsx";
+import Editor from "./Editor.jsx";
 import "./overlay.css";
 
 function formatClock(totalSec) {
@@ -41,18 +41,23 @@ export function readSessionKey(location = window.location) {
   return null;
 }
 
-function sessionHref(key) {
-  return `/clozzz-overlay/${encodeURIComponent(key)}`;
-}
-
 function useStageClass(mode) {
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove("clozzz-stage-dark", "clozzz-stage-preview");
+    root.classList.remove(
+      "clozzz-stage-dark",
+      "clozzz-stage-preview",
+      "clozzz-stage-editor"
+    );
     if (mode === "dark") root.classList.add("clozzz-stage-dark");
     if (mode === "preview") root.classList.add("clozzz-stage-preview");
+    if (mode === "editor") root.classList.add("clozzz-stage-editor");
     return () => {
-      root.classList.remove("clozzz-stage-dark", "clozzz-stage-preview");
+      root.classList.remove(
+        "clozzz-stage-dark",
+        "clozzz-stage-preview",
+        "clozzz-stage-editor"
+      );
     };
   }, [mode]);
 }
@@ -118,52 +123,17 @@ function TimerIcon() {
   );
 }
 
-function SessionPicker({ routines }) {
-  useStageClass("dark");
-  return (
-    <div className="clozzz-overlay clozzz-overlay--picker">
-      <BrandLockup />
-      <h1 className="clozzz-picker-title">OBS overlay sessions</h1>
-      <p className="clozzz-picker-lead">
-        Pick a named session for Browser Source, or open{" "}
-        <code>/clozzz-overlay/&lt;id-or-name&gt;</code> (or{" "}
-        <code>?session=</code>) directly. Edit catalog at{" "}
-        <a href="/clozzz-overlay/edit">
-          <code>/clozzz-overlay/edit</code>
-        </a>
-        .
-      </p>
-      <ul className="clozzz-session-list">
-        {routines.map((session) => {
-          const total = sessionTotalSec(session);
-          return (
-            <li key={session.id}>
-              <a href={sessionHref(session.id)}>
-                <strong>
-                  {session.routineId} — {session.title}
-                </strong>
-                <span>
-                  {session.space} · {session.name} · {session.segments.length}{" "}
-                  segments · {formatDuration(total)}
-                </span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
 function SessionNotFound({ keyTried }) {
-  useStageClass("dark");
+  useStageClass("editor");
   const home = "/clozzz-overlay";
   return (
-    <div className="clozzz-overlay clozzz-overlay--picker">
-      <BrandLockup />
-      <p className="clozzz-error">
-        Unknown session “{keyTried}”. <a href={home}>Browse sessions</a>
-      </p>
+    <div className="clozzz-editor">
+      <div className="clozzz-editor__shell">
+        <BrandLockup />
+        <p style={{ marginTop: "1rem" }}>
+          Unknown session “{keyTried}”. <a href={home}>Back to routines</a>
+        </p>
+      </div>
     </div>
   );
 }
@@ -301,64 +271,46 @@ function useCatalog() {
   return { catalog, ready };
 }
 
-function EditorApp() {
-  useStageClass("dark");
-  const [catalog, setCatalog] = useState(null);
+function LibraryApp({ catalog: initial }) {
+  useStageClass("editor");
+  return <Editor initialCatalog={initial} />;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    loadEditorCatalog(FALLBACK_CATALOG).then((data) => {
-      if (!cancelled) setCatalog(data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!catalog) {
-    return (
-      <div className="clozzz-overlay clozzz-overlay--picker">
-        <BrandLockup />
-        <p className="clozzz-picker-lead">Loading routine editor…</p>
+function LibraryLoading() {
+  useStageClass("editor");
+  return (
+    <div className="clozzz-editor">
+      <div className="clozzz-editor__shell">
+        <p>Loading routines…</p>
       </div>
-    );
-  }
-
-  return <Editor initialCatalog={catalog} />;
+    </div>
+  );
 }
 
 export default function Overlay() {
   const [sessionKey, setSessionKey] = useState(() => readSessionKey());
-  const [editing, setEditing] = useState(() => isEditorPath());
   const { catalog, ready } = useCatalog();
 
   useEffect(() => {
-    const sync = () => {
-      setSessionKey(readSessionKey());
-      setEditing(isEditorPath());
-    };
+    // Old /edit URL → library at base route.
+    if (isEditorPath()) {
+      window.history.replaceState({}, "", "/clozzz-overlay");
+      setSessionKey(null);
+    }
+    const sync = () => setSessionKey(readSessionKey());
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
-
-  if (editing) {
-    return <EditorApp />;
-  }
 
   if (!ready) {
     if (sessionKey) {
       return <div className="clozzz-overlay clozzz-overlay--live" aria-busy="true" />;
     }
-    return (
-      <div className="clozzz-overlay clozzz-overlay--picker">
-        <BrandLockup />
-        <p className="clozzz-picker-lead">Loading sessions…</p>
-      </div>
-    );
+    return <LibraryLoading />;
   }
 
   if (!sessionKey) {
-    return <SessionPicker routines={catalog.routines} />;
+    return <LibraryApp catalog={catalog} />;
   }
 
   const session = findSessionIn(catalog.routines, sessionKey);

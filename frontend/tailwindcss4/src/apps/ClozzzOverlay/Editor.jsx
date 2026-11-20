@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   blankRoutine,
   formatDuration,
   newId,
   sessionTotalSec,
+  slugify,
+  toServerRoutine,
 } from "./routines.js";
 import {
   deleteRoutine,
@@ -45,11 +47,13 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
   );
 }
 
+function obsPath(routine) {
+  return `/clozzz-overlay/${encodeURIComponent(routine.id)}`;
+}
+
 export default function Editor({ initialCatalog }) {
   const [catalog, setCatalog] = useState(() => cloneCatalog(initialCatalog));
-  const [selectedId, setSelectedId] = useState(
-    () => initialCatalog.routines[0]?.id ?? null
-  );
+  const [openId, setOpenId] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
   const [status, setStatus] = useState({ kind: "idle", text: "" });
   const [busy, setBusy] = useState(false);
@@ -59,14 +63,9 @@ export default function Editor({ initialCatalog }) {
   const dragSegment = useRef(null);
   const fileRef = useRef(null);
 
-  const selected = useMemo(
-    () => catalog.routines.find((r) => r.id === selectedId) ?? null,
-    [catalog.routines, selectedId]
-  );
-
   useEffect(() => {
     if (!toast) return undefined;
-    const t = window.setTimeout(() => setToast(""), 2800);
+    const t = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(t);
   }, [toast]);
 
@@ -82,129 +81,132 @@ export default function Editor({ initialCatalog }) {
     setCatalog(cloneCatalog(nextCatalog));
   }
 
-  async function persistCatalog(nextCatalog, { recordUndo = true, message } = {}) {
-    setBusy(true);
-    setStatus({ kind: "idle", text: "Saving…" });
-    try {
-      const saved = await saveCatalog(nextCatalog);
-      applyLocal(saved, { recordUndo });
-      setStatus({ kind: "ok", text: message || "Saved to server." });
-      setToast(message || "Saved");
-      return saved;
-    } catch (err) {
-      setStatus({ kind: "err", text: err.message || "Save failed" });
-      throw err;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function persistRoutine(routine, { recordUndo = true } = {}) {
-    setBusy(true);
-    setStatus({ kind: "idle", text: "Saving routine…" });
-    try {
-      if (recordUndo) pushUndo(catalog);
-      const saved = await saveRoutine(routine);
-      setCatalog(cloneCatalog(saved));
-      setSelectedId(routine.id);
-      setStatus({ kind: "ok", text: "Routine saved." });
-      setToast("Routine saved");
-      return saved;
-    } catch (err) {
-      setStatus({ kind: "err", text: err.message || "Save failed" });
-      throw err;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function updateSelected(patch) {
-    if (!selected) return;
+  function updateRoutine(id, patch) {
     const next = {
       ...catalog,
-      routines: catalog.routines.map((r) =>
-        r.id === selected.id ? { ...r, ...patch } : r
-      ),
+      routines: catalog.routines.map((r) => {
+        if (r.id !== id) return r;
+        const merged = { ...r, ...patch };
+        // Keep URL slug loosely aligned with title for unsaved routines.
+        if (r.localOnly && patch.title != null) {
+          merged.name = `${r.id}-${slugify(patch.title)}`;
+        }
+        return merged;
+      }),
     };
     applyLocal(next);
   }
 
-  function updateSegment(segId, patch) {
-    if (!selected) return;
-    const segments = selected.segments.map((s) =>
-      s.id === segId ? { ...s, ...patch } : s
-    );
-    updateSelected({ segments });
+  async function persistRoutine(routine) {
+    setBusy(true);
+    setStatus({ kind: "idle", text: "Saving…" });
+    try {
+      pushUndo(catalog);
+      const saved = await saveRoutine(toServerRoutine(routine));
+      setCatalog(cloneCatalog(saved));
+      setOpenId(routine.id);
+      setStatus({ kind: "ok", text: "Saved." });
+      setToast("Saved");
+    } catch (err) {
+      setStatus({ kind: "err", text: err.message || "Save failed" });
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function handleUndo() {
+  async function persistWholeCatalog(nextCatalog, message) {
+    setBusy(true);
+    setStatus({ kind: "idle", text: "Saving…" });
+    try {
+      const payload = {
+        ...nextCatalog,
+        routines: nextCatalog.routines.map(toServerRoutine),
+      };
+      const saved = await saveCatalog(payload);
+      applyLocal(saved, { recordUndo: true });
+      setStatus({ kind: "ok", text: message || "Saved." });
+      setToast(message || "Saved");
+    } catch (err) {
+      setStatus({ kind: "err", text: err.message || "Save failed" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleUndo() {
     setUndoStack((stack) => {
       if (!stack.length) return stack;
       const prev = stack[stack.length - 1];
       setBusy(true);
-      saveCatalog(prev)
+      saveCatalog({
+        ...prev,
+        routines: prev.routines.filter((r) => !r.localOnly).map(toServerRoutine),
+      })
         .then((saved) => {
-          setCatalog(cloneCatalog(saved));
-          setStatus({ kind: "ok", text: "Undid last change." });
+          // Re-attach any local-only drafts that were in the undo snapshot.
+          const locals = prev.routines.filter((r) => r.localOnly);
+          const merged = {
+            ...saved,
+            routines: [...saved.routines, ...locals.filter((l) => !saved.routines.some((s) => s.id === l.id))],
+          };
+          setCatalog(cloneCatalog(merged));
+          setStatus({ kind: "ok", text: "Undone." });
           setToast("Undone");
-          if (!saved.routines.some((r) => r.id === selectedId)) {
-            setSelectedId(saved.routines[0]?.id ?? null);
-          }
         })
-        .catch((err) => {
-          setStatus({ kind: "err", text: err.message || "Undo failed" });
-        })
+        .catch((err) => setStatus({ kind: "err", text: err.message || "Undo failed" }))
         .finally(() => setBusy(false));
       return stack.slice(0, -1);
     });
   }
 
-  async function handleSaveSelected() {
-    if (!selected) return;
-    await persistRoutine(selected);
+  function handleNew() {
+    const routine = blankRoutine(catalog.routines);
+    applyLocal({ ...catalog, routines: [...catalog.routines, routine] });
+    setOpenId(routine.id);
+    setToast("Draft routine created — save when ready");
   }
 
-  async function handleSaveAll() {
-    await persistCatalog(catalog, { message: "Catalog saved." });
-  }
-
-  function handleNewRoutine() {
-    const routine = blankRoutine();
-    const next = { ...catalog, routines: [...catalog.routines, routine] };
-    applyLocal(next);
-    setSelectedId(routine.id);
-  }
-
-  function handleDuplicate() {
-    if (!selected) return;
+  function handleDuplicate(routine) {
+    const codes = blankRoutine(catalog.routines);
     const copy = {
-      ...cloneCatalog(selected),
-      id: newId("routine"),
-      name: `${selected.name}-copy`,
-      title: `${selected.title} (copy)`,
-      segments: selected.segments.map((s) => ({ ...s, id: newId("seg") })),
+      ...cloneCatalog(routine),
+      id: codes.id,
+      routineId: codes.routineId,
+      name: `${codes.id}-${slugify(routine.title)}-copy`,
+      title: `${routine.title} (copy)`,
+      segments: routine.segments.map((s) => ({ ...s, id: newId("seg") })),
+      localOnly: true,
     };
-    const next = { ...catalog, routines: [...catalog.routines, copy] };
-    applyLocal(next);
-    setSelectedId(copy.id);
+    applyLocal({ ...catalog, routines: [...catalog.routines, copy] });
+    setOpenId(copy.id);
   }
 
-  function requestDeleteRoutine() {
-    if (!selected) return;
+  function requestDelete(routine) {
     setConfirm({
       title: "Delete routine?",
-      body: `“${selected.title}” and all of its exercises will be removed from the server.`,
+      body: routine.localOnly
+        ? `Remove draft “${routine.title}”? It was never saved to the server.`
+        : `Delete “${routine.title}” from the server?`,
       confirmLabel: "Delete",
       danger: true,
       run: async () => {
         setConfirm(null);
+        if (routine.localOnly) {
+          applyLocal({
+            ...catalog,
+            routines: catalog.routines.filter((r) => r.id !== routine.id),
+          });
+          if (openId === routine.id) setOpenId(null);
+          setToast("Draft discarded");
+          return;
+        }
         pushUndo(catalog);
         setBusy(true);
         try {
-          const saved = await deleteRoutine(selected.id);
+          const saved = await deleteRoutine(routine.id);
           setCatalog(cloneCatalog(saved));
-          setSelectedId(saved.routines[0]?.id ?? null);
-          setStatus({ kind: "ok", text: "Routine deleted." });
+          if (openId === routine.id) setOpenId(null);
+          setStatus({ kind: "ok", text: "Deleted." });
           setToast("Deleted");
         } catch (err) {
           setStatus({ kind: "err", text: err.message || "Delete failed" });
@@ -217,8 +219,8 @@ export default function Editor({ initialCatalog }) {
 
   function requestResetSeed() {
     setConfirm({
-      title: "Reset to seed data?",
-      body: "This replaces the whole catalog with the bundled DEMO + R1–R5 defaults.",
+      title: "Reset to defaults?",
+      body: "Replace the whole catalog with the bundled DEMO + R1–R5 seed.",
       confirmLabel: "Reset",
       danger: true,
       run: async () => {
@@ -228,7 +230,7 @@ export default function Editor({ initialCatalog }) {
         try {
           const saved = await resetCatalogToSeed();
           setCatalog(cloneCatalog(saved));
-          setSelectedId(saved.routines[0]?.id ?? null);
+          setOpenId(null);
           setStatus({ kind: "ok", text: "Reset to seed." });
           setToast("Reset to seed");
         } catch (err) {
@@ -241,7 +243,11 @@ export default function Editor({ initialCatalog }) {
   }
 
   function handleExport() {
-    const blob = new Blob([JSON.stringify(catalog, null, 2)], {
+    const payload = {
+      ...catalog,
+      routines: catalog.routines.map(toServerRoutine),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -255,55 +261,12 @@ export default function Editor({ initialCatalog }) {
 
   async function handleImportFile(file) {
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      await persistCatalog(parsed, { message: "Imported catalog." });
-      setSelectedId(parsed.routines?.[0]?.id ?? null);
+      const parsed = JSON.parse(await file.text());
+      await persistWholeCatalog(parsed, "Imported catalog.");
+      setOpenId(null);
     } catch (err) {
       setStatus({ kind: "err", text: err.message || "Import failed" });
     }
-  }
-
-  function addSegment() {
-    if (!selected) return;
-    updateSelected({
-      segments: [
-        ...selected.segments,
-        { id: newId("seg"), label: "New exercise", durationSec: 60 },
-      ],
-    });
-  }
-
-  function duplicateSegment(segId) {
-    if (!selected) return;
-    const idx = selected.segments.findIndex((s) => s.id === segId);
-    if (idx < 0) return;
-    const src = selected.segments[idx];
-    const copy = { ...src, id: newId("seg"), label: `${src.label} (copy)` };
-    const segments = [...selected.segments];
-    segments.splice(idx + 1, 0, copy);
-    updateSelected({ segments });
-  }
-
-  function requestDeleteSegment(segId) {
-    if (!selected) return;
-    if (selected.segments.length <= 1) {
-      setStatus({ kind: "err", text: "A routine needs at least one exercise." });
-      return;
-    }
-    const seg = selected.segments.find((s) => s.id === segId);
-    setConfirm({
-      title: "Delete exercise?",
-      body: `Remove “${seg?.label || "this exercise"}” from the routine?`,
-      confirmLabel: "Delete",
-      danger: true,
-      run: () => {
-        setConfirm(null);
-        updateSelected({
-          segments: selected.segments.filter((s) => s.id !== segId),
-        });
-      },
-    });
   }
 
   async function onRoutineDrop(targetId) {
@@ -315,11 +278,25 @@ export default function Editor({ initialCatalog }) {
     const to = ids.indexOf(targetId);
     if (from < 0 || to < 0) return;
     ids.splice(to, 0, ids.splice(from, 1)[0]);
-    pushUndo(catalog);
+    const byId = Object.fromEntries(catalog.routines.map((r) => [r.id, r]));
+    const nextLocal = { ...catalog, routines: ids.map((id) => byId[id]) };
+    applyLocal(nextLocal);
+
+    const serverIds = ids.filter((id) => !byId[id].localOnly);
+    if (serverIds.length !== catalog.routines.filter((r) => !r.localOnly).length) {
+      return;
+    }
     setBusy(true);
     try {
-      const saved = await reorderRoutines(ids);
-      setCatalog(cloneCatalog(saved));
+      const saved = await reorderRoutines(serverIds);
+      const locals = nextLocal.routines.filter((r) => r.localOnly);
+      setCatalog({
+        ...saved,
+        routines: [
+          ...saved.routines,
+          ...locals.filter((l) => !saved.routines.some((s) => s.id === l.id)),
+        ],
+      });
       setToast("Order updated");
     } catch (err) {
       setStatus({ kind: "err", text: err.message || "Reorder failed" });
@@ -328,301 +305,357 @@ export default function Editor({ initialCatalog }) {
     }
   }
 
-  function onSegmentDrop(targetId) {
-    if (!selected) return;
+  function updateSegment(routineId, segId, patch) {
+    const routine = catalog.routines.find((r) => r.id === routineId);
+    if (!routine) return;
+    updateRoutine(routineId, {
+      segments: routine.segments.map((s) => (s.id === segId ? { ...s, ...patch } : s)),
+    });
+  }
+
+  function addSegment(routineId) {
+    const routine = catalog.routines.find((r) => r.id === routineId);
+    if (!routine) return;
+    updateRoutine(routineId, {
+      segments: [
+        ...routine.segments,
+        { id: newId("seg"), label: "New exercise", durationSec: 60 },
+      ],
+    });
+  }
+
+  function onSegmentDrop(routineId, targetId) {
+    const routine = catalog.routines.find((r) => r.id === routineId);
+    if (!routine) return;
     const fromId = dragSegment.current;
     dragSegment.current = null;
     if (!fromId || fromId === targetId) return;
-    const list = selected.segments.map((s) => s.id);
+    const list = routine.segments.map((s) => s.id);
     const from = list.indexOf(fromId);
     const to = list.indexOf(targetId);
     if (from < 0 || to < 0) return;
     list.splice(to, 0, list.splice(from, 1)[0]);
-    const byId = Object.fromEntries(selected.segments.map((s) => [s.id, s]));
-    updateSelected({ segments: list.map((id) => byId[id]) });
+    const byId = Object.fromEntries(routine.segments.map((s) => [s.id, s]));
+    updateRoutine(routineId, { segments: list.map((id) => byId[id]) });
+  }
+
+  function requestDeleteSegment(routine, segId) {
+    if (routine.segments.length <= 1) {
+      setStatus({ kind: "err", text: "Keep at least one exercise." });
+      return;
+    }
+    const seg = routine.segments.find((s) => s.id === segId);
+    setConfirm({
+      title: "Delete exercise?",
+      body: `Remove “${seg?.label || "this exercise"}”?`,
+      confirmLabel: "Delete",
+      danger: true,
+      run: () => {
+        setConfirm(null);
+        updateRoutine(routine.id, {
+          segments: routine.segments.filter((s) => s.id !== segId),
+        });
+      },
+    });
   }
 
   return (
     <div className="clozzz-editor">
-      <header className="clozzz-editor__top">
-        <div className="clozzz-editor__brand">
-          <img src="/clozzz/clozzz-logo.png" alt="" width="40" height="40" />
-          <div>
-            <h1>Clozzz routines</h1>
-            <p>Edit catalog · OBS loads on Browser Source open</p>
+      <div className="clozzz-editor__shell">
+        <header className="clozzz-editor__top">
+          <div className="clozzz-editor__brand">
+            <img src="/clozzz/clozzz-logo.png" alt="" width="44" height="44" />
+            <div>
+              <h1>Clozzz routines</h1>
+              <p>Click a routine to edit · open its OBS link when you stream</p>
+            </div>
           </div>
-        </div>
-        <div className="clozzz-editor__actions">
-          <button
-            type="button"
-            className="ce-btn"
-            disabled={!undoStack.length || busy}
-            onClick={handleUndo}
-          >
-            Undo
-          </button>
-          <button type="button" className="ce-btn" disabled={busy} onClick={handleNewRoutine}>
-            New
-          </button>
-          <button
-            type="button"
-            className="ce-btn"
-            disabled={!selected || busy}
-            onClick={handleDuplicate}
-          >
-            Duplicate
-          </button>
-          <button type="button" className="ce-btn" disabled={busy} onClick={handleExport}>
-            Export
-          </button>
-          <button
-            type="button"
-            className="ce-btn"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-          >
-            Import
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) handleImportFile(file);
-            }}
-          />
-          <button
-            type="button"
-            className="ce-btn ce-btn--danger"
-            disabled={busy}
-            onClick={requestResetSeed}
-          >
-            Reset seed
-          </button>
-          <button
-            type="button"
-            className="ce-btn ce-btn--primary"
-            disabled={busy}
-            onClick={handleSaveAll}
-          >
-            Save all
-          </button>
-          <a className="ce-btn ce-btn--ghost" href="/clozzz-overlay">
-            Overlay
-          </a>
-        </div>
-        {status.text ? (
-          <div
-            className={`clozzz-editor__status${
-              status.kind === "ok"
-                ? " clozzz-editor__status--ok"
-                : status.kind === "err"
-                  ? " clozzz-editor__status--err"
-                  : ""
-            }`}
-          >
-            {status.text}
-            {catalog.updatedAt ? ` · server ${catalog.updatedAt}` : ""}
-          </div>
-        ) : null}
-      </header>
-
-      <div className="clozzz-editor__body">
-        <aside className="ce-sidebar">
-          <div className="ce-sidebar__head">
-            <h2>Library · {catalog.routines.length}</h2>
-            <button type="button" className="ce-btn" disabled={busy} onClick={handleNewRoutine}>
-              +
+          <div className="clozzz-editor__actions">
+            <button
+              type="button"
+              className="ce-btn"
+              disabled={!undoStack.length || busy}
+              onClick={handleUndo}
+            >
+              Undo
+            </button>
+            <button type="button" className="ce-btn" disabled={busy} onClick={handleExport}>
+              Export
+            </button>
+            <button
+              type="button"
+              className="ce-btn"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              Import
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleImportFile(file);
+              }}
+            />
+            <button
+              type="button"
+              className="ce-btn ce-btn--danger"
+              disabled={busy}
+              onClick={requestResetSeed}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              className="ce-btn ce-btn--primary"
+              disabled={busy}
+              onClick={handleNew}
+            >
+              New routine
             </button>
           </div>
-          <ul className="ce-routine-list">
-            {catalog.routines.map((routine) => (
-              <li key={routine.id}>
-                <button
-                  type="button"
-                  className={`ce-routine-item${
-                    routine.id === selectedId ? " is-active" : ""
-                  }`}
+          {status.text ? (
+            <div
+              className={`clozzz-editor__status${
+                status.kind === "ok"
+                  ? " clozzz-editor__status--ok"
+                  : status.kind === "err"
+                    ? " clozzz-editor__status--err"
+                    : ""
+              }`}
+            >
+              {status.text}
+            </div>
+          ) : null}
+        </header>
+
+        {!catalog.routines.length ? (
+          <div className="ce-empty">
+            <p>No routines yet.</p>
+            <button type="button" className="ce-btn ce-btn--primary" onClick={handleNew}>
+              Create one
+            </button>
+          </div>
+        ) : (
+          <ul className="ce-list">
+            {catalog.routines.map((routine) => {
+              const open = openId === routine.id;
+              return (
+                <li
+                  key={routine.id}
+                  className={`ce-item${open ? " is-open" : ""}`}
                   draggable
                   onDragStart={() => {
                     dragRoutine.current = routine.id;
                   }}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => onRoutineDrop(routine.id)}
-                  onClick={() => setSelectedId(routine.id)}
                 >
-                  <span className="ce-drag-handle" title="Drag to reorder" aria-hidden="true">
-                    ⋮⋮
-                  </span>
-                  <span>
-                    <strong>{routine.title}</strong>
-                    <span>
-                      {routine.routineId} · {routine.segments.length} exercises ·{" "}
-                      {formatDuration(sessionTotalSec(routine))}
+                  <button
+                    type="button"
+                    className="ce-item__summary"
+                    onClick={() => setOpenId(open ? null : routine.id)}
+                    aria-expanded={open}
+                  >
+                    <span className="ce-drag-handle" title="Drag to reorder" aria-hidden="true">
+                      ⋮⋮
                     </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <main className="ce-main">
-          {!selected ? (
-            <div className="ce-empty">
-              <p>No routine selected. Create one to get started.</p>
-            </div>
-          ) : (
-            <section className="ce-card">
-              <div className="ce-card__title-row">
-                <h2>{selected.title || "Untitled"}</h2>
-                <div className="clozzz-editor__actions">
-                  <button
-                    type="button"
-                    className="ce-btn ce-btn--primary"
-                    disabled={busy}
-                    onClick={handleSaveSelected}
-                  >
-                    Save routine
-                  </button>
-                  <button
-                    type="button"
-                    className="ce-btn ce-btn--danger"
-                    disabled={busy}
-                    onClick={requestDeleteRoutine}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-
-              <div className="ce-fields">
-                <div className="ce-field">
-                  <label htmlFor="ce-title">Title</label>
-                  <input
-                    id="ce-title"
-                    value={selected.title}
-                    onChange={(e) => updateSelected({ title: e.target.value })}
-                  />
-                </div>
-                <div className="ce-field">
-                  <label htmlFor="ce-routine-id">Display id (e.g. R1)</label>
-                  <input
-                    id="ce-routine-id"
-                    value={selected.routineId}
-                    onChange={(e) => updateSelected({ routineId: e.target.value })}
-                  />
-                </div>
-                <div className="ce-field">
-                  <label htmlFor="ce-id">Stable id</label>
-                  <input id="ce-id" value={selected.id} readOnly />
-                </div>
-                <div className="ce-field">
-                  <label htmlFor="ce-name">URL slug / name</label>
-                  <input
-                    id="ce-name"
-                    value={selected.name}
-                    onChange={(e) => updateSelected({ name: e.target.value })}
-                  />
-                </div>
-                <div className="ce-field">
-                  <label htmlFor="ce-space">Space</label>
-                  <input
-                    id="ce-space"
-                    value={selected.space}
-                    onChange={(e) => updateSelected({ space: e.target.value })}
-                  />
-                </div>
-                <div className="ce-field ce-field--wide">
-                  <label htmlFor="ce-intent">Intent</label>
-                  <textarea
-                    id="ce-intent"
-                    value={selected.intent}
-                    onChange={(e) => updateSelected({ intent: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="ce-segments">
-                <div className="ce-segments__head">
-                  <h3>
-                    Exercises · {selected.segments.length} ·{" "}
-                    {formatDuration(sessionTotalSec(selected))}
-                  </h3>
-                  <button type="button" className="ce-btn" onClick={addSegment}>
-                    Add exercise
-                  </button>
-                </div>
-                <ul className="ce-segment-list">
-                  {selected.segments.map((seg) => (
-                    <li
-                      key={seg.id}
-                      className="ce-segment"
-                      draggable
-                      onDragStart={() => {
-                        dragSegment.current = seg.id;
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => onSegmentDrop(seg.id)}
-                    >
-                      <span className="ce-drag-handle" aria-hidden="true">
-                        ⋮⋮
+                    <span>
+                      <strong>{routine.title}</strong>
+                      <span>
+                        {routine.segments.length} exercises ·{" "}
+                        {formatDuration(sessionTotalSec(routine))}
+                        {routine.localOnly ? " · unsaved draft" : ""}
                       </span>
-                      <input
-                        aria-label="Exercise name"
-                        value={seg.label}
-                        onChange={(e) => updateSegment(seg.id, { label: e.target.value })}
-                      />
-                      <div className="ce-seg-duration">
-                        <input
-                          aria-label="Duration seconds"
-                          type="number"
-                          min={1}
-                          value={seg.durationSec}
-                          onChange={(e) =>
-                            updateSegment(seg.id, {
-                              durationSec: Math.max(1, Number(e.target.value) || 1),
-                            })
-                          }
-                        />
-                        <div className="ce-presets">
-                          {DURATION_PRESETS.map((sec) => (
-                            <button
-                              key={sec}
-                              type="button"
-                              onClick={() => updateSegment(seg.id, { durationSec: sec })}
-                            >
-                              {sec}s
-                            </button>
-                          ))}
+                    </span>
+                    <span className="ce-item__chevron" aria-hidden="true">
+                      ›
+                    </span>
+                  </button>
+
+                  {open ? (
+                    <div className="ce-item__body">
+                      <div className="ce-item__toolbar">
+                        <button
+                          type="button"
+                          className="ce-btn ce-btn--primary ce-btn--small"
+                          disabled={busy}
+                          onClick={() => persistRoutine(routine)}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="ce-btn ce-btn--small"
+                          disabled={busy}
+                          onClick={() => handleDuplicate(routine)}
+                        >
+                          Duplicate
+                        </button>
+                        <button
+                          type="button"
+                          className="ce-btn ce-btn--danger ce-btn--small"
+                          disabled={busy}
+                          onClick={() => requestDelete(routine)}
+                        >
+                          Delete
+                        </button>
+                        {routine.localOnly ? (
+                          <span className="ce-badge">Draft</span>
+                        ) : null}
+                      </div>
+
+                      <div className="ce-fields">
+                        <div className="ce-field">
+                          <label htmlFor={`title-${routine.id}`}>Title</label>
+                          <input
+                            id={`title-${routine.id}`}
+                            value={routine.title}
+                            onChange={(e) =>
+                              updateRoutine(routine.id, { title: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="ce-field">
+                          <label htmlFor={`space-${routine.id}`}>Space</label>
+                          <input
+                            id={`space-${routine.id}`}
+                            value={routine.space}
+                            onChange={(e) =>
+                              updateRoutine(routine.id, { space: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="ce-field">
+                          <label htmlFor={`intent-${routine.id}`}>Intent</label>
+                          <textarea
+                            id={`intent-${routine.id}`}
+                            value={routine.intent}
+                            onChange={(e) =>
+                              updateRoutine(routine.id, { intent: e.target.value })
+                            }
+                          />
                         </div>
                       </div>
-                      <div className="ce-seg-actions">
-                        <button
-                          type="button"
-                          className="ce-btn"
-                          onClick={() => duplicateSegment(seg.id)}
-                        >
-                          Dup
-                        </button>
-                        <button
-                          type="button"
-                          className="ce-btn ce-btn--danger"
-                          onClick={() => requestDeleteSegment(seg.id)}
-                        >
-                          Del
-                        </button>
+
+                      <div className="ce-meta" style={{ marginTop: "0.75rem" }}>
+                        <span>
+                          OBS link{" "}
+                          <a href={obsPath(routine)}>
+                            <code>{obsPath(routine)}</code>
+                          </a>
+                        </span>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          )}
-        </main>
+
+                      <div className="ce-segments">
+                        <div className="ce-segments__head">
+                          <h3>Exercises</h3>
+                          <button
+                            type="button"
+                            className="ce-btn ce-btn--small"
+                            onClick={() => addSegment(routine.id)}
+                          >
+                            Add exercise
+                          </button>
+                        </div>
+                        <ul className="ce-segment-list">
+                          {routine.segments.map((seg) => (
+                            <li
+                              key={seg.id}
+                              className="ce-segment"
+                              draggable
+                              onDragStart={() => {
+                                dragSegment.current = seg.id;
+                              }}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={() => onSegmentDrop(routine.id, seg.id)}
+                            >
+                              <span className="ce-drag-handle" aria-hidden="true">
+                                ⋮⋮
+                              </span>
+                              <input
+                                aria-label="Exercise name"
+                                value={seg.label}
+                                onChange={(e) =>
+                                  updateSegment(routine.id, seg.id, {
+                                    label: e.target.value,
+                                  })
+                                }
+                              />
+                              <div className="ce-seg-duration">
+                                <input
+                                  aria-label="Duration seconds"
+                                  type="number"
+                                  min={1}
+                                  value={seg.durationSec}
+                                  onChange={(e) =>
+                                    updateSegment(routine.id, seg.id, {
+                                      durationSec: Math.max(
+                                        1,
+                                        Number(e.target.value) || 1
+                                      ),
+                                    })
+                                  }
+                                />
+                                <div className="ce-presets">
+                                  {DURATION_PRESETS.map((sec) => (
+                                    <button
+                                      key={sec}
+                                      type="button"
+                                      onClick={() =>
+                                        updateSegment(routine.id, seg.id, {
+                                          durationSec: sec,
+                                        })
+                                      }
+                                    >
+                                      {sec}s
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="ce-seg-actions">
+                                <button
+                                  type="button"
+                                  className="ce-btn ce-btn--small"
+                                  onClick={() => {
+                                    const idx = routine.segments.findIndex(
+                                      (s) => s.id === seg.id
+                                    );
+                                    const copy = {
+                                      ...seg,
+                                      id: newId("seg"),
+                                      label: `${seg.label} (copy)`,
+                                    };
+                                    const segments = [...routine.segments];
+                                    segments.splice(idx + 1, 0, copy);
+                                    updateRoutine(routine.id, { segments });
+                                  }}
+                                >
+                                  Dup
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ce-btn ce-btn--danger ce-btn--small"
+                                  onClick={() => requestDeleteSegment(routine, seg.id)}
+                                >
+                                  Del
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {confirm ? (

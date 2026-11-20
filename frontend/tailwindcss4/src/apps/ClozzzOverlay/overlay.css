@@ -48,6 +48,18 @@ body,
   -webkit-font-smoothing: antialiased;
 }
 
+/* Library/editor needs normal document scroll (OBS live keeps overflow hidden). */
+html.clozzz-stage-editor,
+html.clozzz-stage-editor body,
+html.clozzz-stage-editor #root {
+  height: auto;
+  min-height: 100%;
+  overflow: auto !important;
+  overflow-x: hidden !important;
+  background: #f4f2fb !important;
+  color: #1a1630;
+}
+
 *,
 *::before,
 *::after {
