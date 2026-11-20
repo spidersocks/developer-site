@@ -17,7 +17,7 @@ import {
 import "./editor.css";
 
 const UNDO_LIMIT = 40;
-const DURATION_PRESETS = [30, 45, 60, 90];
+const DURATION_STEP = 15;
 
 function cloneCatalog(catalog) {
   return JSON.parse(JSON.stringify(catalog));
@@ -33,6 +33,47 @@ function formatLastEdited(iso) {
     hour: "numeric",
     minute: "2-digit",
   })}`;
+}
+
+function formatMmSs(totalSec) {
+  const sec = Math.max(0, Math.round(Number(totalSec) || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function parseMmSs(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+  if (/^\d+$/.test(text)) return Math.max(1, Number(text));
+  const match = text.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+  if (!match) return null;
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+  if (seconds > 59) return null;
+  return Math.max(1, minutes * 60 + seconds);
+}
+
+function PencilIcon() {
+  return (
+    <svg className="ce-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M11.7 1.3a1.5 1.5 0 0 1 2.1 2.1L5.4 12 2 13l1-3.4 8.7-8.3Zm-8 9.9.5 1.6 1.6.5 7.8-7.8-2.1-2.1-7.8 7.8Z"
+      />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg className="ce-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M3 8a1.25 1.25 0 1 1-2.5 0A1.25 1.25 0 0 1 3 8Zm6.25 0a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0ZM14.5 8a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Z"
+      />
+    </svg>
+  );
 }
 
 function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }) {
@@ -58,6 +99,144 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
   );
 }
 
+function DurationField({ value, onChange, ariaLabel }) {
+  const [draft, setDraft] = useState(formatMmSs(value));
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(formatMmSs(value));
+  }, [value, editing]);
+
+  function commit(raw = draft) {
+    const parsed = parseMmSs(raw);
+    setEditing(false);
+    if (parsed == null) {
+      setDraft(formatMmSs(value));
+      return;
+    }
+    onChange(parsed);
+    setDraft(formatMmSs(parsed));
+  }
+
+  function nudge(delta) {
+    onChange(Math.max(1, (Number(value) || 1) + delta));
+  }
+
+  return (
+    <div className="ce-duration" role="group" aria-label={ariaLabel}>
+      <button
+        type="button"
+        className="ce-duration__step"
+        aria-label="Decrease duration"
+        onClick={() => nudge(-DURATION_STEP)}
+      >
+        −
+      </button>
+      {editing ? (
+        <input
+          className="ce-duration__input"
+          value={draft}
+          autoFocus
+          inputMode="numeric"
+          aria-label={ariaLabel}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => commit()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setEditing(false);
+              setDraft(formatMmSs(value));
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              nudge(DURATION_STEP);
+            }
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              nudge(-DURATION_STEP);
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="ce-duration__value"
+          onClick={() => setEditing(true)}
+          title="Click to type m:ss"
+        >
+          {formatMmSs(value)}
+        </button>
+      )}
+      <button
+        type="button"
+        className="ce-duration__step"
+        aria-label="Increase duration"
+        onClick={() => nudge(DURATION_STEP)}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+function OverflowMenu({ open, onToggle, onClose, items }) {
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDoc(e) {
+      if (!rootRef.current?.contains(e.target)) onClose();
+    }
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  return (
+    <div className="ce-overflow" ref={rootRef}>
+      <button
+        type="button"
+        className="ce-icon-btn"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <MoreIcon />
+      </button>
+      {open ? (
+        <div className="ce-menu" role="menu">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={`ce-menu__item${item.danger ? " is-danger" : ""}`}
+              disabled={item.disabled}
+              onClick={() => {
+                onClose();
+                item.onSelect();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function obsPath(routine) {
   return `/clozzz-overlay/${encodeURIComponent(routine.id)}`;
 }
@@ -65,6 +244,9 @@ function obsPath(routine) {
 export default function Editor({ initialCatalog }) {
   const [catalog, setCatalog] = useState(() => cloneCatalog(initialCatalog));
   const [openId, setOpenId] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [menuKey, setMenuKey] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
   const [status, setStatus] = useState({ kind: "idle", text: "" });
   const [busy, setBusy] = useState(false);
@@ -76,12 +258,20 @@ export default function Editor({ initialCatalog }) {
   const [overSegment, setOverSegment] = useState(null);
   const dragRoutine = useRef(null);
   const dragSegment = useRef(null);
+  const renameInputRef = useRef(null);
 
   useEffect(() => {
     if (!toast) return undefined;
     const t = window.setTimeout(() => setToast(""), 2400);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    if (renamingId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingId]);
 
   function pushUndo(snapshot = catalog) {
     setUndoStack((stack) => {
@@ -108,6 +298,19 @@ export default function Editor({ initialCatalog }) {
       }),
     };
     applyLocal(next);
+  }
+
+  function beginRename(routine) {
+    setRenamingId(routine.id);
+    setRenameDraft(routine.title);
+  }
+
+  function commitRename(routine) {
+    const nextTitle = renameDraft.trim() || routine.title;
+    setRenamingId(null);
+    if (nextTitle !== routine.title) {
+      updateRoutine(routine.id, { title: nextTitle });
+    }
   }
 
   async function persistRoutine(routine) {
@@ -142,6 +345,7 @@ export default function Editor({ initialCatalog }) {
     const routine = blankRoutine(catalog.routines);
     applyLocal({ ...catalog, routines: [...catalog.routines, routine] });
     setOpenId(routine.id);
+    beginRename(routine);
     setToast("Draft created");
   }
 
@@ -279,6 +483,18 @@ export default function Editor({ initialCatalog }) {
     });
   }
 
+  function duplicateSegment(routine, seg) {
+    const idx = routine.segments.findIndex((s) => s.id === seg.id);
+    const copy = {
+      ...seg,
+      id: newId("seg"),
+      label: `${seg.label} (copy)`,
+    };
+    const segments = [...routine.segments];
+    segments.splice(idx + 1, 0, copy);
+    updateRoutine(routine.id, { segments });
+  }
+
   function onSegmentDrop(routineId, targetId) {
     const routine = catalog.routines.find((r) => r.id === routineId);
     if (!routine) return;
@@ -376,6 +592,7 @@ export default function Editor({ initialCatalog }) {
           <ul className="ce-list">
             {catalog.routines.map((routine) => {
               const open = openId === routine.id;
+              const renaming = renamingId === routine.id;
               return (
                 <li
                   key={routine.id}
@@ -414,7 +631,38 @@ export default function Editor({ initialCatalog }) {
                       ⋮⋮
                     </button>
                     <div className="ce-item__main">
-                      <p className="ce-item__title">{routine.title}</p>
+                      {renaming ? (
+                        <input
+                          ref={renameInputRef}
+                          className="ce-item__rename"
+                          value={renameDraft}
+                          aria-label="Routine title"
+                          onChange={(e) => setRenameDraft(e.target.value)}
+                          onBlur={() => commitRename(routine)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitRename(routine);
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              setRenamingId(null);
+                              setRenameDraft(routine.title);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <p
+                          className="ce-item__title"
+                          title="Double-click to rename"
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            beginRename(routine);
+                          }}
+                        >
+                          {routine.title}
+                        </p>
+                      )}
                       <p className="ce-item__meta">
                         {routine.segments.length} exercises ·{" "}
                         {formatDuration(sessionTotalSec(routine))} ·{" "}
@@ -425,17 +673,18 @@ export default function Editor({ initialCatalog }) {
                     </div>
                     <div className="ce-item__actions">
                       {!routine.localOnly ? (
-                        <a className="ce-btn ce-btn--link" href={obsPath(routine)}>
+                        <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
                           Open
                         </a>
                       ) : null}
                       <button
                         type="button"
-                        className="ce-btn ce-btn--link"
+                        className="ce-edit-link"
                         onClick={() => setOpenId(open ? null : routine.id)}
                         aria-expanded={open}
                       >
-                        {open ? "Done" : "Edit"}
+                        <PencilIcon />
+                        <span>{open ? "Done" : "Edit"}</span>
                       </button>
                     </div>
                   </div>
@@ -451,36 +700,33 @@ export default function Editor({ initialCatalog }) {
                         >
                           Save
                         </button>
-                        <button
-                          type="button"
-                          className="ce-btn"
-                          disabled={busy}
-                          onClick={() => handleDuplicate(routine)}
-                        >
-                          Duplicate
-                        </button>
-                        <button
-                          type="button"
-                          className="ce-btn ce-btn--danger"
-                          disabled={busy}
-                          onClick={() => requestDelete(routine)}
-                        >
-                          Delete
-                        </button>
                         {routine.localOnly ? <span className="ce-badge">Draft</span> : null}
+                        <div className="ce-item__toolbar-spacer" />
+                        <OverflowMenu
+                          open={menuKey === `routine:${routine.id}`}
+                          onToggle={() =>
+                            setMenuKey((k) =>
+                              k === `routine:${routine.id}` ? null : `routine:${routine.id}`
+                            )
+                          }
+                          onClose={() => setMenuKey(null)}
+                          items={[
+                            {
+                              label: "Duplicate",
+                              onSelect: () => handleDuplicate(routine),
+                              disabled: busy,
+                            },
+                            {
+                              label: "Delete",
+                              danger: true,
+                              onSelect: () => requestDelete(routine),
+                              disabled: busy,
+                            },
+                          ]}
+                        />
                       </div>
 
                       <div className="ce-fields">
-                        <div className="ce-field">
-                          <label htmlFor={`title-${routine.id}`}>Title</label>
-                          <input
-                            id={`title-${routine.id}`}
-                            value={routine.title}
-                            onChange={(e) =>
-                              updateRoutine(routine.id, { title: e.target.value })
-                            }
-                          />
-                        </div>
                         <div className="ce-field">
                           <label htmlFor={`space-${routine.id}`}>Space</label>
                           <input
@@ -551,6 +797,7 @@ export default function Editor({ initialCatalog }) {
                                 ⋮⋮
                               </button>
                               <input
+                                className="ce-segment__name"
                                 aria-label="Exercise name"
                                 value={seg.label}
                                 onChange={(e) =>
@@ -559,65 +806,35 @@ export default function Editor({ initialCatalog }) {
                                   })
                                 }
                               />
-                              <div className="ce-seg-duration">
-                                <input
-                                  aria-label="Duration seconds"
-                                  type="number"
-                                  min={1}
-                                  value={seg.durationSec}
-                                  onChange={(e) =>
-                                    updateSegment(routine.id, seg.id, {
-                                      durationSec: Math.max(
-                                        1,
-                                        Number(e.target.value) || 1
-                                      ),
-                                    })
-                                  }
-                                />
-                                <div className="ce-presets">
-                                  {DURATION_PRESETS.map((sec) => (
-                                    <button
-                                      key={sec}
-                                      type="button"
-                                      onClick={() =>
-                                        updateSegment(routine.id, seg.id, {
-                                          durationSec: sec,
-                                        })
-                                      }
-                                    >
-                                      {sec}s
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="ce-seg-actions">
-                                <button
-                                  type="button"
-                                  className="ce-btn ce-btn--subtle"
-                                  onClick={() => {
-                                    const idx = routine.segments.findIndex(
-                                      (s) => s.id === seg.id
-                                    );
-                                    const copy = {
-                                      ...seg,
-                                      id: newId("seg"),
-                                      label: `${seg.label} (copy)`,
-                                    };
-                                    const segments = [...routine.segments];
-                                    segments.splice(idx + 1, 0, copy);
-                                    updateRoutine(routine.id, { segments });
-                                  }}
-                                >
-                                  Dup
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ce-btn ce-btn--danger"
-                                  onClick={() => requestDeleteSegment(routine, seg.id)}
-                                >
-                                  Del
-                                </button>
-                              </div>
+                              <DurationField
+                                value={seg.durationSec}
+                                ariaLabel={`Duration for ${seg.label}`}
+                                onChange={(durationSec) =>
+                                  updateSegment(routine.id, seg.id, { durationSec })
+                                }
+                              />
+                              <OverflowMenu
+                                open={menuKey === `seg:${routine.id}:${seg.id}`}
+                                onToggle={() =>
+                                  setMenuKey((k) =>
+                                    k === `seg:${routine.id}:${seg.id}`
+                                      ? null
+                                      : `seg:${routine.id}:${seg.id}`
+                                  )
+                                }
+                                onClose={() => setMenuKey(null)}
+                                items={[
+                                  {
+                                    label: "Duplicate",
+                                    onSelect: () => duplicateSegment(routine, seg),
+                                  },
+                                  {
+                                    label: "Delete",
+                                    danger: true,
+                                    onSelect: () => requestDeleteSegment(routine, seg.id),
+                                  },
+                                ]}
+                              />
                             </li>
                           ))}
                         </ul>
