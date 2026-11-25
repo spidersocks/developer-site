@@ -3,6 +3,7 @@ import React from "react";
 /**
  * Post-unlock chooser: Display vs Remote vs Library.
  * Deep links that already imply a mode skip this screen.
+ * On phones, Display is hidden — OBS/desktop keep the Display path.
  */
 export default function ModeChooser({ catalog }) {
   const routines = catalog?.routines || [];
@@ -21,7 +22,8 @@ export default function ModeChooser({ catalog }) {
           <a className="clozzz-chooser__card" href="/clozzz-overlay">
             <span className="clozzz-chooser__card-title">Library</span>
             <span className="clozzz-chooser__card-desc">
-              Edit routines, then open Display or Remote.
+              Edit routines, then open Remote on your phone (Display stays on
+              desktop / OBS).
             </span>
           </a>
         </div>
@@ -33,7 +35,7 @@ export default function ModeChooser({ catalog }) {
               <span className="clozzz-chooser__name">{r.title}</span>
               <span className="clozzz-chooser__actions">
                 <a
-                  className="clozzz-chooser__link"
+                  className="clozzz-chooser__link clozzz-chooser__link--display"
                   href={`/clozzz-overlay/${encodeURIComponent(r.id)}`}
                 >
                   Display

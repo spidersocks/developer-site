@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ensureLiveToken,
   fetchLive,
@@ -7,24 +7,40 @@ import {
 } from "./api.js";
 
 const POLL_MS = 800;
+const PULL_THRESHOLD_PX = 72;
 
 /**
  * Mobile remote — big controls. No mirrored clock.
  * Intro / stream-ended come from routine flags on the live snapshot.
- * @param {{ sessionKey: string, sessionTitle?: string }} props
+ * @param {{
+ *   sessionKey: string,
+ *   sessionTitle?: string,
+ *   introCountdownEnabled?: boolean,
+ * }} props
  */
-export default function Remote({ sessionKey, sessionTitle }) {
+export default function Remote({
+  sessionKey,
+  sessionTitle,
+  introCountdownEnabled: catalogIntroEnabled = false,
+}) {
   const [live, setLive] = useState(null);
   const [error, setError] = useState("");
   const [busyCmd, setBusyCmd] = useState(null);
+  const [pullY, setPullY] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const touchStartY = useRef(0);
+  const pullingRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
       const snap = await fetchLive(sessionKey);
       setLive(snap);
       setError("");
+      return snap;
     } catch (e) {
       setError(e.message || "Could not load live state");
+      return null;
     }
   }, [sessionKey]);
 
@@ -72,6 +88,46 @@ export default function Remote({ sessionKey, sessionTitle }) {
     };
   }, [sessionKey]);
 
+  const onTouchStart = (e) => {
+    if (refreshing) return;
+    if (window.scrollY > 2) return;
+    const t = e.touches?.[0];
+    if (!t) return;
+    touchStartY.current = t.clientY;
+    pullingRef.current = true;
+  };
+
+  const onTouchMove = (e) => {
+    if (!pullingRef.current || refreshing) return;
+    const t = e.touches?.[0];
+    if (!t) return;
+    const dy = t.clientY - touchStartY.current;
+    if (dy <= 0 || window.scrollY > 2) {
+      setPullY(0);
+      setPulling(false);
+      return;
+    }
+    const damped = Math.min(dy * 0.45, 120);
+    setPullY(damped);
+    setPulling(true);
+    if (dy > 12 && e.cancelable) e.preventDefault();
+  };
+
+  const onTouchEnd = async () => {
+    if (!pullingRef.current) return;
+    pullingRef.current = false;
+    const shouldRefresh = pullY >= PULL_THRESHOLD_PX;
+    setPulling(false);
+    setPullY(0);
+    if (!shouldRefresh) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const send = async (command, extras = {}) => {
     const busyKey = extras._busyKey || command;
     setBusyCmd(busyKey);
@@ -96,7 +152,12 @@ export default function Remote({ sessionKey, sessionTitle }) {
   const inCountdown = status === "countdown";
   const inStreamEnded = status === "stream_ended";
   const chromeVisible = live?.chromeVisible !== false;
-  const introEnabled = Boolean(live?.introCountdownEnabled);
+  // Bridge stale live snapshots that lag an editor intro toggle.
+  const introEnabled =
+    Boolean(live?.introCountdownEnabled) ||
+    (status === "idle" &&
+      !live?.introConsumed &&
+      Boolean(catalogIntroEnabled));
   const introPending = introEnabled && !live?.introConsumed;
   const introHeld = status === "idle" && introPending;
   const label = live?.currentLabel || "…";
@@ -113,9 +174,32 @@ export default function Remote({ sessionKey, sessionTitle }) {
   const library = "/clozzz-overlay";
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
+  const pullHint =
+    refreshing || pullY >= PULL_THRESHOLD_PX
+      ? "Release to refresh"
+      : pulling
+        ? "Pull to refresh"
+        : "";
 
   return (
-    <div className="clozzz-remote">
+    <div
+      className="clozzz-remote"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
+      <div
+        className={`clozzz-remote__pull${pulling || refreshing ? " is-active" : ""}`}
+        style={{
+          height: refreshing ? 48 : pullY,
+          opacity: pulling || refreshing ? 1 : 0,
+        }}
+        aria-hidden="true"
+      >
+        <span>{refreshing ? "Refreshing…" : pullHint}</span>
+      </div>
+
       <header className="clozzz-remote__head">
         <p className="clozzz-remote__eyebrow">Clozzz remote</p>
         <h1 className="clozzz-remote__title">{sessionTitle || sessionKey}</h1>

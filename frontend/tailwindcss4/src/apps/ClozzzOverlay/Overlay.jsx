@@ -189,9 +189,38 @@ function SessionNotFound({ keyTried }) {
  * Derive remaining ms from a server LiveRun snapshot + local clock.
  * Skew is fixed at poll receive time (`_receivedAtMs`); wall clock then
  * advances smoothly via rAF without waiting on the next poll.
+ *
+ * @param {object | null} live
+ * @param {number} [nowMs]
+ * @param {{ introCountdownEnabled?: boolean, introCountdownSec?: number } | null} [sessionHints]
+ *        Catalog routine flags — used before the first poll and to bridge
+ *        stale in-memory live runs that lag an editor toggle.
  */
-export function remainingFromLive(live, nowMs = Date.now()) {
-  if (!live) return { remainingMs: 0, done: false, armed: true };
+export function remainingFromLive(
+  live,
+  nowMs = Date.now(),
+  sessionHints = null
+) {
+  const hintIntro = Boolean(sessionHints?.introCountdownEnabled);
+  const hintIntroSec =
+    sessionHints?.introCountdownSec ||
+    sessionHints?.countdownDurationSec ||
+    1800;
+
+  if (!live) {
+    if (hintIntro) {
+      const introMs = hintIntroSec * 1000;
+      return {
+        remainingMs: introMs,
+        done: false,
+        armed: false,
+        countdown: true,
+        countdownHeld: true,
+        durationMs: introMs,
+      };
+    }
+    return { remainingMs: 0, done: false, armed: true };
+  }
   const status = live.status;
   const receivedAt =
     typeof live._receivedAtMs === "number" ? live._receivedAtMs : nowMs;
@@ -249,14 +278,15 @@ export function remainingFromLive(live, nowMs = Date.now()) {
   }
   if (status === "idle" || status === "paused") {
     // Pre-stream intro armed but not started: hold frozen countdown at max.
-    if (
-      status === "idle" &&
-      live.introCountdownEnabled &&
-      !live.introConsumed
-    ) {
+    // OR catalog hint when live snapshot still has a stale false flag.
+    const introEnabled =
+      Boolean(live.introCountdownEnabled) ||
+      (status === "idle" && !live.introConsumed && hintIntro);
+    if (status === "idle" && introEnabled && !live.introConsumed) {
       const introMs =
         (live.countdownDurationSec ||
           live.introCountdownSec ||
+          hintIntroSec ||
           1800) * 1000;
       return {
         remainingMs: introMs,
@@ -418,7 +448,7 @@ function RunningOverlay({ session, sessionKey }) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const derived = remainingFromLive(live, now);
+  const derived = remainingFromLive(live, now, session);
   const index = live?.segmentIndex ?? 0;
   const segments = live?.segments?.length
     ? live.segments
@@ -577,6 +607,7 @@ function RemoteApp({ sessionKey, catalog }) {
     <Remote
       sessionKey={session?.id || sessionKey}
       sessionTitle={session?.title}
+      introCountdownEnabled={Boolean(session?.introCountdownEnabled)}
     />
   );
 }

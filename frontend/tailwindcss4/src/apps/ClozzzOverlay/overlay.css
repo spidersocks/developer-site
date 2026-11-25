@@ -693,6 +693,29 @@ html.clozzz-stage-remote #root {
   color: #fff;
 }
 
+/* Phones: hide Display — remote-only nudge. Desktop / OBS keep Display. */
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  .clozzz-chooser__link--display {
+    display: none !important;
+  }
+
+  .clozzz-chooser__link--remote {
+    font-size: 1.05rem;
+    padding: 0.7rem 1.1rem;
+    min-height: 2.85rem;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .clozzz-chooser__name {
+    font-size: 1.1rem;
+  }
+
+  .clozzz-chooser__item {
+    padding: 1.05rem 1.05rem;
+  }
+}
+
 .clozzz-remote {
   min-height: 100vh;
   min-height: 100dvh;
@@ -706,11 +729,30 @@ html.clozzz-stage-remote #root {
     #120e22;
   color: var(--clozzz-cream);
   font-family: var(--clozzz-font-sans);
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+
+.clozzz-remote__pull {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  margin: -0.5rem -0.25rem 0;
+  color: var(--clozzz-gold);
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s ease;
+}
+
+.clozzz-remote__pull span {
+  padding-bottom: 0.35rem;
 }
 
 .clozzz-remote__eyebrow {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--clozzz-gold);
@@ -720,35 +762,37 @@ html.clozzz-stage-remote #root {
 .clozzz-remote__title {
   margin: 0.3rem 0 0.25rem;
   font-family: var(--clozzz-font-display);
-  font-size: clamp(1.7rem, 7vw, 2.2rem);
+  font-size: clamp(2rem, 8vw, 2.55rem);
   font-weight: 600;
 }
 
 .clozzz-remote__meta {
   margin: 0;
   color: var(--clozzz-cream-faint);
-  font-size: 0.92rem;
+  font-size: 1.1rem;
+  line-height: 1.4;
 }
 
 .clozzz-remote__label {
-  margin: 0.65rem 0 0;
-  font-size: 1.15rem;
-  font-weight: 650;
+  margin: 0.75rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .clozzz-remote__error {
   margin: 0;
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
   background: rgba(240, 138, 106, 0.18);
   color: #f0b56a;
-  font-size: 0.9rem;
+  font-size: 1.05rem;
 }
 
 .clozzz-remote__pad {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.9rem;
   margin-top: 0.5rem;
   flex: 1;
 }
@@ -756,17 +800,17 @@ html.clozzz-stage-remote #root {
 .clozzz-remote__row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: 0.85rem;
 }
 
 .clozzz-remote__btn {
   appearance: none;
   border: 1px solid rgba(243, 234, 215, 0.22);
-  border-radius: 1.1rem;
-  min-height: 4.25rem;
-  padding: 1rem 1.1rem;
+  border-radius: 1.25rem;
+  min-height: 5.25rem;
+  padding: 1.15rem 1.2rem;
   font: inherit;
-  font-size: 1.25rem;
+  font-size: 1.45rem;
   font-weight: 700;
   color: var(--clozzz-cream);
   background: rgba(22, 14, 44, 0.88);
@@ -781,17 +825,17 @@ html.clozzz-stage-remote #root {
 }
 
 .clozzz-remote__btn--primary {
-  min-height: 5.5rem;
-  font-size: 1.55rem;
+  min-height: 6.75rem;
+  font-size: 1.85rem;
   background: linear-gradient(180deg, #5c568f, #3d3768);
   border-color: rgba(228, 201, 137, 0.35);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
 .clozzz-remote__btn--ghost {
-  min-height: 3.25rem;
-  font-size: 1rem;
-  font-weight: 600;
+  min-height: 3.85rem;
+  font-size: 1.15rem;
+  font-weight: 650;
   background: transparent;
   color: var(--clozzz-cream-faint);
 }
@@ -806,12 +850,12 @@ html.clozzz-stage-remote #root {
 .clozzz-remote__foot a {
   color: var(--clozzz-gold);
   font-weight: 650;
-  font-size: 0.92rem;
+  font-size: 1.1rem;
 }
 
 .clozzz-remote__section {
-  margin: 0.35rem 0 0;
-  font-size: 0.72rem;
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--clozzz-gold);

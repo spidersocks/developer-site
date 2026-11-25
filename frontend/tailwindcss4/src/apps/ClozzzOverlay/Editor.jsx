@@ -897,7 +897,10 @@ export default function Editor({ initialCatalog }) {
                   <div className="ce-item__actions">
                     {!routine.localOnly ? (
                       <>
-                        <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
+                        <a
+                          className="ce-btn ce-btn--open ce-btn--display"
+                          href={obsPath(routine)}
+                        >
                           Display
                         </a>
                         <a
