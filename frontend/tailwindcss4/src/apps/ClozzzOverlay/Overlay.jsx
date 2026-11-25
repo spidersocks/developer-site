@@ -172,9 +172,31 @@ function SessionNotFound({ keyTried }) {
 export function remainingFromLive(live, nowMs = Date.now()) {
   if (!live) return { remainingMs: 0, done: false, armed: true };
   const status = live.status;
-  const durationMs = (live.segmentDurationSec || 0) * 1000;
   const skew = live.serverNowMs ? nowMs - live.serverNowMs : 0;
   const serverNow = nowMs - skew;
+
+  if (status === "countdown") {
+    const durationMs = (live.countdownDurationSec || 180) * 1000;
+    if (live.countdownStartedAtMs != null) {
+      const elapsed = serverNow - live.countdownStartedAtMs;
+      return {
+        remainingMs: Math.max(0, durationMs - elapsed),
+        done: false,
+        armed: false,
+        countdown: true,
+        durationMs,
+      };
+    }
+    return {
+      remainingMs: durationMs,
+      done: false,
+      armed: false,
+      countdown: true,
+      durationMs,
+    };
+  }
+
+  const durationMs = (live.segmentDurationSec || 0) * 1000;
 
   if (status === "done") {
     return { remainingMs: 0, done: true, armed: false };
@@ -201,6 +223,42 @@ export function remainingFromLive(live, nowMs = Date.now()) {
     };
   }
   return { remainingMs: durationMs, done: false, armed: true };
+}
+
+function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
+  const progress =
+    durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
+  const critical = remainingSec <= 10;
+
+  return (
+    <div className="clozzz-countdown" aria-live="polite">
+      <video
+        className="clozzz-countdown__bg"
+        src="/clozzz/bg1.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+      />
+      <div className="clozzz-countdown__veil" aria-hidden="true" />
+      <header className="clozzz-countdown__brand">
+        <BrandLockup backed />
+      </header>
+      <div className="clozzz-countdown__center">
+        <p className="clozzz-countdown__eyebrow">Starting soon</p>
+        <div
+          className={`clozzz-countdown__ring${critical ? " clozzz-countdown__ring--critical" : ""}`}
+          style={{ "--clozzz-cd-progress": progress }}
+        >
+          <span className="clozzz-countdown__digits">
+            {formatClock(remainingSec)}
+          </span>
+        </div>
+        <p className="clozzz-countdown__title">{title}</p>
+      </div>
+    </div>
+  );
 }
 
 function RunningOverlay({ session, sessionKey }) {
@@ -253,6 +311,19 @@ function RunningOverlay({ session, sessionKey }) {
   const remainingSec = derived.remainingMs / 1000;
   const band = timerBand(progress, remainingSec, done);
   const armed = derived.armed && !done;
+  const chromeVisible = live?.chromeVisible !== false;
+  const inCountdown = Boolean(derived.countdown);
+
+  if (inCountdown) {
+    return (
+      <CountdownStage
+        remainingSec={remainingSec}
+        remainingMs={derived.remainingMs}
+        durationMs={derived.durationMs || 180000}
+        title={live?.title || session.title || session.name}
+      />
+    );
+  }
 
   return (
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
@@ -260,48 +331,59 @@ function RunningOverlay({ session, sessionKey }) {
         <BrandLockup backed />
       </header>
 
-      <div className="clozzz-corner clozzz-corner--tr">
-        <div
-          className={`clozzz-timer clozzz-timer--${band}${armed ? " clozzz-timer--armed" : ""}${derived.paused ? " clozzz-timer--paused" : ""}`}
-          style={{
-            "--clozzz-elapsed": done
-              ? 1
-              : Math.min(1, Math.max(0, 1 - progress)),
-          }}
-        >
-          <TimerIcon />
-          <span className="clozzz-timer__value">
-            {done ? "0:00" : formatClock(remainingSec)}
-          </span>
-        </div>
-      </div>
+      {chromeVisible ? (
+        <>
+          <div className="clozzz-corner clozzz-corner--tr">
+            <div
+              className={`clozzz-timer clozzz-timer--${band}${armed ? " clozzz-timer--armed" : ""}${derived.paused ? " clozzz-timer--paused" : ""}`}
+              style={{
+                "--clozzz-elapsed": done
+                  ? 1
+                  : Math.min(1, Math.max(0, 1 - progress)),
+              }}
+            >
+              <TimerIcon />
+              <span className="clozzz-timer__value">
+                {done ? "0:00" : formatClock(remainingSec)}
+              </span>
+            </div>
+          </div>
 
-      <section className="clozzz-corner clozzz-corner--bl clozzz-current-panel">
-        {done ? (
-          <>
-            <h1 className="clozzz-current clozzz-anim" key="done-title">
-              Routine complete
-            </h1>
-            <p className="clozzz-exercise-count">
-              {segments.length} exercises ·{" "}
-              {formatDuration(sessionTotalSec({ segments }))}
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="clozzz-current clozzz-anim" key={current?.id || index}>
-              {current?.label || live?.currentLabel || "…"}
-            </h1>
-            <p className="clozzz-exercise-count">
-              Exercise {index + 1} of {segments.length}
-              {armed ? " · Waiting for Start" : derived.paused ? " · Paused" : ""}
-            </p>
-            <p className="clozzz-up-next">
-              {next ? `Up next: ${next.label}` : "Up next: Rest"}
-            </p>
-          </>
-        )}
-      </section>
+          <section className="clozzz-corner clozzz-corner--bl clozzz-current-panel">
+            {done ? (
+              <>
+                <h1 className="clozzz-current clozzz-anim" key="done-title">
+                  Routine complete
+                </h1>
+                <p className="clozzz-exercise-count">
+                  {segments.length} exercises ·{" "}
+                  {formatDuration(sessionTotalSec({ segments }))}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1
+                  className="clozzz-current clozzz-anim"
+                  key={current?.id || index}
+                >
+                  {current?.label || live?.currentLabel || "…"}
+                </h1>
+                <p className="clozzz-exercise-count">
+                  Exercise {index + 1} of {segments.length}
+                  {armed
+                    ? " · Waiting for Start"
+                    : derived.paused
+                      ? " · Paused"
+                      : ""}
+                </p>
+                <p className="clozzz-up-next">
+                  {next ? `Up next: ${next.label}` : "Up next: Rest"}
+                </p>
+              </>
+            )}
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

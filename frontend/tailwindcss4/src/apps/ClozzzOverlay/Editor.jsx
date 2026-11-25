@@ -469,6 +469,10 @@ function remotePath(routine) {
   return `/clozzz-overlay/${encodeURIComponent(routine.id)}/remote`;
 }
 
+function countdownStudioPath(routine) {
+  return `/clozzz-overlay/${encodeURIComponent(routine.id)}/remote?startCountdown=180`;
+}
+
 function makeDuplicate(source, existingRoutines) {
   const codes = blankRoutine(existingRoutines);
   return {
@@ -779,6 +783,13 @@ export default function Editor({ initialCatalog }) {
                       <>
                         <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
                           Display
+                        </a>
+                        <a
+                          className="ce-btn ce-btn--open ce-btn--countdown"
+                          href={countdownStudioPath(routine)}
+                          title="Starts a 3‑minute pre-stream countdown from the remote (OBS uses Display)"
+                        >
+                          Countdown
                         </a>
                         <a
                           className="ce-btn ce-btn--open ce-btn--remote"

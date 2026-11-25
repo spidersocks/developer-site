@@ -39,6 +39,13 @@ export default function ModeChooser({ catalog }) {
                   Display
                 </a>
                 <a
+                  className="clozzz-chooser__link"
+                  href={`/clozzz-overlay/${encodeURIComponent(r.id)}/remote?startCountdown=180`}
+                  title="Start 3‑minute countdown from remote"
+                >
+                  Countdown
+                </a>
+                <a
                   className="clozzz-chooser__link clozzz-chooser__link--remote"
                   href={`/clozzz-overlay/${encodeURIComponent(r.id)}/remote`}
                 >

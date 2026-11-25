@@ -78,13 +78,14 @@ export function fetchLive(routineKey) {
   return request(`/live/${encodeURIComponent(routineKey)}`);
 }
 
-export function postLiveCommand(routineKey, command, token) {
+export function postLiveCommand(routineKey, command, token, extras = {}) {
   const headers = {};
   if (token) headers["X-Clozzz-Live-Token"] = token;
+  const body = { command, ...extras };
   return request(`/live/${encodeURIComponent(routineKey)}/command`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ command }),
+    body: JSON.stringify(body),
   });
 }
 

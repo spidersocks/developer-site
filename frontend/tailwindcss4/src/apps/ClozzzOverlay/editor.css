@@ -140,6 +140,18 @@
   color: #fff;
 }
 
+.ce-btn--countdown {
+  background: #1a1430;
+  color: #e4c989;
+  border-color: rgba(228, 201, 137, 0.45);
+}
+
+.ce-btn--countdown:hover:not(:disabled) {
+  background: #241c40;
+  color: #f3ead7;
+  border-color: #e4c989;
+}
+
 .ce-btn--subtle {
   color: var(--ce-secondary);
   font-weight: 500;
