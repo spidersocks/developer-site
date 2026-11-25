@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   blankRoutine,
+  DEFAULT_EXERCISE_DURATION_SEC,
+  DEFAULT_INTRO_COUNTDOWN_SEC,
+  DEFAULT_STREAM_ENDED_SEC,
   formatDuration,
   newId,
   sessionTotalSec,
@@ -16,6 +19,17 @@ import {
 import "./editor.css";
 
 const DURATION_STEP = 15;
+
+/** + always lands on a multiple of 5; 1 → 15; − by 15 floored at 1. */
+export function stepDuration(current, delta) {
+  const cur = Math.max(1, Math.round(Number(current) || 1));
+  if (delta < 0) {
+    return Math.max(1, cur - Math.abs(delta || DURATION_STEP));
+  }
+  if (cur <= 1) return 15;
+  const stepped = cur + Math.abs(delta || DURATION_STEP);
+  return Math.ceil(stepped / 5) * 5;
+}
 
 function cloneCatalog(catalog) {
   return JSON.parse(JSON.stringify(catalog));
@@ -110,7 +124,7 @@ function DurationField({ value, onChange, ariaLabel }) {
   }
 
   function nudge(delta) {
-    onChange(Math.max(1, (Number(value) || 1) + delta));
+    onChange(stepDuration(value, delta));
   }
 
   return (
@@ -273,7 +287,11 @@ function EditRoutineModal({
     patchDraft({
       segments: [
         ...draft.segments,
-        { id: newId("seg"), label: "New exercise", durationSec: 60 },
+        {
+          id: newId("seg"),
+          label: "New exercise",
+          durationSec: DEFAULT_EXERCISE_DURATION_SEC,
+        },
       ],
     });
   }
@@ -359,7 +377,7 @@ function EditRoutineModal({
                       introCountdownSec:
                         draft.introCountdownSec > 0
                           ? draft.introCountdownSec
-                          : 180,
+                          : DEFAULT_INTRO_COUNTDOWN_SEC,
                     })
                   }
                 />
@@ -373,14 +391,18 @@ function EditRoutineModal({
               </label>
               {draft.introCountdownEnabled ? (
                 <div className="ce-toggle-block__expand">
-                  <span className="ce-toggle-block__label">Duration</span>
-                  <DurationField
-                    value={draft.introCountdownSec || 180}
-                    ariaLabel="Pre-stream countdown duration"
-                    onChange={(introCountdownSec) =>
-                      patchDraft({ introCountdownSec })
-                    }
-                  />
+                  <div className="ce-toggle-block__field">
+                    <span className="ce-toggle-block__label">Duration</span>
+                    <DurationField
+                      value={
+                        draft.introCountdownSec || DEFAULT_INTRO_COUNTDOWN_SEC
+                      }
+                      ariaLabel="Pre-stream countdown duration"
+                      onChange={(introCountdownSec) =>
+                        patchDraft({ introCountdownSec })
+                      }
+                    />
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -394,7 +416,9 @@ function EditRoutineModal({
                     patchDraft({
                       streamEndedEnabled: e.target.checked,
                       streamEndedSec:
-                        draft.streamEndedSec > 0 ? draft.streamEndedSec : 45,
+                        draft.streamEndedSec > 0
+                          ? draft.streamEndedSec
+                          : DEFAULT_STREAM_ENDED_SEC,
                     })
                   }
                 />
@@ -407,26 +431,36 @@ function EditRoutineModal({
                 </span>
               </label>
               {draft.streamEndedEnabled ? (
-                <div className="ce-toggle-block__expand">
-                  <span className="ce-toggle-block__label">Duration</span>
-                  <DurationField
-                    value={draft.streamEndedSec || 45}
-                    ariaLabel="Stream ended graphic duration"
-                    onChange={(streamEndedSec) =>
-                      patchDraft({ streamEndedSec })
-                    }
-                  />
-                  <label className="ce-toggle-block__msg" htmlFor="ce-ended-msg">
-                    Message
+                <div className="ce-toggle-block__expand ce-toggle-block__expand--ended">
+                  <div className="ce-toggle-block__field">
+                    <span className="ce-toggle-block__label">Duration</span>
+                    <DurationField
+                      value={
+                        draft.streamEndedSec || DEFAULT_STREAM_ENDED_SEC
+                      }
+                      ariaLabel="Stream ended graphic duration"
+                      onChange={(streamEndedSec) =>
+                        patchDraft({ streamEndedSec })
+                      }
+                    />
+                  </div>
+                  <div className="ce-toggle-block__field ce-toggle-block__field--msg">
+                    <label
+                      className="ce-toggle-block__label"
+                      htmlFor="ce-ended-msg"
+                    >
+                      Message
+                    </label>
                     <input
                       id="ce-ended-msg"
+                      className="ce-toggle-block__input"
                       value={draft.streamEndedMessage || ""}
                       placeholder="Thanks for watching"
                       onChange={(e) =>
                         patchDraft({ streamEndedMessage: e.target.value })
                       }
                     />
-                  </label>
+                  </div>
                 </div>
               ) : null}
             </div>

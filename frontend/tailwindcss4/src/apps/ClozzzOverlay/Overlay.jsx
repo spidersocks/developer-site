@@ -21,6 +21,14 @@ function formatClock(totalSec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** Padded MM:SS for full-screen countdown stages (TimerHub-style). */
+function formatClockPad(totalSec) {
+  const sec = Math.max(0, Math.ceil(totalSec));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 /**
  * Stamp a live snapshot with the client receive time so remaining time can
  * advance smoothly between polls (serverNowMs alone freezes the clock).
@@ -266,10 +274,14 @@ export function remainingFromLive(live, nowMs = Date.now()) {
 function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
   const progress =
     durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
+  const elapsed = 1 - progress;
   const critical = remainingSec <= 10;
 
   return (
-    <div className="clozzz-countdown" aria-live="polite">
+    <div
+      className={`clozzz-countdown clozzz-countdown--soon${critical ? " is-critical" : ""}`}
+      aria-live="polite"
+    >
       <video
         className="clozzz-countdown__bg"
         src="/clozzz/bg1.mp4"
@@ -283,19 +295,19 @@ function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
       <header className="clozzz-countdown__brand">
         <BrandLockup backed />
       </header>
-      <div className="clozzz-countdown__center">
-        <p className="clozzz-countdown__eyebrow">Starting soon</p>
+      <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
+        <p className="clozzz-countdown__label">Starting soon</p>
+        <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
         <div
-          className={`clozzz-countdown__ring${critical ? " clozzz-countdown__ring--critical" : ""}`}
-          style={{ "--clozzz-cd-progress": progress }}
+          className="clozzz-countdown__rail"
+          style={{ "--clozzz-cd-elapsed": elapsed }}
+          aria-hidden="true"
         >
-          <div className="clozzz-countdown__face">
-            <span className="clozzz-countdown__digits">
-              {formatClock(remainingSec)}
-            </span>
-          </div>
+          <span className="clozzz-countdown__rail-track" />
+          <span className="clozzz-countdown__rail-fill" />
+          <span className="clozzz-countdown__rail-head" />
         </div>
-        <p className="clozzz-countdown__title">{title}</p>
+        {title ? <p className="clozzz-countdown__sub">{title}</p> : null}
       </div>
     </div>
   );
@@ -304,8 +316,12 @@ function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
 function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, message }) {
   const progress =
     durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
+  const elapsed = 1 - progress;
   return (
-    <div className="clozzz-countdown clozzz-countdown--ended" aria-live="polite">
+    <div
+      className="clozzz-countdown clozzz-countdown--ended"
+      aria-live="polite"
+    >
       <video
         className="clozzz-countdown__bg"
         src="/clozzz/bg1.mp4"
@@ -319,19 +335,19 @@ function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, messag
       <header className="clozzz-countdown__brand">
         <BrandLockup backed />
       </header>
-      <div className="clozzz-countdown__center">
-        <p className="clozzz-countdown__eyebrow">Stream ended</p>
+      <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
+        <p className="clozzz-countdown__label">Stream ended</p>
+        <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
         <div
-          className="clozzz-countdown__ring"
-          style={{ "--clozzz-cd-progress": progress }}
+          className="clozzz-countdown__rail"
+          style={{ "--clozzz-cd-elapsed": elapsed }}
+          aria-hidden="true"
         >
-          <div className="clozzz-countdown__face">
-            <span className="clozzz-countdown__digits">
-              {formatClock(remainingSec)}
-            </span>
-          </div>
+          <span className="clozzz-countdown__rail-track" />
+          <span className="clozzz-countdown__rail-fill" />
+          <span className="clozzz-countdown__rail-head" />
         </div>
-        <p className="clozzz-countdown__title">
+        <p className="clozzz-countdown__sub">
           {message || title || "Thanks for watching"}
         </p>
       </div>
@@ -398,7 +414,7 @@ function RunningOverlay({ session, sessionKey }) {
       <CountdownStage
         remainingSec={remainingSec}
         remainingMs={derived.remainingMs}
-        durationMs={derived.durationMs || 180000}
+        durationMs={derived.durationMs || 1800000}
         title={live?.title || session.title || session.name}
       />
     );
@@ -409,7 +425,7 @@ function RunningOverlay({ session, sessionKey }) {
       <StreamEndedStage
         remainingSec={remainingSec}
         remainingMs={derived.remainingMs}
-        durationMs={derived.durationMs || 45000}
+        durationMs={derived.durationMs || 1800000}
         title={live?.title || session.title || session.name}
         message={live?.streamEndedMessage}
       />

@@ -22,16 +22,18 @@
  */
 /** @typedef {{ schemaVersion: number, updatedAt?: string, routines: Session[] }} Catalog */
 
-export const DEFAULT_INTRO_COUNTDOWN_SEC = 180;
-export const DEFAULT_STREAM_ENDED_SEC = 45;
+/** New-routine defaults (existing saved routines keep their stored values). */
+export const DEFAULT_INTRO_COUNTDOWN_SEC = 1800; // 30 min
+export const DEFAULT_STREAM_ENDED_SEC = 1800; // 30 min
+export const DEFAULT_EXERCISE_DURATION_SEC = 60;
 
 function clampDurationSec(value, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
-  return Math.max(5, Math.min(60 * 60, Math.round(n)));
+  return Math.max(1, Math.min(60 * 60, Math.round(n)));
 }
 
-/** Migrate legacy `intent` → `description` on read; default intro/end flags. */
+/** Migrate legacy `intent` → `description` on read; keep stored intro/end flags. */
 export function normalizeRoutine(routine) {
   if (!routine || typeof routine !== "object") return routine;
   const description = String(
@@ -266,19 +268,29 @@ export function blankRoutine(existing = [], overrides = {}) {
     routineId: overrides.routineId || routineId,
     space: overrides.space || "",
     description: overrides.description || overrides.intent || "",
-    introCountdownEnabled: Boolean(overrides.introCountdownEnabled),
+    introCountdownEnabled:
+      overrides.introCountdownEnabled !== undefined
+        ? Boolean(overrides.introCountdownEnabled)
+        : true,
     introCountdownSec: clampDurationSec(
       overrides.introCountdownSec,
       DEFAULT_INTRO_COUNTDOWN_SEC
     ),
-    streamEndedEnabled: Boolean(overrides.streamEndedEnabled),
+    streamEndedEnabled:
+      overrides.streamEndedEnabled !== undefined
+        ? Boolean(overrides.streamEndedEnabled)
+        : true,
     streamEndedSec: clampDurationSec(
       overrides.streamEndedSec,
       DEFAULT_STREAM_ENDED_SEC
     ),
     streamEndedMessage: String(overrides.streamEndedMessage || "").trim(),
     segments: overrides.segments || [
-      { id: newId("seg"), label: "New exercise", durationSec: 60 },
+      {
+        id: newId("seg"),
+        label: "New exercise",
+        durationSec: DEFAULT_EXERCISE_DURATION_SEC,
+      },
     ],
     localOnly: true,
   };

@@ -831,7 +831,7 @@ html.clozzz-stage-remote #root {
   border-radius: 0.9rem;
 }
 
-/* —— Pre-stream countdown (bg1 loop + ring) —— */
+/* —— Full-screen countdown (TimerHub-style minimal: label + clock + rail) —— */
 .clozzz-countdown {
   position: fixed;
   inset: 0;
@@ -860,8 +860,9 @@ html.clozzz-stage-remote #root {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 50% 42%, rgba(12, 8, 28, 0.18) 0%, rgba(8, 5, 20, 0.72) 62%, rgba(4, 2, 12, 0.88) 100%),
-    linear-gradient(180deg, rgba(8, 5, 20, 0.45) 0%, transparent 28%, transparent 70%, rgba(8, 5, 20, 0.55) 100%);
+    radial-gradient(ellipse at 72% 18%, rgba(110, 91, 184, 0.22) 0%, transparent 42%),
+    radial-gradient(ellipse at 50% 48%, rgba(12, 8, 28, 0.12) 0%, rgba(8, 5, 20, 0.55) 55%, rgba(4, 2, 12, 0.82) 100%),
+    linear-gradient(180deg, rgba(8, 5, 20, 0.35) 0%, transparent 30%, transparent 68%, rgba(8, 5, 20, 0.5) 100%);
 }
 
 .clozzz-countdown__brand {
@@ -869,6 +870,7 @@ html.clozzz-stage-remote #root {
   top: var(--clozzz-pad);
   left: var(--clozzz-pad);
   z-index: 2;
+  opacity: 0.92;
 }
 
 .clozzz-countdown__center {
@@ -884,79 +886,118 @@ html.clozzz-stage-remote #root {
   text-align: center;
 }
 
-.clozzz-countdown__eyebrow {
+.clozzz-countdown__center--minimal {
+  gap: clamp(0.85rem, 2vw, 1.35rem);
+}
+
+.clozzz-countdown__label {
   margin: 0;
-  font-size: clamp(0.85rem, 1.6vw, 1.05rem);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-weight: 650;
-  color: var(--clozzz-gold);
-  text-shadow: var(--clozzz-text-shadow);
-}
-
-.clozzz-countdown__ring {
-  --clozzz-cd-progress: 1;
-  --clozzz-cd-ring: var(--clozzz-gold);
-  --clozzz-cd-track: rgba(243, 234, 215, 0.14);
-  position: relative;
-  width: clamp(12rem, 30vw, 19rem);
-  height: clamp(12rem, 30vw, 19rem);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: conic-gradient(
-    from -90deg,
-    var(--clozzz-cd-ring) 0 calc(var(--clozzz-cd-progress) * 360deg),
-    var(--clozzz-cd-track) calc(var(--clozzz-cd-progress) * 360deg) 360deg
-  );
-  box-shadow:
-    0 0 0 1px rgba(228, 201, 137, 0.28),
-    0 22px 56px rgba(0, 0, 0, 0.5);
-}
-
-.clozzz-countdown__ring::before {
-  content: "";
-  position: absolute;
-  inset: 0.55rem;
-  border-radius: 50%;
-  background: rgba(8, 5, 20, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(243, 234, 215, 0.08);
-}
-
-.clozzz-countdown__ring--critical {
-  --clozzz-cd-ring: var(--clozzz-critical);
-  --clozzz-cd-track: rgba(240, 138, 106, 0.18);
-}
-
-.clozzz-countdown__face {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-}
-
-.clozzz-countdown__digits {
-  font-family: var(--clozzz-font-display);
-  font-size: clamp(3.1rem, 8.4vw, 5rem);
+  font-family: var(--clozzz-font-sans);
+  font-size: clamp(0.95rem, 1.8vw, 1.2rem);
   font-weight: 600;
-  letter-spacing: 0.045em;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(196, 184, 232, 0.92);
+  animation: clozzz-cd-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.clozzz-countdown__clock {
+  margin: 0;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(5.5rem, 16vw, 11rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
-  line-height: 1;
+  line-height: 0.92;
   color: var(--clozzz-cream);
   -webkit-font-smoothing: antialiased;
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.35);
+  animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
-.clozzz-countdown__title {
-  margin: 0;
+.clozzz-countdown__rail {
+  --clozzz-cd-elapsed: 0;
+  position: relative;
+  width: min(22rem, 42vw);
+  height: 0.7rem;
+  margin-top: 0.35rem;
+  animation: clozzz-cd-enter 1.05s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+.clozzz-countdown__rail-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1.5px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(243, 234, 215, 0.22);
+}
+
+.clozzz-countdown__rail-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 1.5px;
+  width: calc(var(--clozzz-cd-elapsed) * 100%);
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(228, 201, 137, 0.35), var(--clozzz-gold));
+}
+
+.clozzz-countdown__rail-head {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--clozzz-cd-elapsed) * 100%);
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--clozzz-cream);
+  box-shadow:
+    0 0 0 2px rgba(228, 201, 137, 0.35),
+    0 0 16px rgba(228, 201, 137, 0.55);
+}
+
+.clozzz-countdown__sub {
+  margin: 0.35rem 0 0;
   max-width: 28rem;
-  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+  font-size: clamp(1rem, 2.1vw, 1.25rem);
   font-weight: 500;
-  color: var(--clozzz-cream-soft);
-  text-shadow: var(--clozzz-text-shadow);
+  color: var(--clozzz-cream-faint);
+  letter-spacing: 0.01em;
+  animation: clozzz-cd-enter 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.14s both;
 }
 
-.clozzz-countdown--ended .clozzz-countdown__eyebrow {
+.clozzz-countdown.is-critical .clozzz-countdown__clock {
+  color: var(--clozzz-critical);
+}
+
+.clozzz-countdown.is-critical .clozzz-countdown__rail-fill {
+  background: linear-gradient(90deg, rgba(240, 138, 106, 0.35), var(--clozzz-critical));
+}
+
+.clozzz-countdown.is-critical .clozzz-countdown__rail-head {
+  background: var(--clozzz-critical);
+  box-shadow:
+    0 0 0 2px rgba(240, 138, 106, 0.35),
+    0 0 16px rgba(240, 138, 106, 0.5);
+}
+
+.clozzz-countdown--ended .clozzz-countdown__label {
   color: var(--clozzz-cream-soft);
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
+}
+
+@keyframes clozzz-cd-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
