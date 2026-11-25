@@ -85,6 +85,10 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/clozzz/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/clozzz/favicon-32x32.png" sizes="32x32" />
+  <link rel="icon" type="image/png" href="/clozzz/favicon-16x16.png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="/clozzz/apple-touch-icon.png" />
   <title>Clozzz overlay — unlock</title>
   <style>
     :root {
