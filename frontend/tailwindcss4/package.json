@@ -44,5 +44,11 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.13",
     "vite": "^7.0.6"
+  },
+  "overrides": {
+    "react-d3-cloud": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
