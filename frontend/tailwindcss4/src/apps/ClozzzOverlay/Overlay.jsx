@@ -21,6 +21,15 @@ function formatClock(totalSec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/**
+ * Stamp a live snapshot with the client receive time so remaining time can
+ * advance smoothly between polls (serverNowMs alone freezes the clock).
+ */
+function stampLive(snap) {
+  if (!snap || typeof snap !== "object") return snap;
+  return { ...snap, _receivedAtMs: Date.now() };
+}
+
 export function isEditorPath(location = window.location) {
   const path = location.pathname.replace(/\/+$/, "");
   return /\/clozzz-overlay(?:\.html)?\/edit$/i.test(path);
@@ -168,11 +177,18 @@ function SessionNotFound({ keyTried }) {
   );
 }
 
-/** Derive remaining ms from a server LiveRun snapshot + local skew. */
+/**
+ * Derive remaining ms from a server LiveRun snapshot + local clock.
+ * Skew is fixed at poll receive time (`_receivedAtMs`); wall clock then
+ * advances smoothly via rAF without waiting on the next poll.
+ */
 export function remainingFromLive(live, nowMs = Date.now()) {
   if (!live) return { remainingMs: 0, done: false, armed: true };
   const status = live.status;
-  const skew = live.serverNowMs ? nowMs - live.serverNowMs : 0;
+  const receivedAt =
+    typeof live._receivedAtMs === "number" ? live._receivedAtMs : nowMs;
+  const skew =
+    typeof live.serverNowMs === "number" ? receivedAt - live.serverNowMs : 0;
   const serverNow = nowMs - skew;
 
   if (status === "countdown") {
@@ -192,6 +208,28 @@ export function remainingFromLive(live, nowMs = Date.now()) {
       done: false,
       armed: false,
       countdown: true,
+      durationMs,
+    };
+  }
+
+  if (status === "stream_ended") {
+    const durationMs =
+      (live.streamEndedDurationSec || live.streamEndedSec || 45) * 1000;
+    if (live.streamEndedStartedAtMs != null) {
+      const elapsed = serverNow - live.streamEndedStartedAtMs;
+      return {
+        remainingMs: Math.max(0, durationMs - elapsed),
+        done: false,
+        armed: false,
+        streamEnded: true,
+        durationMs,
+      };
+    }
+    return {
+      remainingMs: durationMs,
+      done: false,
+      armed: false,
+      streamEnded: true,
       durationMs,
     };
   }
@@ -251,11 +289,51 @@ function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
           className={`clozzz-countdown__ring${critical ? " clozzz-countdown__ring--critical" : ""}`}
           style={{ "--clozzz-cd-progress": progress }}
         >
-          <span className="clozzz-countdown__digits">
-            {formatClock(remainingSec)}
-          </span>
+          <div className="clozzz-countdown__face">
+            <span className="clozzz-countdown__digits">
+              {formatClock(remainingSec)}
+            </span>
+          </div>
         </div>
         <p className="clozzz-countdown__title">{title}</p>
+      </div>
+    </div>
+  );
+}
+
+function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, message }) {
+  const progress =
+    durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
+  return (
+    <div className="clozzz-countdown clozzz-countdown--ended" aria-live="polite">
+      <video
+        className="clozzz-countdown__bg"
+        src="/clozzz/bg1.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+      />
+      <div className="clozzz-countdown__veil" aria-hidden="true" />
+      <header className="clozzz-countdown__brand">
+        <BrandLockup backed />
+      </header>
+      <div className="clozzz-countdown__center">
+        <p className="clozzz-countdown__eyebrow">Stream ended</p>
+        <div
+          className="clozzz-countdown__ring"
+          style={{ "--clozzz-cd-progress": progress }}
+        >
+          <div className="clozzz-countdown__face">
+            <span className="clozzz-countdown__digits">
+              {formatClock(remainingSec)}
+            </span>
+          </div>
+        </div>
+        <p className="clozzz-countdown__title">
+          {message || title || "Thanks for watching"}
+        </p>
       </div>
     </div>
   );
@@ -271,7 +349,7 @@ function RunningOverlay({ session, sessionKey }) {
     const pull = () => {
       fetchLive(sessionKey)
         .then((snap) => {
-          if (!cancelled) setLive(snap);
+          if (!cancelled) setLive(stampLive(snap));
         })
         .catch(() => {
           /* keep last snapshot */
@@ -313,6 +391,7 @@ function RunningOverlay({ session, sessionKey }) {
   const armed = derived.armed && !done;
   const chromeVisible = live?.chromeVisible !== false;
   const inCountdown = Boolean(derived.countdown);
+  const inStreamEnded = Boolean(derived.streamEnded);
 
   if (inCountdown) {
     return (
@@ -321,6 +400,18 @@ function RunningOverlay({ session, sessionKey }) {
         remainingMs={derived.remainingMs}
         durationMs={derived.durationMs || 180000}
         title={live?.title || session.title || session.name}
+      />
+    );
+  }
+
+  if (inStreamEnded) {
+    return (
+      <StreamEndedStage
+        remainingSec={remainingSec}
+        remainingMs={derived.remainingMs}
+        durationMs={derived.durationMs || 45000}
+        title={live?.title || session.title || session.name}
+        message={live?.streamEndedMessage}
       />
     );
   }

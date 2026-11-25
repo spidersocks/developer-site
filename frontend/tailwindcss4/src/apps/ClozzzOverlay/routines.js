@@ -4,17 +4,55 @@
  */
 
 /** @typedef {{ id: string, label: string, durationSec: number }} Segment */
-/** @typedef {{ id: string, name: string, title: string, routineId: string, space: string, description: string, segments: Segment[] }} Session */
+/**
+ * @typedef {{
+ *   id: string,
+ *   name: string,
+ *   title: string,
+ *   routineId: string,
+ *   space: string,
+ *   description: string,
+ *   introCountdownEnabled?: boolean,
+ *   introCountdownSec?: number,
+ *   streamEndedEnabled?: boolean,
+ *   streamEndedSec?: number,
+ *   streamEndedMessage?: string,
+ *   segments: Segment[]
+ * }} Session
+ */
 /** @typedef {{ schemaVersion: number, updatedAt?: string, routines: Session[] }} Catalog */
 
-/** Migrate legacy `intent` → `description` on read. */
+export const DEFAULT_INTRO_COUNTDOWN_SEC = 180;
+export const DEFAULT_STREAM_ENDED_SEC = 45;
+
+function clampDurationSec(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(5, Math.min(60 * 60, Math.round(n)));
+}
+
+/** Migrate legacy `intent` → `description` on read; default intro/end flags. */
 export function normalizeRoutine(routine) {
   if (!routine || typeof routine !== "object") return routine;
   const description = String(
     routine.description ?? routine.intent ?? ""
   ).trim();
   const { intent: _legacyIntent, ...rest } = routine;
-  return { ...rest, description };
+  return {
+    ...rest,
+    description,
+    introCountdownEnabled: Boolean(routine.introCountdownEnabled),
+    introCountdownSec: clampDurationSec(
+      routine.introCountdownSec,
+      DEFAULT_INTRO_COUNTDOWN_SEC
+    ),
+    streamEndedEnabled: Boolean(routine.streamEndedEnabled),
+    streamEndedSec: clampDurationSec(
+      routine.streamEndedSec,
+      DEFAULT_STREAM_ENDED_SEC
+    ),
+    streamEndedMessage: String(routine.streamEndedMessage || "").trim(),
+  };
 }
 
 export function normalizeCatalog(catalog) {
@@ -228,6 +266,17 @@ export function blankRoutine(existing = [], overrides = {}) {
     routineId: overrides.routineId || routineId,
     space: overrides.space || "",
     description: overrides.description || overrides.intent || "",
+    introCountdownEnabled: Boolean(overrides.introCountdownEnabled),
+    introCountdownSec: clampDurationSec(
+      overrides.introCountdownSec,
+      DEFAULT_INTRO_COUNTDOWN_SEC
+    ),
+    streamEndedEnabled: Boolean(overrides.streamEndedEnabled),
+    streamEndedSec: clampDurationSec(
+      overrides.streamEndedSec,
+      DEFAULT_STREAM_ENDED_SEC
+    ),
+    streamEndedMessage: String(overrides.streamEndedMessage || "").trim(),
     segments: overrides.segments || [
       { id: newId("seg"), label: "New exercise", durationSec: 60 },
     ],

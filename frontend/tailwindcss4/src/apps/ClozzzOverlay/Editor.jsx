@@ -347,6 +347,91 @@ function EditRoutineModal({
             </div>
           </div>
 
+          <div className="ce-stream-opts" aria-label="Stream graphics">
+            <div className="ce-toggle-block">
+              <label className="ce-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.introCountdownEnabled)}
+                  onChange={(e) =>
+                    patchDraft({
+                      introCountdownEnabled: e.target.checked,
+                      introCountdownSec:
+                        draft.introCountdownSec > 0
+                          ? draft.introCountdownSec
+                          : 180,
+                    })
+                  }
+                />
+                <span className="ce-toggle__ui" aria-hidden="true" />
+                <span className="ce-toggle__copy">
+                  <span className="ce-toggle__title">Pre-stream countdown</span>
+                  <span className="ce-toggle__hint">
+                    Start on the remote runs a full-screen intro first
+                  </span>
+                </span>
+              </label>
+              {draft.introCountdownEnabled ? (
+                <div className="ce-toggle-block__expand">
+                  <span className="ce-toggle-block__label">Duration</span>
+                  <DurationField
+                    value={draft.introCountdownSec || 180}
+                    ariaLabel="Pre-stream countdown duration"
+                    onChange={(introCountdownSec) =>
+                      patchDraft({ introCountdownSec })
+                    }
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="ce-toggle-block">
+              <label className="ce-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.streamEndedEnabled)}
+                  onChange={(e) =>
+                    patchDraft({
+                      streamEndedEnabled: e.target.checked,
+                      streamEndedSec:
+                        draft.streamEndedSec > 0 ? draft.streamEndedSec : 45,
+                    })
+                  }
+                />
+                <span className="ce-toggle__ui" aria-hidden="true" />
+                <span className="ce-toggle__copy">
+                  <span className="ce-toggle__title">Stream ended graphic</span>
+                  <span className="ce-toggle__hint">
+                    After the last exercise, show an ended screen
+                  </span>
+                </span>
+              </label>
+              {draft.streamEndedEnabled ? (
+                <div className="ce-toggle-block__expand">
+                  <span className="ce-toggle-block__label">Duration</span>
+                  <DurationField
+                    value={draft.streamEndedSec || 45}
+                    ariaLabel="Stream ended graphic duration"
+                    onChange={(streamEndedSec) =>
+                      patchDraft({ streamEndedSec })
+                    }
+                  />
+                  <label className="ce-toggle-block__msg" htmlFor="ce-ended-msg">
+                    Message
+                    <input
+                      id="ce-ended-msg"
+                      value={draft.streamEndedMessage || ""}
+                      placeholder="Thanks for watching"
+                      onChange={(e) =>
+                        patchDraft({ streamEndedMessage: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <div className="ce-segments">
             <div className="ce-segments__head">
               <h3>Exercises · {formatDuration(sessionTotalSec(draft))}</h3>
@@ -467,10 +552,6 @@ function obsPath(routine) {
 
 function remotePath(routine) {
   return `/clozzz-overlay/${encodeURIComponent(routine.id)}/remote`;
-}
-
-function countdownStudioPath(routine) {
-  return `/clozzz-overlay/${encodeURIComponent(routine.id)}/remote?startCountdown=180`;
 }
 
 function makeDuplicate(source, existingRoutines) {
@@ -783,13 +864,6 @@ export default function Editor({ initialCatalog }) {
                       <>
                         <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
                           Display
-                        </a>
-                        <a
-                          className="ce-btn ce-btn--open ce-btn--countdown"
-                          href={countdownStudioPath(routine)}
-                          title="Starts a 3‑minute pre-stream countdown from the remote (OBS uses Display)"
-                        >
-                          Countdown
                         </a>
                         <a
                           className="ce-btn ce-btn--open ce-btn--remote"

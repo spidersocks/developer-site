@@ -266,35 +266,36 @@ html.clozzz-stage-preview #root {
   opacity: 0.9;
 }
 
-/* ——— Timer (top-right) ——— */
+/* ——— Timer (top-right) — crisp dark plate + gold progress ring ——— */
 
 .clozzz-timer {
-  --clozzz-timer-digit: clamp(3rem, 6.9vw, 5rem);
+  --clozzz-timer-digit: clamp(3.15rem, 7.1vw, 5.15rem);
   --clozzz-elapsed: 0;
-  --clozzz-border-track: rgba(243, 234, 215, 0.18);
+  --clozzz-border-track: rgba(243, 234, 215, 0.16);
   --clozzz-border-fill: var(--clozzz-gold);
-  --clozzz-border-width: 2.5px;
+  --clozzz-border-width: 3px;
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.7rem 1.35rem 0.75rem 1.1rem;
+  gap: 0.62rem;
+  padding: 0.78rem 1.45rem 0.82rem 1.15rem;
   border-radius: var(--clozzz-radius-pill);
   border: none;
-  /* Solid dark plate so numerals stay readable as the camera changes. */
-  background: rgba(8, 5, 20, 0.94);
-  backdrop-filter: blur(12px) saturate(1.05);
-  -webkit-backdrop-filter: blur(12px) saturate(1.05);
-  box-shadow: var(--clozzz-shadow);
+  /* Near-opaque plate: sharp contrast on bright camera / stage lights. */
+  background: rgba(6, 4, 16, 0.96);
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  box-shadow:
+    0 1px 0 rgba(243, 234, 215, 0.06) inset,
+    0 14px 36px rgba(0, 0, 0, 0.58);
   color: var(--clozzz-cream);
-  text-shadow: var(--clozzz-text-shadow);
   overflow: visible;
   isolation: isolate;
   transform-origin: top right;
-  transition: color 0.45s ease, box-shadow 0.45s ease;
+  transition: color 0.35s ease, box-shadow 0.35s ease;
 }
 
-/* Gold line travels the pill perimeter like a circular progress timer. */
+/* Gold stroke travels the pill perimeter (elapsed fraction). */
 .clozzz-timer::before {
   content: "";
   position: absolute;
@@ -318,7 +319,6 @@ html.clozzz-stage-preview #root {
     linear-gradient(#fff 0 0);
   mask-composite: exclude;
   pointer-events: none;
-  transition: background 0.2s linear;
 }
 
 .clozzz-timer > * {
@@ -329,20 +329,24 @@ html.clozzz-stage-preview #root {
 .clozzz-timer__icon {
   flex-shrink: 0;
   /* ~half digit height; keep pill size driven by the numerals. */
-  width: calc(var(--clozzz-timer-digit) * 0.5);
-  height: calc(var(--clozzz-timer-digit) * 0.5);
-  opacity: 0.92;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+  width: calc(var(--clozzz-timer-digit) * 0.46);
+  height: calc(var(--clozzz-timer-digit) * 0.46);
+  opacity: 0.88;
+  color: var(--clozzz-gold);
 }
 
 .clozzz-timer__value {
-  font-family: var(--clozzz-font-sans);
+  font-family: var(--clozzz-font-display);
   font-size: var(--clozzz-timer-digit);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  line-height: 0.95;
-  min-width: 4.2ch;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  line-height: 0.92;
+  min-width: 4.35ch;
+  color: var(--clozzz-cream);
+  text-shadow: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 .clozzz-timer--calm {
@@ -892,43 +896,55 @@ html.clozzz-stage-remote #root {
 
 .clozzz-countdown__ring {
   --clozzz-cd-progress: 1;
-  width: clamp(11rem, 28vw, 18rem);
-  height: clamp(11rem, 28vw, 18rem);
+  --clozzz-cd-ring: var(--clozzz-gold);
+  --clozzz-cd-track: rgba(243, 234, 215, 0.14);
+  position: relative;
+  width: clamp(12rem, 30vw, 19rem);
+  height: clamp(12rem, 30vw, 19rem);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at center, rgba(10, 6, 24, 0.72) 0 58%, transparent 59%),
-    conic-gradient(
-      from -90deg,
-      var(--clozzz-gold) 0 calc(var(--clozzz-cd-progress) * 360deg),
-      rgba(243, 234, 215, 0.14) calc(var(--clozzz-cd-progress) * 360deg) 360deg
-    );
+  background: conic-gradient(
+    from -90deg,
+    var(--clozzz-cd-ring) 0 calc(var(--clozzz-cd-progress) * 360deg),
+    var(--clozzz-cd-track) calc(var(--clozzz-cd-progress) * 360deg) 360deg
+  );
   box-shadow:
-    0 0 0 1px rgba(228, 201, 137, 0.22),
-    0 18px 48px rgba(0, 0, 0, 0.45);
-  transition: filter 0.25s ease;
+    0 0 0 1px rgba(228, 201, 137, 0.28),
+    0 22px 56px rgba(0, 0, 0, 0.5);
+}
+
+.clozzz-countdown__ring::before {
+  content: "";
+  position: absolute;
+  inset: 0.55rem;
+  border-radius: 50%;
+  background: rgba(8, 5, 20, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(243, 234, 215, 0.08);
 }
 
 .clozzz-countdown__ring--critical {
-  filter: saturate(1.15);
-  background:
-    radial-gradient(circle at center, rgba(10, 6, 24, 0.72) 0 58%, transparent 59%),
-    conic-gradient(
-      from -90deg,
-      var(--clozzz-critical) 0 calc(var(--clozzz-cd-progress) * 360deg),
-      rgba(243, 234, 215, 0.14) calc(var(--clozzz-cd-progress) * 360deg) 360deg
-    );
+  --clozzz-cd-ring: var(--clozzz-critical);
+  --clozzz-cd-track: rgba(240, 138, 106, 0.18);
+}
+
+.clozzz-countdown__face {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
 }
 
 .clozzz-countdown__digits {
   font-family: var(--clozzz-font-display);
-  font-size: clamp(2.8rem, 8vw, 4.6rem);
+  font-size: clamp(3.1rem, 8.4vw, 5rem);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.045em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
   line-height: 1;
   color: var(--clozzz-cream);
-  text-shadow: var(--clozzz-text-shadow);
+  -webkit-font-smoothing: antialiased;
 }
 
 .clozzz-countdown__title {
@@ -938,4 +954,9 @@ html.clozzz-stage-remote #root {
   font-weight: 500;
   color: var(--clozzz-cream-soft);
   text-shadow: var(--clozzz-text-shadow);
+}
+
+.clozzz-countdown--ended .clozzz-countdown__eyebrow {
+  color: var(--clozzz-cream-soft);
+  letter-spacing: 0.18em;
 }
