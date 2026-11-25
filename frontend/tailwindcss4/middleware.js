@@ -7,6 +7,7 @@ import {
 } from "./lib/clozzz-overlay-gate.js";
 
 export const config = {
+  runtime: "nodejs",
   matcher: ["/clozzz-overlay", "/clozzz-overlay/:path*"],
 };
 
