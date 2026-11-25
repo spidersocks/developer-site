@@ -63,6 +63,7 @@ const PARENT_PROFILES = [
 
 /** Survives site reload; cleared on Reset so the gate returns only then. */
 const PARENT_PICK_KEY = "bn_parent_picked";
+const SESSION_KEY_LEGACY = "bn_bot_session_id";
 
 function readPickedProfileId() {
   try {
@@ -77,13 +78,63 @@ function profileById(id) {
   return PARENT_PROFILES.find((p) => p.id === id) || PARENT_PROFILES[0];
 }
 
-function getOrCreateSessionId() {
-  let id = localStorage.getItem("bn_bot_session_id");
+function sessionKeyFor(profileId) {
+  return `${SESSION_KEY_LEGACY}:${profileId || "jason"}`;
+}
+
+/** Jason keeps localStorage (reload OK). New parent uses sessionStorage so a
+ *  refresh cannot revive a prior booking identity (e.g. sticky "David"). */
+function sessionStoreFor(profileId) {
+  return profileId === "new" ? sessionStorage : localStorage;
+}
+
+function getOrCreateSessionId(profileId = "jason") {
+  const key = sessionKeyFor(profileId);
+  const store = sessionStoreFor(profileId);
+  let id = null;
+  try {
+    id = store.getItem(key);
+    // Migrate legacy single-key sessions onto the Jason profile once.
+    if (!id && profileId === "jason") {
+      id = localStorage.getItem(SESSION_KEY_LEGACY);
+      if (id) {
+        store.setItem(key, id);
+        localStorage.removeItem(SESSION_KEY_LEGACY);
+      }
+    }
+  } catch {
+    id = null;
+  }
   if (!id) {
     id = "web:" + Math.random().toString(36).slice(2, 10) + Date.now();
-    localStorage.setItem("bn_bot_session_id", id);
+    try {
+      store.setItem(key, id);
+    } catch {
+      /* ignore */
+    }
   }
   return id;
+}
+
+function readSessionId(profileId = "jason") {
+  try {
+    return (
+      sessionStoreFor(profileId).getItem(sessionKeyFor(profileId)) ||
+      (profileId === "jason" ? localStorage.getItem(SESSION_KEY_LEGACY) : null)
+    );
+  } catch {
+    return null;
+  }
+}
+
+function clearAllDemoSessions() {
+  try {
+    localStorage.removeItem(SESSION_KEY_LEGACY);
+    localStorage.removeItem(sessionKeyFor("jason"));
+    sessionStorage.removeItem(sessionKeyFor("new"));
+  } catch {
+    /* ignore */
+  }
 }
 
 function formatTime(d = new Date()) {
@@ -109,8 +160,8 @@ function sheetWhen(iso) {
 
 const mailWhen = sheetWhen;
 
-function shortSessionLabel() {
-  const id = localStorage.getItem("bn_bot_session_id");
+function shortSessionLabel(profileId = readPickedProfileId() || "jason") {
+  const id = readSessionId(profileId);
   if (!id) return "web:new";
   return id.length > 20 ? `${id.slice(0, 18)}…` : id;
 }
@@ -244,6 +295,8 @@ export default function BrightNestBotDemo() {
   );
   const [sessionLabel, setSessionLabel] = useState(() => shortSessionLabel());
   const [trace, setTrace] = useState(null);
+  /** Bumps only when a bot answer lands — drives one camera fit, not every chat append. */
+  const [turnSerial, setTurnSerial] = useState(0);
   const [apiOnline, setApiOnline] = useState(null);
   const [schedule, setSchedule] = useState(null);
   const [scheduleTeacherId, setScheduleTeacherId] = useState("all");
@@ -351,12 +404,28 @@ export default function BrightNestBotDemo() {
     } catch {
       /* ignore */
     }
+    // New parent always starts a clean backend session — never inherit a prior
+    // booking identity (David, etc.) from an earlier demo pass.
+    if (profile.id === "new") {
+      const prev = readSessionId("new");
+      try {
+        sessionStorage.removeItem(sessionKeyFor("new"));
+      } catch {
+        /* ignore */
+      }
+      if (prev) {
+        fetch(`${API_BASE}/chat/history/${encodeURIComponent(prev)}`, {
+          method: "DELETE",
+        }).catch(() => {});
+      }
+    }
     setProfileId(profile.id);
     setParentName(profile.parentName);
     setChildName(profile.childName);
     setPhone(profile.phone);
     setParentGateOpen(false);
-    // Keep chat + session until System Reset — profile only changes who we speak as.
+    setSessionLabel(shortSessionLabel(profile.id));
+    // Keep chat visible until System Reset — identity + session are profile-scoped.
     setError(null);
     refreshFamilies();
     refreshSchedule();
@@ -414,11 +483,12 @@ export default function BrightNestBotDemo() {
   }, [inputMessage]);
 
   function handleReset() {
-    const sid = localStorage.getItem("bn_bot_session_id");
+    const sids = [readSessionId("jason"), readSessionId("new")].filter(Boolean);
     const finish = () => {
       setChatHistory([]);
       setError(null);
       setTrace(null);
+      setTurnSerial(0);
       setAdminTodos([]);
       setStaffMessages([]);
       setSelectedMsgId(null);
@@ -428,33 +498,31 @@ export default function BrightNestBotDemo() {
       setSelectedFamilyPhone(null);
       familiesBaselineRef.current = false;
       setSeenFamilyPhones(new Set());
-      localStorage.removeItem("bn_bot_session_id");
+      clearAllDemoSessions();
       try {
         localStorage.removeItem(PARENT_PICK_KEY);
       } catch {
         /* ignore */
       }
+      setProfileId("jason");
+      setParentName("");
+      setChildName("");
+      setPhone("");
       setParentGateOpen(true);
-      setSessionLabel(shortSessionLabel());
+      setSessionLabel("web:new");
       refreshAdminTodos();
       refreshStaffMessages();
       refreshFamilies({ markSeen: true });
       refreshSchedule();
     };
-    if (sid) {
-      fetch(`${API_BASE}/chat/history/${encodeURIComponent(sid)}`, {
-        method: "DELETE",
-      })
-        .catch(() => {})
-        .finally(finish);
-    } else {
-      // Still clear admin to-dos for a clean demo even without a session id
-      fetch(`${API_BASE}/chat/history/${encodeURIComponent("demo-reset")}`, {
-        method: "DELETE",
-      })
-        .catch(() => {})
-        .finally(finish);
-    }
+    const targets = sids.length ? sids : ["demo-reset"];
+    Promise.all(
+      targets.map((sid) =>
+        fetch(`${API_BASE}/chat/history/${encodeURIComponent(sid)}`, {
+          method: "DELETE",
+        }).catch(() => {})
+      )
+    ).finally(finish);
   }
 
   async function sendMessage(raw) {
@@ -467,7 +535,7 @@ export default function BrightNestBotDemo() {
     setIsLoading(true);
     setError(null);
     setInputMessage("");
-    setSessionLabel(shortSessionLabel());
+    setSessionLabel(shortSessionLabel(profileId));
 
     try {
       const res = await fetch(`${API_BASE}/chat`, {
@@ -475,16 +543,18 @@ export default function BrightNestBotDemo() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
-          session_id: getOrCreateSessionId(),
+          session_id: getOrCreateSessionId(profileId),
           debug: true,
           phone,
           parent_name: parentName,
-          child_name: childName,
+          // Never send a learned name as a hint for the blank new-parent profile —
+          // that re-seeded booking DST (sticky "David"). Jason may send sheet hint.
+          child_name: profileId === "jason" ? childName : "",
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setSessionLabel(shortSessionLabel());
+      setSessionLabel(shortSessionLabel(profileId));
       const nextTrace = data.trace ? { ...data.trace } : {};
       if (!nextTrace.staff_message && data.debug?.staff_message) {
         nextTrace.staff_message = data.debug.staff_message;
@@ -493,6 +563,7 @@ export default function BrightNestBotDemo() {
         nextTrace.admin_todo = data.debug.admin_todo;
       }
       setTrace(Object.keys(nextTrace).length ? nextTrace : null);
+      if (Object.keys(nextTrace).length) setTurnSerial((n) => n + 1);
       const hitTodo = Boolean(nextTrace.admin_todo);
       const hitBoss =
         Boolean(nextTrace.staff_message) || nextTrace.route === "staff_escalation";
@@ -509,12 +580,14 @@ export default function BrightNestBotDemo() {
         }
         setStaffTab("mail");
       }
-      // Keep form identity in sync when dialogue resolves a child
-      const resolvedChild =
-        data.trace?.booking?.child_name || data.trace?.cancel?.child_name;
-      if (resolvedChild) setChildName(resolvedChild);
-      const resolvedParent = data.trace?.booking?.parent_name;
-      if (resolvedParent) setParentName(resolvedParent);
+      // Jason strip tracks sheet child; new parent strip stays blank (no sticky hint).
+      if (profileId === "jason") {
+        const resolvedChild =
+          data.trace?.booking?.child_name || data.trace?.cancel?.child_name;
+        if (resolvedChild) setChildName(resolvedChild);
+        const resolvedParent = data.trace?.booking?.parent_name;
+        if (resolvedParent) setParentName(resolvedParent);
+      }
       setChatHistory((prev) => [
         ...prev,
         {
@@ -552,7 +625,11 @@ export default function BrightNestBotDemo() {
 
   const isDisabled = parentGateOpen || isLoading || !inputMessage.trim();
   const showEmpty = chatHistory.length === 0 && !isLoading;
-  const turnKey = String(trace?.latency_ms ?? "idle");
+  // Stable per bot answer only — never tie to chatHistory.length (that re-fit on send
+  // and fought wheel/pinch zoom with a snap-back).
+  const turnKey = !trace || turnSerial < 1
+    ? "idle"
+    : `${turnSerial}:${trace.route || "x"}:${trace.latency_ms ?? 0}`;
 
   const selectedMsg = useMemo(() => {
     if (!staffMessages.length) return null;

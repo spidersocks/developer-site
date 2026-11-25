@@ -7,6 +7,12 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 
+/** Stable empty defaults — inline `|| []` / `|| {}` as hook deps recreate every render
+ *  and were re-firing fitLitPath (camera snap-back) on booking turns that refresh
+ *  calendar/families while often lacking llm_calls / arbiter payloads. */
+const EMPTY_ARR = Object.freeze([]);
+const EMPTY_OBJ = Object.freeze({});
+
 const LLM_ROLE_LABELS = {
   intent_arbiter: "Intent arbiter (cheap)",
   action_policy: "Action policy (cheap)",
@@ -3336,6 +3342,12 @@ export default function TurnPipeline({
   const fittedRef = useRef(false);
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
+  /** User panned/zoomed — pending auto-fit must not overwrite their camera. */
+  const userCameraRef = useRef(false);
+
+  const markUserCamera = () => {
+    userCameraRef.current = true;
+  };
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -3347,14 +3359,24 @@ export default function TurnPipeline({
   const route = trace?.route;
   const grounding = trace?.grounding;
   const routing = trace?.routing;
-  const llmCalls = Array.isArray(trace?.llm_calls) ? trace.llm_calls : [];
+  const llmCalls = Array.isArray(trace?.llm_calls)
+    ? trace.llm_calls
+    : EMPTY_ARR;
   const history = trace?.history;
   const rag = trace?.rag;
   const facts = trace?.opening_hours?.facts;
   const enrichMode = rag?.mode === "grounded_enrich" || grounding?.used_rag;
-  const hits = route === "rag" || enrichMode ? rag?.hits || [] : [];
-  const rulesEvaluatedRaw =
-    routing?.rules_evaluated || routing?.debug?.rules_evaluated || [];
+  const hits =
+    route === "rag" || enrichMode
+      ? Array.isArray(rag?.hits)
+        ? rag.hits
+        : EMPTY_ARR
+      : EMPTY_ARR;
+  const rulesEvaluatedRaw = Array.isArray(routing?.rules_evaluated)
+    ? routing.rules_evaluated
+    : Array.isArray(routing?.debug?.rules_evaluated)
+      ? routing.debug.rules_evaluated
+      : EMPTY_ARR;
   const hoursDebug =
     routing?.debug?.hours_debug ||
     routing?.hours_debug ||
@@ -3425,9 +3447,10 @@ export default function TurnPipeline({
       };
     });
   }, [rulesEvaluatedRaw, hoursDebug, inboundForRules]);
-  const winningRule = routing?.winning_rule || routing?.debug?.winning_rule || {};
+  const winningRule =
+    routing?.winning_rule || routing?.debug?.winning_rule || EMPTY_OBJ;
   const matchSummaryRaw =
-    routing?.match_summary || routing?.debug?.match_summary || {};
+    routing?.match_summary || routing?.debug?.match_summary || EMPTY_OBJ;
   const matchSummary = useMemo(() => {
     const hoursRule = rulesEvaluated.find((r) => r.id === "opening_hours");
     const cue =
@@ -3460,8 +3483,8 @@ export default function TurnPipeline({
           : matchSummaryRaw.rule_id,
     };
   }, [matchSummaryRaw, rulesEvaluated, hoursDebug, inboundForRules]);
-  const arbiter = routing?.debug?.arbiter || {};
-  const actionPolicy = routing?.debug?.action_policy || {};
+  const arbiter = routing?.debug?.arbiter || EMPTY_OBJ;
+  const actionPolicy = routing?.debug?.action_policy || EMPTY_OBJ;
   const actionPolicyOverride = routing?.debug?.action_policy_override || null;
   const l2CheapOn = Boolean(arbiter?.called || actionPolicy?.called);
   const winningRuleId =
@@ -4159,18 +4182,30 @@ export default function TurnPipeline({
     return applyFitBox({ minX, minY, maxX, maxY }, 0.45);
   }, [activePath, statusById, applyFitBox, fitView]);
 
+  const fitLitPathRef = useRef(fitLitPath);
+  const fitViewRef = useRef(fitView);
+  useEffect(() => {
+    fitLitPathRef.current = fitLitPath;
+  }, [fitLitPath]);
+  useEffect(() => {
+    fitViewRef.current = fitView;
+  }, [fitView]);
+
   useEffect(() => {
     setActiveId(null);
   }, [turnKey]);
 
-  // After each answered turn, frame the lit path (keeps Live / Pack on screen).
+  // Frame lit path once per answered turn. Skip if the user already moved the
+  // camera (including during this 80ms delay) so zoom never snap-backs.
   useEffect(() => {
-    if (!trace || !turnKey) return undefined;
+    if (!turnKey || turnKey === "idle") return undefined;
+    userCameraRef.current = false;
     const t = window.setTimeout(() => {
-      fitLitPath();
+      if (userCameraRef.current) return;
+      fitLitPathRef.current();
     }, 80);
     return () => window.clearTimeout(t);
-  }, [turnKey, trace, fitLitPath]);
+  }, [turnKey]);
 
   // Fit once when the canvas has a real size; never on hide/show of staff desk.
   useEffect(() => {
@@ -4178,7 +4213,7 @@ export default function TurnPipeline({
     let tries = 0;
     const tick = () => {
       tries += 1;
-      if (fitView()) {
+      if (fitViewRef.current()) {
         fittedRef.current = true;
         return;
       }
@@ -4186,8 +4221,9 @@ export default function TurnPipeline({
     };
     const t = window.setTimeout(tick, 30);
     return () => window.clearTimeout(t);
-  }, [fitView]);
+  }, []);
 
+  // Mobile URL-bar resize must not reset the camera — only re-clamp pan.
   useEffect(() => {
     let timer = null;
     const onResize = () => {
@@ -4196,7 +4232,16 @@ export default function TurnPipeline({
         const el = viewportRef.current;
         if (!el) return;
         if (el.offsetParent === null && el.getClientRects().length === 0) return;
-        fitView();
+        const { width, height } = el.getBoundingClientRect();
+        if (width < 120 || height < 120) return;
+        const next = clampPan(
+          panRef.current,
+          zoomRef.current,
+          width,
+          height
+        );
+        panRef.current = next;
+        setPan(next);
       }, 120);
     };
     window.addEventListener("resize", onResize);
@@ -4204,7 +4249,7 @@ export default function TurnPipeline({
       window.removeEventListener("resize", onResize);
       if (timer) window.clearTimeout(timer);
     };
-  }, [fitView]);
+  }, []);
 
   useEffect(() => {
     if (!activeId) return undefined;
@@ -4226,6 +4271,7 @@ export default function TurnPipeline({
     const onWheel = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      markUserCamera();
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
@@ -4254,6 +4300,7 @@ export default function TurnPipeline({
   }, []);
 
   const applyZoomAt = (mx, my, nextZoom, width, height) => {
+    markUserCamera();
     const z = zoomRef.current;
     const p = panRef.current;
     const wx = (mx - p.x) / z;
@@ -4365,6 +4412,7 @@ export default function TurnPipeline({
     const dy = e.clientY - d.y;
     if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
     if (!d.moved) return;
+    markUserCamera();
     const next = clampPan(
       { x: d.panX + dx, y: d.panY + dy },
       zoomRef.current,
@@ -4438,6 +4486,7 @@ export default function TurnPipeline({
           <button
             type="button"
             onClick={() => {
+              markUserCamera();
               const el = viewportRef.current;
               const { width, height } = el?.getBoundingClientRect?.() || {
                 width: 0,
@@ -4464,6 +4513,7 @@ export default function TurnPipeline({
           <button
             type="button"
             onClick={() => {
+              markUserCamera();
               const el = viewportRef.current;
               const { width, height } = el?.getBoundingClientRect?.() || {
                 width: 0,
@@ -4490,7 +4540,11 @@ export default function TurnPipeline({
           <button
             type="button"
             className="bn-flow-fit"
-            onClick={() => (trace ? fitLitPath() : fitView())}
+            onClick={() => {
+              userCameraRef.current = false;
+              if (trace) fitLitPath();
+              else fitView();
+            }}
             title="Fit to view"
             aria-label="Fit to view"
           >
