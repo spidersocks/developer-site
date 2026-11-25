@@ -59,6 +59,20 @@ export function safeNextPath(raw, fallback = "/clozzz-overlay") {
   return raw;
 }
 
+/**
+ * After unlock on a bare library URL, send new devices to the mode chooser
+ * (Display vs Remote). Deep links that already imply a mode are unchanged.
+ */
+export function postUnlockPath(raw, fallback = "/clozzz-overlay/mode") {
+  const next = safeNextPath(raw, fallback);
+  const pathOnly = next.split("?")[0].replace(/\/+$/, "") || "/clozzz-overlay";
+  if (pathOnly === "/clozzz-overlay") {
+    const qs = next.includes("?") ? next.slice(next.indexOf("?")) : "";
+    return `/clozzz-overlay/mode${qs}`;
+  }
+  return next;
+}
+
 /** Minimal gate page HTML (inline styles; no client password). */
 export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
   const next = safeNextPath(nextPath);
@@ -162,6 +176,12 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
           errEl.textContent = msg;
           btn.disabled = false;
           return;
+        }
+        if (data.liveToken) {
+          try {
+            sessionStorage.setItem("clozzz_live_token", data.liveToken);
+            localStorage.setItem("clozzz_live_token", data.liveToken);
+          } catch (_) {}
         }
         location.replace(data.next || ${JSON.stringify(next)});
       } catch {

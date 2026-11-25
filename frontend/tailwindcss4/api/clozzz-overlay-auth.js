@@ -2,7 +2,7 @@ import {
   AUTH_PATH,
   buildSetCookie,
   gatePageHtml,
-  safeNextPath,
+  postUnlockPath,
   unlockToken,
 } from "../lib/clozzz-overlay-gate.js";
 
@@ -23,7 +23,7 @@ export default async function handler(request) {
 
   if (request.method === "GET") {
     if (!password) {
-      return json({ ok: true, unlocked: true, gate: "off" });
+      return json({ ok: true, unlocked: true, gate: "off", liveToken: null });
     }
     const expected = await unlockToken(password);
     const cookie = request.headers.get("cookie") || "";
@@ -39,7 +39,12 @@ export default async function handler(request) {
           return part.slice(idx + 1).trim() === expected;
         }
       });
-    return json({ ok: true, unlocked, gate: "on" });
+    return json({
+      ok: true,
+      unlocked,
+      gate: "on",
+      liveToken: unlocked ? expected : null,
+    });
   }
 
   if (request.method !== "POST") {
@@ -48,22 +53,22 @@ export default async function handler(request) {
 
   if (!password) {
     // Gate disabled — treat as unlocked.
-    const nextPath = safeNextPath(url.searchParams.get("next"));
+    const nextPath = postUnlockPath(url.searchParams.get("next"));
     return wantsJson
-      ? json({ ok: true, next: nextPath, gate: "off" })
+      ? json({ ok: true, next: nextPath, gate: "off", liveToken: null })
       : Response.redirect(new URL(nextPath, url.origin), 303);
   }
 
   let submitted = "";
   let remember = false;
-  let nextPath = "/clozzz-overlay";
+  let nextPath = "/clozzz-overlay/mode";
 
   const contentType = request.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const body = await request.json().catch(() => ({}));
     submitted = String(body.password ?? "");
     remember = Boolean(body.remember);
-    nextPath = safeNextPath(body.next);
+    nextPath = postUnlockPath(body.next);
   } else {
     const form = await request.formData();
     submitted = String(form.get("password") ?? "");
@@ -71,7 +76,7 @@ export default async function handler(request) {
       form.get("remember") === "1" ||
       form.get("remember") === "on" ||
       form.get("remember") === "true";
-    nextPath = safeNextPath(String(form.get("next") ?? ""));
+    nextPath = postUnlockPath(String(form.get("next") ?? ""));
   }
 
   if (submitted !== password) {
@@ -101,10 +106,13 @@ export default async function handler(request) {
 
   if (wantsJson) {
     headers.set("content-type", "application/json; charset=utf-8");
-    return new Response(JSON.stringify({ ok: true, next: nextPath }), {
-      status: 200,
-      headers,
-    });
+    return new Response(
+      JSON.stringify({ ok: true, next: nextPath, liveToken: token }),
+      {
+        status: 200,
+        headers,
+      }
+    );
   }
 
   headers.set("location", nextPath);

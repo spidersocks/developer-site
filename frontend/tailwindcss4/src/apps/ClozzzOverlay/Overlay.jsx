@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   FALLBACK_CATALOG,
   findSessionIn,
@@ -6,9 +6,13 @@ import {
   normalizeCatalog,
   sessionTotalSec,
 } from "./routines.js";
-import { fetchCatalog } from "./api.js";
+import { ensureLiveToken, fetchCatalog, fetchLive, rememberLiveToken } from "./api.js";
 import Editor from "./Editor.jsx";
+import Remote from "./Remote.jsx";
+import ModeChooser from "./ModeChooser.jsx";
 import "./overlay.css";
+
+const LIVE_POLL_MS = 400;
 
 function formatClock(totalSec) {
   const sec = Math.max(0, Math.ceil(totalSec));
@@ -22,12 +26,33 @@ export function isEditorPath(location = window.location) {
   return /\/clozzz-overlay(?:\.html)?\/edit$/i.test(path);
 }
 
+export function isModePath(location = window.location) {
+  const path = location.pathname.replace(/\/+$/, "");
+  return /\/clozzz-overlay(?:\.html)?\/mode$/i.test(path);
+}
+
+export function isRemotePath(location = window.location) {
+  const path = location.pathname.replace(/\/+$/, "");
+  return /\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path);
+}
+
 /** Session key from `?session=` or trailing path after /clozzz-overlay[/].html. */
 export function readSessionKey(location = window.location) {
   const fromQuery = new URLSearchParams(location.search).get("session");
   if (fromQuery && fromQuery.trim()) return fromQuery.trim();
 
   const path = location.pathname.replace(/\/+$/, "");
+  const remoteMatch = path.match(
+    /\/clozzz-overlay(?:\.html)?\/([^/]+)\/remote$/i
+  );
+  if (remoteMatch?.[1]) {
+    try {
+      return decodeURIComponent(remoteMatch[1]);
+    } catch {
+      return remoteMatch[1];
+    }
+  }
+
   const match = path.match(/\/clozzz-overlay(?:\.html)?(?:\/([^/]+))?$/i);
   if (match?.[1]) {
     let key = match[1];
@@ -36,7 +61,8 @@ export function readSessionKey(location = window.location) {
     } catch {
       /* keep raw */
     }
-    if (key.toLowerCase() === "edit") return null;
+    const lower = key.toLowerCase();
+    if (lower === "edit" || lower === "mode") return null;
     return key;
   }
   return null;
@@ -48,16 +74,19 @@ function useStageClass(mode) {
     root.classList.remove(
       "clozzz-stage-dark",
       "clozzz-stage-preview",
-      "clozzz-stage-editor"
+      "clozzz-stage-editor",
+      "clozzz-stage-remote"
     );
     if (mode === "dark") root.classList.add("clozzz-stage-dark");
     if (mode === "preview") root.classList.add("clozzz-stage-preview");
     if (mode === "editor") root.classList.add("clozzz-stage-editor");
+    if (mode === "remote") root.classList.add("clozzz-stage-remote");
     return () => {
       root.classList.remove(
         "clozzz-stage-dark",
         "clozzz-stage-preview",
-        "clozzz-stage-editor"
+        "clozzz-stage-editor",
+        "clozzz-stage-remote"
       );
     };
   }, [mode]);
@@ -139,65 +168,91 @@ function SessionNotFound({ keyTried }) {
   );
 }
 
-function RunningOverlay({ session }) {
+/** Derive remaining ms from a server LiveRun snapshot + local skew. */
+export function remainingFromLive(live, nowMs = Date.now()) {
+  if (!live) return { remainingMs: 0, done: false, armed: true };
+  const status = live.status;
+  const durationMs = (live.segmentDurationSec || 0) * 1000;
+  const skew = live.serverNowMs ? nowMs - live.serverNowMs : 0;
+  const serverNow = nowMs - skew;
+
+  if (status === "done") {
+    return { remainingMs: 0, done: true, armed: false };
+  }
+  if (status === "idle" || status === "paused") {
+    const rem =
+      typeof live.pausedRemainingMs === "number"
+        ? live.pausedRemainingMs
+        : durationMs;
+    return {
+      remainingMs: Math.max(0, rem),
+      done: false,
+      armed: status === "idle",
+      paused: status === "paused",
+    };
+  }
+  if (status === "running" && live.segmentStartedAtMs != null) {
+    const elapsed = serverNow - live.segmentStartedAtMs;
+    return {
+      remainingMs: Math.max(0, durationMs - elapsed),
+      done: false,
+      armed: false,
+      paused: false,
+    };
+  }
+  return { remainingMs: durationMs, done: false, armed: true };
+}
+
+function RunningOverlay({ session, sessionKey }) {
   useStageClass(wantsPreview() ? "preview" : null);
-  const [index, setIndex] = useState(0);
-  const [remainingMs, setRemainingMs] = useState(
-    () => session.segments[0].durationSec * 1000
-  );
-  const [done, setDone] = useState(false);
+  const [live, setLive] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
-    let segmentIndex = 0;
-    let segmentStarted = performance.now();
-    let raf = 0;
-
-    setIndex(0);
-    setRemainingMs(session.segments[0].durationSec * 1000);
-    setDone(false);
-
-    const tick = (now) => {
-      if (cancelled) return;
-
-      const seg = session.segments[segmentIndex];
-      const durationMs = seg.durationSec * 1000;
-      const elapsed = now - segmentStarted;
-
-      if (elapsed >= durationMs) {
-        if (segmentIndex + 1 >= session.segments.length) {
-          setIndex(segmentIndex);
-          setRemainingMs(0);
-          setDone(true);
-          return;
-        }
-        segmentIndex += 1;
-        segmentStarted = now;
-        const nextSeg = session.segments[segmentIndex];
-        setIndex(segmentIndex);
-        setRemainingMs(nextSeg.durationSec * 1000);
-      } else {
-        setRemainingMs(durationMs - elapsed);
-      }
-
-      raf = requestAnimationFrame(tick);
+    const pull = () => {
+      fetchLive(sessionKey)
+        .then((snap) => {
+          if (!cancelled) setLive(snap);
+        })
+        .catch(() => {
+          /* keep last snapshot */
+        });
     };
-
-    raf = requestAnimationFrame(tick);
+    pull();
+    const poll = setInterval(pull, LIVE_POLL_MS);
     return () => {
       cancelled = true;
-      cancelAnimationFrame(raf);
+      clearInterval(poll);
     };
-  }, [session]);
+  }, [sessionKey]);
 
-  const current = session.segments[index];
-  const next = done ? null : session.segments[index + 1] ?? null;
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setNow(Date.now());
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const derived = remainingFromLive(live, now);
+  const index = live?.segmentIndex ?? 0;
+  const segments = live?.segments?.length
+    ? live.segments
+    : session.segments;
+  const done = derived.done || live?.status === "done";
+  const current = segments[index] || session.segments[0];
+  const next = done ? null : segments[index + 1] ?? null;
+  const durationMs = (current?.durationSec || live?.segmentDurationSec || 0) * 1000;
   const progress =
-    current && !done
-      ? Math.min(1, Math.max(0, remainingMs / (current.durationSec * 1000)))
+    current && !done && durationMs > 0
+      ? Math.min(1, Math.max(0, derived.remainingMs / durationMs))
       : 0;
-  const remainingSec = remainingMs / 1000;
+  const remainingSec = derived.remainingMs / 1000;
   const band = timerBand(progress, remainingSec, done);
+  const armed = derived.armed && !done;
 
   return (
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
@@ -207,10 +262,11 @@ function RunningOverlay({ session }) {
 
       <div className="clozzz-corner clozzz-corner--tr">
         <div
-          className={`clozzz-timer clozzz-timer--${band}`}
+          className={`clozzz-timer clozzz-timer--${band}${armed ? " clozzz-timer--armed" : ""}${derived.paused ? " clozzz-timer--paused" : ""}`}
           style={{
-            /* Elapsed fraction: gold border fills as time elapses. */
-            "--clozzz-elapsed": done ? 1 : Math.min(1, Math.max(0, 1 - progress)),
+            "--clozzz-elapsed": done
+              ? 1
+              : Math.min(1, Math.max(0, 1 - progress)),
           }}
         >
           <TimerIcon />
@@ -227,17 +283,18 @@ function RunningOverlay({ session }) {
               Routine complete
             </h1>
             <p className="clozzz-exercise-count">
-              {session.segments.length} exercises ·{" "}
-              {formatDuration(sessionTotalSec(session))}
+              {segments.length} exercises ·{" "}
+              {formatDuration(sessionTotalSec({ segments }))}
             </p>
           </>
         ) : (
           <>
-            <h1 className="clozzz-current clozzz-anim" key={current.id}>
-              {current.label}
+            <h1 className="clozzz-current clozzz-anim" key={current?.id || index}>
+              {current?.label || live?.currentLabel || "…"}
             </h1>
             <p className="clozzz-exercise-count">
-              Exercise {index + 1} of {session.segments.length}
+              Exercise {index + 1} of {segments.length}
+              {armed ? " · Waiting for Start" : derived.paused ? " · Paused" : ""}
             </p>
             <p className="clozzz-up-next">
               {next ? `Up next: ${next.label}` : "Up next: Rest"}
@@ -291,36 +348,91 @@ function LibraryLoading() {
   );
 }
 
+function RemoteApp({ sessionKey, catalog }) {
+  useStageClass("remote");
+  useEffect(() => {
+    ensureLiveToken();
+  }, []);
+  const session = findSessionIn(catalog.routines, sessionKey);
+  return (
+    <Remote
+      sessionKey={session?.id || sessionKey}
+      sessionTitle={session?.title}
+    />
+  );
+}
+
+function ChooserApp({ catalog }) {
+  useStageClass("editor");
+  return <ModeChooser catalog={catalog} />;
+}
+
 export default function Overlay() {
   const [sessionKey, setSessionKey] = useState(() => readSessionKey());
+  const [remote, setRemote] = useState(() => isRemotePath());
+  const [modePage, setModePage] = useState(() => isModePath());
   const { catalog, ready } = useCatalog();
+
+  useEffect(() => {
+    // Capture liveToken if auth page left it on the URL hash/query (legacy) —
+    // primary path is unlock JSON + ensureLiveToken.
+    ensureLiveToken().then((token) => {
+      if (token) rememberLiveToken(token);
+    });
+  }, []);
 
   useEffect(() => {
     // Old /edit URL → library at base route.
     if (isEditorPath()) {
       window.history.replaceState({}, "", "/clozzz-overlay");
       setSessionKey(null);
+      setRemote(false);
+      setModePage(false);
     }
-    const sync = () => setSessionKey(readSessionKey());
+    const sync = () => {
+      setSessionKey(readSessionKey());
+      setRemote(isRemotePath());
+      setModePage(isModePath());
+    };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
 
+  const resolvedSession = useMemo(() => {
+    if (!sessionKey) return null;
+    return findSessionIn(catalog.routines, sessionKey);
+  }, [catalog, sessionKey]);
+
   if (!ready) {
-    if (sessionKey) {
+    if (sessionKey && !remote && !modePage) {
       return <div className="clozzz-overlay clozzz-overlay--live" aria-busy="true" />;
     }
     return <LibraryLoading />;
+  }
+
+  if (modePage) {
+    return <ChooserApp catalog={catalog} />;
   }
 
   if (!sessionKey) {
     return <LibraryApp catalog={catalog} />;
   }
 
-  const session = findSessionIn(catalog.routines, sessionKey);
-  if (!session) {
+  if (!resolvedSession) {
     return <SessionNotFound keyTried={sessionKey} />;
   }
 
-  return <RunningOverlay key={session.id} session={session} />;
+  if (remote) {
+    return (
+      <RemoteApp sessionKey={resolvedSession.id} catalog={catalog} />
+    );
+  }
+
+  return (
+    <RunningOverlay
+      key={resolvedSession.id}
+      session={resolvedSession}
+      sessionKey={resolvedSession.id}
+    />
+  );
 }

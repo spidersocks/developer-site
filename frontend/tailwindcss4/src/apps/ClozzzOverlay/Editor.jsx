@@ -465,6 +465,10 @@ function obsPath(routine) {
   return `/clozzz-overlay/${encodeURIComponent(routine.id)}`;
 }
 
+function remotePath(routine) {
+  return `/clozzz-overlay/${encodeURIComponent(routine.id)}/remote`;
+}
+
 function makeDuplicate(source, existingRoutines) {
   const codes = blankRoutine(existingRoutines);
   return {
@@ -772,9 +776,17 @@ export default function Editor({ initialCatalog }) {
                   </div>
                   <div className="ce-item__actions">
                     {!routine.localOnly ? (
-                      <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
-                        Open
-                      </a>
+                      <>
+                        <a className="ce-btn ce-btn--open" href={obsPath(routine)}>
+                          Display
+                        </a>
+                        <a
+                          className="ce-btn ce-btn--open ce-btn--remote"
+                          href={remotePath(routine)}
+                        >
+                          Remote
+                        </a>
+                      </>
                     ) : null}
                     <OverflowMenu
                       open={menuKey === `routine:${routine.id}`}

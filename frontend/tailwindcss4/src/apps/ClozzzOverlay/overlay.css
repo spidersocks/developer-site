@@ -553,3 +553,254 @@ html.clozzz-stage-preview #root {
     font-size: clamp(0.95rem, 3.6vw, 1.15rem);
   }
 }
+
+.clozzz-timer--armed {
+  opacity: 0.92;
+}
+
+.clozzz-timer--paused {
+  filter: saturate(0.85);
+}
+
+/* —— Mode chooser + phone remote —— */
+html.clozzz-stage-remote,
+html.clozzz-stage-remote body,
+html.clozzz-stage-remote #root {
+  height: auto;
+  min-height: 100%;
+  overflow: auto !important;
+  background: #120e22 !important;
+  color: var(--clozzz-cream);
+}
+
+.clozzz-chooser {
+  min-height: 100vh;
+  padding: 1.5rem 1.15rem 2.5rem;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(228, 201, 137, 0.12), transparent 45%),
+    radial-gradient(ellipse at 90% 10%, rgba(110, 91, 184, 0.18), transparent 40%),
+    #f6f4fb;
+  color: #2a2540;
+}
+
+.clozzz-chooser__shell {
+  width: min(28rem, 100%);
+  margin: 0 auto;
+}
+
+.clozzz-chooser__eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6580;
+  font-weight: 650;
+}
+
+.clozzz-chooser__title {
+  margin: 0.35rem 0 0.5rem;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.8rem, 6vw, 2.35rem);
+  font-weight: 600;
+}
+
+.clozzz-chooser__lead {
+  margin: 0 0 1.25rem;
+  color: #6b6580;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.clozzz-chooser__card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid #e6e1f0;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(42, 37, 64, 0.08);
+  margin-bottom: 1.25rem;
+}
+
+.clozzz-chooser__card-title {
+  display: block;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.clozzz-chooser__card-desc {
+  display: block;
+  margin-top: 0.25rem;
+  color: #6b6580;
+  font-size: 0.88rem;
+}
+
+.clozzz-chooser__section {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: #514b82;
+}
+
+.clozzz-chooser__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.clozzz-chooser__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.85rem;
+  background: #fff;
+  border: 1px solid #e6e1f0;
+}
+
+.clozzz-chooser__name {
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.clozzz-chooser__actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.clozzz-chooser__link {
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 650;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  background: #eeebf6;
+  color: #514b82;
+}
+
+.clozzz-chooser__link--remote {
+  background: linear-gradient(180deg, #5c568f, #514b82);
+  color: #fff;
+}
+
+.clozzz-remote {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1.35rem 1.15rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background:
+    radial-gradient(ellipse at 15% 0%, rgba(228, 201, 137, 0.16), transparent 42%),
+    radial-gradient(ellipse at 85% 8%, rgba(110, 91, 184, 0.28), transparent 45%),
+    #120e22;
+  color: var(--clozzz-cream);
+  font-family: var(--clozzz-font-sans);
+}
+
+.clozzz-remote__eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--clozzz-gold);
+  font-weight: 650;
+}
+
+.clozzz-remote__title {
+  margin: 0.3rem 0 0.25rem;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.7rem, 7vw, 2.2rem);
+  font-weight: 600;
+}
+
+.clozzz-remote__meta {
+  margin: 0;
+  color: var(--clozzz-cream-faint);
+  font-size: 0.92rem;
+}
+
+.clozzz-remote__label {
+  margin: 0.65rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.clozzz-remote__error {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.75rem;
+  background: rgba(240, 138, 106, 0.18);
+  color: #f0b56a;
+  font-size: 0.9rem;
+}
+
+.clozzz-remote__pad {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  flex: 1;
+}
+
+.clozzz-remote__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.clozzz-remote__btn {
+  appearance: none;
+  border: 1px solid rgba(243, 234, 215, 0.22);
+  border-radius: 1.1rem;
+  min-height: 4.25rem;
+  padding: 1rem 1.1rem;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--clozzz-cream);
+  background: rgba(22, 14, 44, 0.88);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clozzz-remote__btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+.clozzz-remote__btn--primary {
+  min-height: 5.5rem;
+  font-size: 1.55rem;
+  background: linear-gradient(180deg, #5c568f, #3d3768);
+  border-color: rgba(228, 201, 137, 0.35);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.clozzz-remote__btn--ghost {
+  min-height: 3.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--clozzz-cream-faint);
+}
+
+.clozzz-remote__foot {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+
+.clozzz-remote__foot a {
+  color: var(--clozzz-gold);
+  font-weight: 650;
+  font-size: 0.92rem;
+}

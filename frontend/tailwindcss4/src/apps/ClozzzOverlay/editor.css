@@ -128,6 +128,18 @@
   border-color: var(--ce-accent);
 }
 
+.ce-btn--remote {
+  background: linear-gradient(180deg, #5c568f, var(--ce-accent));
+  color: #fff;
+  border-color: transparent;
+}
+
+.ce-btn--remote:hover:not(:disabled) {
+  filter: brightness(1.05);
+  background: linear-gradient(180deg, #5c568f, var(--ce-accent));
+  color: #fff;
+}
+
 .ce-btn--subtle {
   color: var(--ce-secondary);
   font-weight: 500;

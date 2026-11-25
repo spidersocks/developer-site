@@ -8,8 +8,8 @@ import {
   COOKIE_NAME,
   buildSetCookie,
   gatePageHtml,
+  postUnlockPath,
   readCookie,
-  safeNextPath,
   unlockToken,
 } from './lib/clozzz-overlay-gate.js'
 
@@ -66,14 +66,21 @@ function clozzzOverlayGate(env) {
       if (url.pathname === AUTH_PATH) {
         if (req.method === 'GET') {
           if (!password) {
-            return sendJson(res, 200, { ok: true, unlocked: true, gate: 'off' })
+            return sendJson(res, 200, {
+              ok: true,
+              unlocked: true,
+              gate: 'off',
+              liveToken: null,
+            })
           }
           const expected = await unlockToken(password)
           const cookie = readCookie(req.headers.cookie, COOKIE_NAME)
+          const unlocked = cookie === expected
           return sendJson(res, 200, {
             ok: true,
-            unlocked: cookie === expected,
+            unlocked,
             gate: 'on',
+            liveToken: unlocked ? expected : null,
           })
         }
 
@@ -85,14 +92,14 @@ function clozzzOverlayGate(env) {
         const contentType = req.headers['content-type'] || ''
         let submitted = ''
         let remember = false
-        let nextPath = '/clozzz-overlay'
+        let nextPath = '/clozzz-overlay/mode'
 
         if (contentType.includes('application/json')) {
           try {
             const body = JSON.parse(raw || '{}')
             submitted = String(body.password ?? '')
             remember = Boolean(body.remember)
-            nextPath = safeNextPath(body.next)
+            nextPath = postUnlockPath(body.next)
           } catch {
             return sendJson(res, 400, { ok: false, error: 'Invalid JSON' })
           }
@@ -103,13 +110,18 @@ function clozzzOverlayGate(env) {
             params.get('remember') === '1' ||
             params.get('remember') === 'on' ||
             params.get('remember') === 'true'
-          nextPath = safeNextPath(params.get('next'))
+          nextPath = postUnlockPath(params.get('next'))
         }
 
         const wantsJson = (req.headers.accept || '').includes('application/json')
 
         if (!password) {
-          return sendJson(res, 200, { ok: true, next: nextPath, gate: 'off' })
+          return sendJson(res, 200, {
+            ok: true,
+            next: nextPath,
+            gate: 'off',
+            liveToken: null,
+          })
         }
 
         if (submitted !== password) {
@@ -133,7 +145,7 @@ function clozzzOverlayGate(env) {
           return sendJson(
             res,
             200,
-            { ok: true, next: nextPath },
+            { ok: true, next: nextPath, liveToken: token },
             { 'set-cookie': setCookie }
           )
         }

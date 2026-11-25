@@ -4,6 +4,8 @@ const API_BASE =
   import.meta.env.VITE_CLOZZZ_API_URL ||
   "https://unified-backend.fly.dev/clozzz";
 
+const LIVE_TOKEN_KEY = "clozzz_live_token";
+
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -27,7 +29,9 @@ async function request(path, options = {}) {
         : Array.isArray(detail)
           ? detail.map((d) => d.msg || JSON.stringify(d)).join("; ")
           : `Request failed (${res.status})`;
-    throw new Error(message);
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -67,4 +71,61 @@ export function reorderRoutines(ids) {
   }).then(asCatalog);
 }
 
-export { API_BASE };
+export function fetchLive(routineKey) {
+  return request(`/live/${encodeURIComponent(routineKey)}`);
+}
+
+export function postLiveCommand(routineKey, command, token) {
+  const headers = {};
+  if (token) headers["X-Clozzz-Live-Token"] = token;
+  return request(`/live/${encodeURIComponent(routineKey)}/command`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ command }),
+  });
+}
+
+export function rememberLiveToken(token) {
+  if (!token) return;
+  try {
+    sessionStorage.setItem(LIVE_TOKEN_KEY, token);
+    localStorage.setItem(LIVE_TOKEN_KEY, token);
+  } catch {
+    /* private mode */
+  }
+}
+
+export function readLiveToken() {
+  try {
+    return (
+      sessionStorage.getItem(LIVE_TOKEN_KEY) ||
+      localStorage.getItem(LIVE_TOKEN_KEY) ||
+      ""
+    );
+  } catch {
+    return "";
+  }
+}
+
+/** Refresh live token from gate cookie when storage is empty. */
+export async function ensureLiveToken() {
+  const existing = readLiveToken();
+  if (existing) return existing;
+  try {
+    const res = await fetch("/api/clozzz-overlay-auth", {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data?.liveToken) {
+      rememberLiveToken(data.liveToken);
+      return data.liveToken;
+    }
+    if (data?.gate === "off") return "";
+  } catch {
+    /* ignore */
+  }
+  return readLiveToken();
+}
+
+export { API_BASE, LIVE_TOKEN_KEY };
