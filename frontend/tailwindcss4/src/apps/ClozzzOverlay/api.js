@@ -7,13 +7,16 @@ const API_BASE =
 const LIVE_TOKEN_KEY = "clozzz_live_token";
 
 async function request(path, options = {}) {
+  // Pull headers out before spreading options — otherwise options.headers
+  // replaces the merged object and drops Content-Type (remote commands → 422).
+  const { headers: extraHeaders, ...rest } = options;
   const res = await fetch(`${API_BASE}${path}`, {
+    ...rest,
     headers: {
       Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
+      ...(rest.body ? { "Content-Type": "application/json" } : {}),
+      ...extraHeaders,
     },
-    ...options,
   });
   let data = null;
   try {
