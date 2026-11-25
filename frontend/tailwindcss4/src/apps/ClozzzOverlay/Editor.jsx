@@ -385,7 +385,8 @@ function EditRoutineModal({
                 <span className="ce-toggle__copy">
                   <span className="ce-toggle__title">Pre-stream countdown</span>
                   <span className="ce-toggle__hint">
-                    Start on the remote runs a full-screen intro first
+                    OBS opens on a frozen full-duration countdown; remote Start
+                    ticks it, or Skip goes straight to the routine
                   </span>
                 </span>
               </label>

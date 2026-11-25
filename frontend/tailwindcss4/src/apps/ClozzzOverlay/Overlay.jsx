@@ -248,6 +248,25 @@ export function remainingFromLive(live, nowMs = Date.now()) {
     return { remainingMs: 0, done: true, armed: false };
   }
   if (status === "idle" || status === "paused") {
+    // Pre-stream intro armed but not started: hold frozen countdown at max.
+    if (
+      status === "idle" &&
+      live.introCountdownEnabled &&
+      !live.introConsumed
+    ) {
+      const introMs =
+        (live.countdownDurationSec ||
+          live.introCountdownSec ||
+          1800) * 1000;
+      return {
+        remainingMs: introMs,
+        done: false,
+        armed: false,
+        countdown: true,
+        countdownHeld: true,
+        durationMs: introMs,
+      };
+    }
     const rem =
       typeof live.pausedRemainingMs === "number"
         ? live.pausedRemainingMs
@@ -271,15 +290,21 @@ export function remainingFromLive(live, nowMs = Date.now()) {
   return { remainingMs: durationMs, done: false, armed: true };
 }
 
-function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
+function CountdownStage({
+  remainingSec,
+  durationMs,
+  remainingMs,
+  title,
+  held = false,
+}) {
   const progress =
     durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
   const elapsed = 1 - progress;
-  const critical = remainingSec <= 10;
+  const critical = !held && remainingSec <= 10;
 
   return (
     <div
-      className={`clozzz-countdown clozzz-countdown--soon${critical ? " is-critical" : ""}`}
+      className={`clozzz-countdown clozzz-countdown--soon${critical ? " is-critical" : ""}${held ? " is-held" : ""}`}
       aria-live="polite"
     >
       <video
@@ -307,7 +332,11 @@ function CountdownStage({ remainingSec, durationMs, remainingMs, title }) {
           <span className="clozzz-countdown__rail-fill" />
           <span className="clozzz-countdown__rail-head" />
         </div>
-        {title ? <p className="clozzz-countdown__sub">{title}</p> : null}
+        {held ? (
+          <p className="clozzz-countdown__sub">Waiting for Start</p>
+        ) : title ? (
+          <p className="clozzz-countdown__sub">{title}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -416,6 +445,7 @@ function RunningOverlay({ session, sessionKey }) {
         remainingMs={derived.remainingMs}
         durationMs={derived.durationMs || 1800000}
         title={live?.title || session.title || session.name}
+        held={Boolean(derived.countdownHeld)}
       />
     );
   }

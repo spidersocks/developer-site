@@ -98,6 +98,7 @@ export default function Remote({ sessionKey, sessionTitle }) {
   const chromeVisible = live?.chromeVisible !== false;
   const introEnabled = Boolean(live?.introCountdownEnabled);
   const introPending = introEnabled && !live?.introConsumed;
+  const introHeld = status === "idle" && introPending;
   const label = live?.currentLabel || "…";
   const index = typeof live?.segmentIndex === "number" ? live.segmentIndex : 0;
   const count = live?.segmentCount || 0;
@@ -107,8 +108,7 @@ export default function Remote({ sessionKey, sessionTitle }) {
   else if (status === "paused") primary = { cmd: "resume", text: "Resume" };
   else if (status === "done" || inStreamEnded)
     primary = { cmd: "restart", text: "Restart" };
-  else if (status === "idle" && introPending)
-    primary = { cmd: "start", text: "Start countdown" };
+  else if (introHeld) primary = { cmd: "start", text: "Start countdown" };
 
   const library = "/clozzz-overlay";
   const isBusy = (key) => busyCmd === key;
@@ -122,28 +122,28 @@ export default function Remote({ sessionKey, sessionTitle }) {
         <p className="clozzz-remote__meta">
           {inCountdown
             ? "Pre-stream countdown"
-            : inStreamEnded
-              ? "Stream ended"
-              : status === "done"
-                ? "Routine complete"
-                : status === "idle"
-                  ? introPending
-                    ? "Armed — Start runs intro"
-                    : "Armed — waiting for Start"
-                  : status === "paused"
-                    ? "Paused"
-                    : "Live"}
-          {!inCountdown && !inStreamEnded && count > 0
+            : introHeld
+              ? "Countdown held — waiting for Start"
+              : inStreamEnded
+                ? "Stream ended"
+                : status === "done"
+                  ? "Routine complete"
+                  : status === "idle"
+                    ? "Armed — waiting for Start"
+                    : status === "paused"
+                      ? "Paused"
+                      : "Live"}
+          {!inCountdown && !introHeld && !inStreamEnded && count > 0
             ? ` · ${index + 1} / ${count}`
             : ""}
-          {!inCountdown && !inStreamEnded
+          {!inCountdown && !introHeld && !inStreamEnded
             ? chromeVisible
               ? " · Chrome on"
               : " · Logo only"
             : ""}
         </p>
         <p className="clozzz-remote__label" aria-live="polite">
-          {inCountdown
+          {inCountdown || introHeld
             ? "Starting soon"
             : inStreamEnded
               ? live?.streamEndedMessage || "Thanks for watching"
@@ -169,6 +169,25 @@ export default function Remote({ sessionKey, sessionTitle }) {
           >
             Skip countdown
           </button>
+        ) : introHeld ? (
+          <>
+            <button
+              type="button"
+              className="clozzz-remote__btn clozzz-remote__btn--primary"
+              disabled={noLive || isBusy(primary.cmd)}
+              onClick={() => send(primary.cmd)}
+            >
+              {primary.text}
+            </button>
+            <button
+              type="button"
+              className="clozzz-remote__btn"
+              disabled={noLive || isBusy("skip_countdown")}
+              onClick={() => send("skip_countdown")}
+            >
+              Skip countdown
+            </button>
+          </>
         ) : inStreamEnded ? (
           <>
             <button
@@ -226,6 +245,7 @@ export default function Remote({ sessionKey, sessionTitle }) {
           disabled={
             noLive ||
             inCountdown ||
+            introHeld ||
             inStreamEnded ||
             isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
           }
@@ -236,7 +256,7 @@ export default function Remote({ sessionKey, sessionTitle }) {
           {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
         </button>
 
-        {status === "done" || inCountdown || inStreamEnded ? null : (
+        {status === "done" || inCountdown || introHeld || inStreamEnded ? null : (
           <button
             type="button"
             className="clozzz-remote__btn clozzz-remote__btn--ghost"
