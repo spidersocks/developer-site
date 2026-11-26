@@ -592,6 +592,14 @@ function remotePath(routine) {
   return `/clozzz-remote/${encodeURIComponent(routine.id)}`;
 }
 
+function rememberRemoteChannel(routine) {
+  try {
+    localStorage.setItem("clozzz_last_routine_id", routine.id);
+  } catch {
+    /* private mode */
+  }
+}
+
 function makeDuplicate(source, existingRoutines) {
   const codes = blankRoutine(existingRoutines);
   return {
@@ -919,6 +927,7 @@ export default function Editor({ initialCatalog }) {
                         <a
                           className="ce-btn ce-btn--open ce-btn--remote"
                           href={remotePath(routine)}
+                          onClick={() => rememberRemoteChannel(routine)}
                         >
                           Remote
                         </a>

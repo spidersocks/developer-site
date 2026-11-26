@@ -780,7 +780,7 @@ html.clozzz-stage-remote #root {
   color: var(--clozzz-cream);
   font-family: var(--clozzz-font-sans);
   overscroll-behavior-y: contain;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
 }
 
 .clozzz-remote__pull {
@@ -814,6 +814,14 @@ html.clozzz-stage-remote #root {
   font-family: var(--clozzz-font-display);
   font-size: clamp(2rem, 8vw, 2.55rem);
   font-weight: 600;
+}
+
+.clozzz-remote__channel {
+  margin: 0.15rem 0 0.35rem;
+  color: var(--clozzz-gold);
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .clozzz-remote__meta {

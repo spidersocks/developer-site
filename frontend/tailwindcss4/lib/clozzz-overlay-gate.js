@@ -56,7 +56,11 @@ export function buildSetCookie(token, opts = {}) {
 export function safeNextPath(raw, fallback = "/clozzz-remote") {
   if (typeof raw !== "string" || !raw.startsWith("/")) return fallback;
   if (raw.startsWith("//") || raw.includes("://")) return fallback;
-  if (raw.startsWith("/clozzz-remote") || raw.startsWith("/clozzz-overlay")) {
+  if (
+    raw.startsWith("/clozzz-remote") ||
+    raw.startsWith("/clozzz-routines") ||
+    raw.startsWith("/clozzz-overlay")
+  ) {
     return raw;
   }
   return fallback;
@@ -64,7 +68,7 @@ export function safeNextPath(raw, fallback = "/clozzz-remote") {
 
 /**
  * After unlock, send new devices to the remote-first mode chooser.
- * Deep links that already imply a remote session are unchanged.
+ * Deep links that already imply a remote session or routines page are unchanged.
  */
 export function postUnlockPath(raw, fallback = "/clozzz-remote/mode") {
   const next = safeNextPath(raw, fallback);
@@ -148,8 +152,8 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
 </head>
 <body>
   <main>
-    <h1>Unlock Clozzz remote</h1>
-    <p class="lead">Library and remote controls are gated. The OBS display at <strong>/clozzz-overlay</strong> stays open — no password there.</p>
+    <h1>Unlock Clozzz</h1>
+    <p class="lead">Remote and routines library are gated. The OBS display at <strong>/clozzz-overlay</strong> stays open — no password there.</p>
     ${errBlock}
     <form id="gate" method="post" action="${escapeHtml(action)}" autocomplete="current-password">
       <input type="hidden" name="next" value="${escapeHtml(next)}" />
@@ -158,7 +162,7 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
       <label class="row"><input type="checkbox" name="remember" value="1" /> Remember on this device (30 days)</label>
       <button type="submit">Unlock</button>
     </form>
-    <p class="hint">Paste <code>/clozzz-overlay</code> once into OBS Browser Source. Switch channels from the phone remote.</p>
+    <p class="hint">Paste <code>/clozzz-overlay</code> once into OBS Browser Source. Control from <code>/clozzz-remote</code>; edit routines at <code>/clozzz-routines</code>.</p>
   </main>
   <script>
     const form = document.getElementById("gate");

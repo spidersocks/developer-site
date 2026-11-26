@@ -1,7 +1,8 @@
 import React, { useState } from "react";
+import { rememberLastRoutineId } from "./Remote.jsx";
 
 const OPEN_DISPLAY = "/clozzz-overlay";
-const LIBRARY = "/clozzz-remote";
+const LIBRARY = "/clozzz-routines";
 
 function displayUrl() {
   if (typeof window === "undefined") return OPEN_DISPLAY;
@@ -11,6 +12,7 @@ function displayUrl() {
 /**
  * Post-unlock chooser — remote-first.
  * OBS uses one fixed open display URL; channel select happens on Remote.
+ * Library/editor lives at /clozzz-routines.
  */
 export default function ModeChooser({ catalog }) {
   const routines = catalog?.routines || [];
@@ -40,10 +42,10 @@ export default function ModeChooser({ catalog }) {
 
         <div className="clozzz-chooser__modes">
           <a className="clozzz-chooser__card" href={LIBRARY}>
-            <span className="clozzz-chooser__card-title">Library</span>
+            <span className="clozzz-chooser__card-title">Routines</span>
             <span className="clozzz-chooser__card-desc">
-              Edit routines, then open Remote. Channel switches update the open
-              display without changing the OBS link.
+              Library and editor — list, edit, duplicate, delete. Separate from
+              the phone remote.
             </span>
           </a>
           <button
@@ -69,6 +71,7 @@ export default function ModeChooser({ catalog }) {
                 <a
                   className="clozzz-chooser__link clozzz-chooser__link--remote"
                   href={`/clozzz-remote/${encodeURIComponent(r.id)}`}
+                  onClick={() => rememberLastRoutineId(r.id)}
                 >
                   Remote
                 </a>

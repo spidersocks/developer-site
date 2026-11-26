@@ -161,13 +161,16 @@ function clozzzOverlayGate(env) {
         return next()
       }
 
-      // Gate remote/library only — open OBS display stays ungated.
-      const isRemote =
+      // Gate remote + routines only — open OBS display stays ungated.
+      const isGated =
         url.pathname === '/clozzz-remote' ||
         url.pathname === '/clozzz-remote/' ||
-        url.pathname.startsWith('/clozzz-remote/')
+        url.pathname.startsWith('/clozzz-remote/') ||
+        url.pathname === '/clozzz-routines' ||
+        url.pathname === '/clozzz-routines/' ||
+        url.pathname.startsWith('/clozzz-routines/')
 
-      if (!isRemote || req.method !== 'GET') {
+      if (!isGated || req.method !== 'GET') {
         return next()
       }
 
@@ -203,7 +206,7 @@ function clozzzOverlayGate(env) {
 }
 
 /**
- * Dev/preview: map /clozzz-overlay and /clozzz-remote to the MPA
+ * Dev/preview: map /clozzz-overlay, /clozzz-remote, /clozzz-routines to the MPA
  * directory entry (dist/clozzz-overlay/index.html). Vite's SPA fallback would
  * otherwise steal these paths to /index.html (plaza).
  */
@@ -219,7 +222,10 @@ function clozzzOverlayRewrite() {
       path.startsWith('/clozzz-overlay/') ||
       path === '/clozzz-remote' ||
       path === '/clozzz-remote/' ||
-      path.startsWith('/clozzz-remote/')
+      path.startsWith('/clozzz-remote/') ||
+      path === '/clozzz-routines' ||
+      path === '/clozzz-routines/' ||
+      path.startsWith('/clozzz-routines/')
     ) {
       req.url = `/clozzz-overlay/index.html${query}`
     }

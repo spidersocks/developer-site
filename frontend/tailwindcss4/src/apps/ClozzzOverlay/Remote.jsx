@@ -9,20 +9,52 @@ import {
 
 const POLL_MS = 800;
 const PULL_THRESHOLD_PX = 72;
+const SWIPE_THRESHOLD_PX = 56;
+const LAST_ROUTINE_KEY = "clozzz_last_routine_id";
+
+export function readLastRoutineId() {
+  try {
+    return localStorage.getItem(LAST_ROUTINE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function rememberLastRoutineId(id) {
+  if (!id) return;
+  try {
+    localStorage.setItem(LAST_ROUTINE_KEY, id);
+  } catch {
+    /* private mode */
+  }
+}
+
+function navigateRemote(routineId, { replace = false } = {}) {
+  const path = `/clozzz-remote/${encodeURIComponent(routineId)}`;
+  if (replace) {
+    window.history.replaceState({}, "", path);
+  } else {
+    window.history.pushState({}, "", path);
+  }
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 /**
  * Mobile remote — big controls. No mirrored clock.
+ * Side-swipe switches routine channels; last channel is remembered.
  * Intro / stream-ended come from routine flags on the live snapshot.
  * @param {{
  *   sessionKey: string,
  *   sessionTitle?: string,
  *   introCountdownEnabled?: boolean,
+ *   routines?: Array<{ id: string, title?: string }>,
  * }} props
  */
 export default function Remote({
   sessionKey,
   sessionTitle,
   introCountdownEnabled: catalogIntroEnabled = false,
+  routines = [],
 }) {
   const [live, setLive] = useState(null);
   const [error, setError] = useState("");
@@ -30,8 +62,14 @@ export default function Remote({
   const [pullY, setPullY] = useState(0);
   const [pulling, setPulling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const touchStartY = useRef(0);
+  const [swipeHint, setSwipeHint] = useState("");
+  const touchStart = useRef({ x: 0, y: 0 });
+  const gesture = useRef(null); // null | "pull" | "swipe" | "ignore"
   const pullingRef = useRef(false);
+
+  const channelIds = routines.map((r) => r.id);
+  const channelIndex = channelIds.indexOf(sessionKey);
+  const canSwipe = channelIds.length > 1;
 
   const refresh = useCallback(async () => {
     try {
@@ -43,6 +81,10 @@ export default function Remote({
       setError(e.message || "Could not load live state");
       return null;
     }
+  }, [sessionKey]);
+
+  useEffect(() => {
+    rememberLastRoutineId(sessionKey);
   }, [sessionKey]);
 
   useEffect(() => {
@@ -106,20 +148,60 @@ export default function Remote({
     };
   }, [sessionKey]);
 
+  const switchChannel = useCallback(
+    (delta) => {
+      if (!canSwipe || channelIndex < 0) return;
+      const next =
+        channelIds[(channelIndex + delta + channelIds.length) % channelIds.length];
+      if (!next || next === sessionKey) return;
+      rememberLastRoutineId(next);
+      navigateRemote(next);
+    },
+    [canSwipe, channelIndex, channelIds, sessionKey]
+  );
+
   const onTouchStart = (e) => {
     if (refreshing) return;
-    if (window.scrollY > 2) return;
     const t = e.touches?.[0];
     if (!t) return;
-    touchStartY.current = t.clientY;
-    pullingRef.current = true;
+    touchStart.current = { x: t.clientX, y: t.clientY };
+    gesture.current = null;
+    pullingRef.current = false;
+    setSwipeHint("");
   };
 
   const onTouchMove = (e) => {
-    if (!pullingRef.current || refreshing) return;
+    if (refreshing) return;
     const t = e.touches?.[0];
     if (!t) return;
-    const dy = t.clientY - touchStartY.current;
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+
+    if (!gesture.current) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dx) > Math.abs(dy) && canSwipe) {
+        gesture.current = "swipe";
+        pullingRef.current = false;
+        setPulling(false);
+        setPullY(0);
+      } else if (dy > 0 && window.scrollY <= 2) {
+        gesture.current = "pull";
+        pullingRef.current = true;
+      } else {
+        gesture.current = "ignore";
+        return;
+      }
+    }
+
+    if (gesture.current === "swipe") {
+      if (e.cancelable) e.preventDefault();
+      if (Math.abs(dx) > 24) {
+        setSwipeHint(dx < 0 ? "Next channel →" : "← Previous channel");
+      }
+      return;
+    }
+
+    if (gesture.current !== "pull" || !pullingRef.current) return;
     if (dy <= 0 || window.scrollY > 2) {
       setPullY(0);
       setPulling(false);
@@ -131,7 +213,22 @@ export default function Remote({
     if (dy > 12 && e.cancelable) e.preventDefault();
   };
 
-  const onTouchEnd = async () => {
+  const onTouchEnd = async (e) => {
+    const mode = gesture.current;
+    gesture.current = null;
+    setSwipeHint("");
+
+    if (mode === "swipe") {
+      const t = e.changedTouches?.[0];
+      if (t) {
+        const dx = t.clientX - touchStart.current.x;
+        if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) {
+          switchChannel(dx < 0 ? 1 : -1);
+        }
+      }
+      return;
+    }
+
     if (!pullingRef.current) return;
     pullingRef.current = false;
     const shouldRefresh = pullY >= PULL_THRESHOLD_PX;
@@ -189,7 +286,7 @@ export default function Remote({
     primary = { cmd: "restart", text: "Restart" };
   else if (introHeld) primary = { cmd: "start", text: "Start countdown" };
 
-  const library = "/clozzz-remote";
+  const library = "/clozzz-routines";
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
   const pullHint =
@@ -221,6 +318,12 @@ export default function Remote({
       <header className="clozzz-remote__head">
         <p className="clozzz-remote__eyebrow">Clozzz remote</p>
         <h1 className="clozzz-remote__title">{sessionTitle || sessionKey}</h1>
+        {canSwipe ? (
+          <p className="clozzz-remote__channel" aria-live="polite">
+            {swipeHint ||
+              `Channel ${channelIndex + 1} of ${channelIds.length} · swipe to switch`}
+          </p>
+        ) : null}
         <p className="clozzz-remote__meta">
           {inCountdown
             ? "Pre-stream countdown"

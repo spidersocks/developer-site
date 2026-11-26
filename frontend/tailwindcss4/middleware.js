@@ -8,11 +8,16 @@ import {
 
 export const config = {
   runtime: "nodejs",
-  matcher: ["/clozzz-remote", "/clozzz-remote/:path*"],
+  matcher: [
+    "/clozzz-remote",
+    "/clozzz-remote/:path*",
+    "/clozzz-routines",
+    "/clozzz-routines/:path*",
+  ],
 };
 
 /**
- * Password gate for remote + library only.
+ * Password gate for remote + routines library only.
  * Open OBS display at /clozzz-overlay is intentionally ungated.
  * Password: CLOZZZ_OVERLAY_PASSWORD (Vercel env / .env.local). Unset = no gate.
  */
