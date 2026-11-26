@@ -78,6 +78,26 @@ export function fetchLive(routineKey) {
   return request(`/live/${encodeURIComponent(routineKey)}`);
 }
 
+/** Open OBS display: active channel + live snapshot in one poll. */
+export function fetchStudioDisplay() {
+  return request("/studio/display");
+}
+
+export function fetchStudioChannel() {
+  return request("/studio");
+}
+
+/** Remote selects which routine the open display follows. */
+export function setStudioChannel(routineId, token) {
+  const headers = {};
+  if (token) headers["X-Clozzz-Live-Token"] = token;
+  return request("/studio/channel", {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ routineId: routineId ?? null }),
+  });
+}
+
 export function postLiveCommand(routineKey, command, token, extras = {}) {
   const headers = {};
   if (token) headers["X-Clozzz-Live-Token"] = token;

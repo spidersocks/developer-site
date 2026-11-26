@@ -184,6 +184,18 @@
       "destination": "/clozzz-overlay/index.html"
     },
     {
+      "source": "/clozzz-remote",
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
+      "source": "/clozzz-remote/",
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
+      "source": "/clozzz-remote/:path*",
+      "destination": "/clozzz-overlay/index.html"
+    },
+    {
       "source": "/brightnest-api",
       "destination": "http://47.242.157.72:8000/"
     },

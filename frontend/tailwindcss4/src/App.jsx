@@ -119,10 +119,12 @@ export default function App() {
             {/* BrightNest COMP6708 A3 Demo (MPA + Vercel rewrite is primary) */}
             <Route path="/COMP6708_A3_Demo" element={<BrightNestBotDemo />} />
             <Route path="/COMP6708_A3_Demo/*" element={<BrightNestBotDemo />} />
-            {/* Clozzz OBS overlay (MPA clozzz-overlay.html is primary; SPA routes
-                keep /clozzz-overlay off the plaza catch-all if rewrite misses) */}
+            {/* Clozzz OBS overlay + gated remote (MPA entry is primary; SPA
+                routes keep paths off the plaza catch-all if rewrite misses) */}
             <Route path="/clozzz-overlay" element={<ClozzzOverlay />} />
             <Route path="/clozzz-overlay/*" element={<ClozzzOverlay />} />
+            <Route path="/clozzz-remote" element={<ClozzzOverlay />} />
+            <Route path="/clozzz-remote/*" element={<ClozzzOverlay />} />
 
             {/* 800m Calculator (with language support) */}
             <Route path="/800m-calculator" element={<EightHundredCalculatorApp lang="en" />} />

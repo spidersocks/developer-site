@@ -581,12 +581,15 @@ function EditRoutineModal({
   );
 }
 
-function obsPath(routine) {
-  return `/clozzz-overlay/${encodeURIComponent(routine.id)}`;
+const OPEN_DISPLAY_PATH = "/clozzz-overlay";
+
+function openDisplayUrl() {
+  if (typeof window === "undefined") return OPEN_DISPLAY_PATH;
+  return `${window.location.origin}${OPEN_DISPLAY_PATH}`;
 }
 
 function remotePath(routine) {
-  return `/clozzz-overlay/${encodeURIComponent(routine.id)}/remote`;
+  return `/clozzz-remote/${encodeURIComponent(routine.id)}`;
 }
 
 function makeDuplicate(source, existingRoutines) {
@@ -897,12 +900,22 @@ export default function Editor({ initialCatalog }) {
                   <div className="ce-item__actions">
                     {!routine.localOnly ? (
                       <>
-                        <a
+                        <button
+                          type="button"
                           className="ce-btn ce-btn--open ce-btn--display"
-                          href={obsPath(routine)}
+                          title="Copy the fixed OBS display URL (channel is selected on Remote)"
+                          onClick={async () => {
+                            const url = openDisplayUrl();
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              setToast("OBS display URL copied");
+                            } catch {
+                              window.prompt("Copy OBS display URL", url);
+                            }
+                          }}
                         >
-                          Display
-                        </a>
+                          Copy OBS link
+                        </button>
                         <a
                           className="ce-btn ce-btn--open ce-btn--remote"
                           href={remotePath(routine)}

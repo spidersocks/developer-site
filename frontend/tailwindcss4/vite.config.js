@@ -92,7 +92,7 @@ function clozzzOverlayGate(env) {
         const contentType = req.headers['content-type'] || ''
         let submitted = ''
         let remember = false
-        let nextPath = '/clozzz-overlay/mode'
+        let nextPath = '/clozzz-remote/mode'
 
         if (contentType.includes('application/json')) {
           try {
@@ -161,12 +161,13 @@ function clozzzOverlayGate(env) {
         return next()
       }
 
-      const isOverlay =
-        url.pathname === '/clozzz-overlay' ||
-        url.pathname === '/clozzz-overlay/' ||
-        url.pathname.startsWith('/clozzz-overlay/')
+      // Gate remote/library only — open OBS display stays ungated.
+      const isRemote =
+        url.pathname === '/clozzz-remote' ||
+        url.pathname === '/clozzz-remote/' ||
+        url.pathname.startsWith('/clozzz-remote/')
 
-      if (!isOverlay || req.method !== 'GET') {
+      if (!isRemote || req.method !== 'GET') {
         return next()
       }
 
@@ -202,7 +203,7 @@ function clozzzOverlayGate(env) {
 }
 
 /**
- * Dev/preview: map /clozzz-overlay and /clozzz-overlay/:session to the MPA
+ * Dev/preview: map /clozzz-overlay and /clozzz-remote to the MPA
  * directory entry (dist/clozzz-overlay/index.html). Vite's SPA fallback would
  * otherwise steal these paths to /index.html (plaza).
  */
@@ -212,10 +213,14 @@ function clozzzOverlayRewrite() {
     const qIndex = url.indexOf('?')
     const path = qIndex >= 0 ? url.slice(0, qIndex) : url
     const query = qIndex >= 0 ? url.slice(qIndex) : ''
-    if (path === '/clozzz-overlay' || path === '/clozzz-overlay/') {
-      req.url = `/clozzz-overlay/index.html${query}`
-    } else if (path.startsWith('/clozzz-overlay/')) {
-      // Keep deep session URLs on the overlay entry (not plaza SPA).
+    if (
+      path === '/clozzz-overlay' ||
+      path === '/clozzz-overlay/' ||
+      path.startsWith('/clozzz-overlay/') ||
+      path === '/clozzz-remote' ||
+      path === '/clozzz-remote/' ||
+      path.startsWith('/clozzz-remote/')
+    ) {
       req.url = `/clozzz-overlay/index.html${query}`
     }
     next()

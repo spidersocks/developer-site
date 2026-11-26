@@ -1,6 +1,7 @@
 /**
- * Shared Clozzz overlay gate helpers (Edge / Node / Vite).
+ * Shared Clozzz remote gate helpers (Edge / Node / Vite).
  * Password stays in CLOZZZ_OVERLAY_PASSWORD — never baked into the client bundle.
+ * Open OBS display at /clozzz-overlay is NOT gated.
  */
 
 export const COOKIE_NAME = "clozzz_overlay_gate";
@@ -52,30 +53,36 @@ export function buildSetCookie(token, opts = {}) {
 }
 
 /** Safe same-origin relative path for post-unlock redirect. */
-export function safeNextPath(raw, fallback = "/clozzz-overlay") {
+export function safeNextPath(raw, fallback = "/clozzz-remote") {
   if (typeof raw !== "string" || !raw.startsWith("/")) return fallback;
   if (raw.startsWith("//") || raw.includes("://")) return fallback;
-  if (!raw.startsWith("/clozzz-overlay")) return fallback;
-  return raw;
+  if (raw.startsWith("/clozzz-remote") || raw.startsWith("/clozzz-overlay")) {
+    return raw;
+  }
+  return fallback;
 }
 
 /**
- * After unlock on a bare library URL, send new devices to the mode chooser
- * (Display vs Remote). Deep links that already imply a mode are unchanged.
+ * After unlock, send new devices to the remote-first mode chooser.
+ * Deep links that already imply a remote session are unchanged.
  */
-export function postUnlockPath(raw, fallback = "/clozzz-overlay/mode") {
+export function postUnlockPath(raw, fallback = "/clozzz-remote/mode") {
   const next = safeNextPath(raw, fallback);
-  const pathOnly = next.split("?")[0].replace(/\/+$/, "") || "/clozzz-overlay";
-  if (pathOnly === "/clozzz-overlay") {
+  const pathOnly = next.split("?")[0].replace(/\/+$/, "") || "/clozzz-remote";
+  if (
+    pathOnly === "/clozzz-remote" ||
+    pathOnly === "/clozzz-overlay" ||
+    pathOnly === "/clozzz-overlay/mode"
+  ) {
     const qs = next.includes("?") ? next.slice(next.indexOf("?")) : "";
-    return `/clozzz-overlay/mode${qs}`;
+    return `/clozzz-remote/mode${qs}`;
   }
   return next;
 }
 
 /** Minimal gate page HTML (inline styles; no client password). */
 export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
-  const next = safeNextPath(nextPath);
+  const next = safeNextPath(nextPath, "/clozzz-remote/mode");
   const errBlock = error
     ? `<p class="err" role="alert">${escapeHtml(error)}</p>`
     : "";
@@ -89,7 +96,7 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
   <link rel="icon" type="image/png" href="/clozzz/favicon-32x32.png" sizes="32x32" />
   <link rel="icon" type="image/png" href="/clozzz/favicon-16x16.png" sizes="16x16" />
   <link rel="apple-touch-icon" href="/clozzz/apple-touch-icon.png" />
-  <title>Clozzz overlay — unlock</title>
+  <title>Clozzz remote — unlock</title>
   <style>
     :root {
       --ink: #2a2540;
@@ -141,8 +148,8 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
 </head>
 <body>
   <main>
-    <h1>Unlock Clozzz overlay</h1>
-    <p class="lead">Library and OBS sessions are gated. Enter the overlay password to continue.</p>
+    <h1>Unlock Clozzz remote</h1>
+    <p class="lead">Library and remote controls are gated. The OBS display at <strong>/clozzz-overlay</strong> stays open — no password there.</p>
     ${errBlock}
     <form id="gate" method="post" action="${escapeHtml(action)}" autocomplete="current-password">
       <input type="hidden" name="next" value="${escapeHtml(next)}" />
@@ -151,7 +158,7 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
       <label class="row"><input type="checkbox" name="remember" value="1" /> Remember on this device (30 days)</label>
       <button type="submit">Unlock</button>
     </form>
-    <p class="hint">OBS Browser Source has its own cookies — unlock once there (check Remember), or re-enter after clearing OBS cache.</p>
+    <p class="hint">Paste <code>/clozzz-overlay</code> once into OBS Browser Source. Switch channels from the phone remote.</p>
   </main>
   <script>
     const form = document.getElementById("gate");

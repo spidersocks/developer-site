@@ -615,6 +615,13 @@ html.clozzz-stage-remote #root {
   font-size: 0.95rem;
 }
 
+.clozzz-chooser__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
 .clozzz-chooser__card {
   display: block;
   text-decoration: none;
@@ -624,7 +631,50 @@ html.clozzz-stage-remote #root {
   border: 1px solid #e6e1f0;
   background: #fff;
   box-shadow: 0 8px 22px rgba(42, 37, 64, 0.08);
-  margin-bottom: 1.25rem;
+  margin-bottom: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.clozzz-chooser__card--action {
+  border-color: rgba(201, 164, 90, 0.45);
+  background: linear-gradient(180deg, #fffdf8, #fff);
+}
+
+.clozzz-chooser__code {
+  font-size: 0.85em;
+  padding: 0.05em 0.35em;
+  border-radius: 0.3em;
+  background: #eeebf6;
+  color: #514b82;
+}
+
+.clozzz-waiting {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  padding: 2rem;
+  pointer-events: none;
+}
+
+.clozzz-waiting__label {
+  margin: 0;
+  font-family: var(--clozzz-font-display);
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 600;
+  color: var(--clozzz-cream);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+}
+
+.clozzz-waiting__hint {
+  margin: 0.65rem 0 0;
+  color: rgba(245, 240, 255, 0.72);
+  font-size: clamp(0.95rem, 2vw, 1.1rem);
+  max-width: 22rem;
 }
 
 .clozzz-chooser__card-title {

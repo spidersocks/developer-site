@@ -4,6 +4,7 @@ import {
   fetchLive,
   postLiveCommand,
   readLiveToken,
+  setStudioChannel,
 } from "./api.js";
 
 const POLL_MS = 800;
@@ -57,6 +58,23 @@ export default function Remote({
       clearInterval(id);
     };
   }, [refresh]);
+
+  // Selecting a remote channel steers the open OBS display.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = (await ensureLiveToken()) || readLiveToken();
+        if (cancelled || !sessionKey) return;
+        await setStudioChannel(sessionKey, token);
+      } catch {
+        /* display still polls; live commands also set channel */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionKey]);
 
   // Optional deep-link still works: /remote?startCountdown=180
   useEffect(() => {
@@ -171,7 +189,7 @@ export default function Remote({
     primary = { cmd: "restart", text: "Restart" };
   else if (introHeld) primary = { cmd: "start", text: "Start countdown" };
 
-  const library = "/clozzz-overlay";
+  const library = "/clozzz-remote";
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
   const pullHint =

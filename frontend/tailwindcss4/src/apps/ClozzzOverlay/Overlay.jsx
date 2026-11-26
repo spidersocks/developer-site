@@ -6,13 +6,21 @@ import {
   normalizeCatalog,
   sessionTotalSec,
 } from "./routines.js";
-import { ensureLiveToken, fetchCatalog, fetchLive, rememberLiveToken } from "./api.js";
+import {
+  ensureLiveToken,
+  fetchCatalog,
+  fetchLive,
+  fetchStudioDisplay,
+  rememberLiveToken,
+} from "./api.js";
 import Editor from "./Editor.jsx";
 import Remote from "./Remote.jsx";
 import ModeChooser from "./ModeChooser.jsx";
 import "./overlay.css";
 
 const LIVE_POLL_MS = 400;
+const OPEN_DISPLAY = "/clozzz-overlay";
+const REMOTE_HOME = "/clozzz-remote";
 
 function formatClock(totalSec) {
   const sec = Math.max(0, Math.ceil(totalSec));
@@ -38,50 +46,91 @@ function stampLive(snap) {
   return { ...snap, _receivedAtMs: Date.now() };
 }
 
+function normalizePath(location = window.location) {
+  return location.pathname.replace(/\/+$/, "") || "/";
+}
+
+/** Password-gated control surface (library / remote / mode). */
+export function isRemoteSurface(location = window.location) {
+  const path = normalizePath(location);
+  return (
+    path === REMOTE_HOME ||
+    path.startsWith(`${REMOTE_HOME}/`) ||
+    // Legacy per-routine remote under overlay → still treat as remote surface.
+    /\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path)
+  );
+}
+
+/** Open dumb OBS display (no editor/remote chrome). */
+export function isOpenDisplayPath(location = window.location) {
+  const path = normalizePath(location);
+  if (isRemoteSurface(location)) return false;
+  return (
+    path === OPEN_DISPLAY ||
+    path === `${OPEN_DISPLAY}.html` ||
+    path.startsWith(`${OPEN_DISPLAY}/`) ||
+    path.startsWith(`${OPEN_DISPLAY}.html/`)
+  );
+}
+
 export function isEditorPath(location = window.location) {
-  const path = location.pathname.replace(/\/+$/, "");
-  return /\/clozzz-overlay(?:\.html)?\/edit$/i.test(path);
+  const path = normalizePath(location);
+  return (
+    /\/clozzz-remote\/edit$/i.test(path) ||
+    /\/clozzz-overlay(?:\.html)?\/edit$/i.test(path)
+  );
 }
 
 export function isModePath(location = window.location) {
-  const path = location.pathname.replace(/\/+$/, "");
-  return /\/clozzz-overlay(?:\.html)?\/mode$/i.test(path);
+  const path = normalizePath(location);
+  return (
+    /\/clozzz-remote\/mode$/i.test(path) ||
+    /\/clozzz-overlay(?:\.html)?\/mode$/i.test(path)
+  );
 }
 
 export function isRemotePath(location = window.location) {
-  const path = location.pathname.replace(/\/+$/, "");
-  return /\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path);
+  const path = normalizePath(location);
+  if (/\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path)) return true;
+  // /clozzz-remote/<id> or /clozzz-remote/<id>/remote
+  const m = path.match(/^\/clozzz-remote\/([^/]+)(?:\/remote)?$/i);
+  if (!m?.[1]) return false;
+  const key = m[1].toLowerCase();
+  return key !== "mode" && key !== "edit";
 }
 
-/** Session key from `?session=` or trailing path after /clozzz-overlay[/].html. */
+/** Decode a single path segment. */
+function decodeSeg(raw) {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Routine key for remote control.
+ * From `?session=`, `/clozzz-remote/<id>`, or legacy `/clozzz-overlay/<id>/remote`.
+ */
 export function readSessionKey(location = window.location) {
   const fromQuery = new URLSearchParams(location.search).get("session");
   if (fromQuery && fromQuery.trim()) return fromQuery.trim();
 
-  const path = location.pathname.replace(/\/+$/, "");
-  const remoteMatch = path.match(
+  const path = normalizePath(location);
+
+  const legacyRemote = path.match(
     /\/clozzz-overlay(?:\.html)?\/([^/]+)\/remote$/i
   );
-  if (remoteMatch?.[1]) {
-    try {
-      return decodeURIComponent(remoteMatch[1]);
-    } catch {
-      return remoteMatch[1];
-    }
-  }
+  if (legacyRemote?.[1]) return decodeSeg(legacyRemote[1]);
 
-  const match = path.match(/\/clozzz-overlay(?:\.html)?(?:\/([^/]+))?$/i);
-  if (match?.[1]) {
-    let key = match[1];
-    try {
-      key = decodeURIComponent(match[1]);
-    } catch {
-      /* keep raw */
-    }
+  const remote = path.match(/^\/clozzz-remote\/([^/]+)(?:\/remote)?$/i);
+  if (remote?.[1]) {
+    const key = decodeSeg(remote[1]);
     const lower = key.toLowerCase();
     if (lower === "edit" || lower === "mode") return null;
     return key;
   }
+
   return null;
 }
 
@@ -172,13 +221,31 @@ function TimerIcon() {
 
 function SessionNotFound({ keyTried }) {
   useStageClass("editor");
-  const home = "/clozzz-overlay";
   return (
     <div className="clozzz-editor">
       <div className="clozzz-editor__shell">
         <BrandLockup />
         <p style={{ marginTop: "1rem" }}>
-          Unknown session “{keyTried}”. <a href={home}>Back to routines</a>
+          Unknown session “{keyTried}”.{" "}
+          <a href={REMOTE_HOME}>Back to routines</a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Elegant idle when no channel is selected yet. */
+function WaitingChannel() {
+  useStageClass("dark");
+  return (
+    <div className="clozzz-overlay clozzz-overlay--live clozzz-overlay--waiting" aria-live="polite">
+      <header className="clozzz-corner clozzz-corner--tl">
+        <BrandLockup backed />
+      </header>
+      <div className="clozzz-waiting">
+        <p className="clozzz-waiting__label">Waiting for channel</p>
+        <p className="clozzz-waiting__hint">
+          Select a routine on the remote — this display follows.
         </p>
       </div>
     </div>
@@ -617,32 +684,119 @@ function ChooserApp({ catalog }) {
   return <ModeChooser catalog={catalog} />;
 }
 
+/**
+ * Open dumb display — always follows server active channel.
+ * Fixed URL for OBS; no editor / remote / mode chooser here.
+ * Polls /studio/display so a remote channel switch remounts without
+ * changing the Browser Source URL.
+ */
+function OpenDisplayApp() {
+  const [payload, setPayload] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pull = () => {
+      fetchStudioDisplay()
+        .then((data) => {
+          if (!cancelled) setPayload(data);
+        })
+        .catch(() => {
+          /* keep last */
+        });
+    };
+    pull();
+    const poll = setInterval(pull, LIVE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+    };
+  }, []);
+
+  if (!payload) {
+    return <div className="clozzz-overlay clozzz-overlay--live" aria-busy="true" />;
+  }
+
+  const rid = payload.activeRoutineId;
+  const routine = payload.routine;
+  if (!rid || !routine) {
+    return <WaitingChannel />;
+  }
+
+  const session = {
+    id: routine.id,
+    name: routine.name || routine.id,
+    title: routine.title || routine.name || routine.id,
+    introCountdownEnabled: Boolean(routine.introCountdownEnabled),
+    introCountdownSec: routine.introCountdownSec,
+    segments: routine.segments || [],
+  };
+
+  return (
+    <RunningOverlay
+      key={session.id}
+      session={session}
+      sessionKey={session.id}
+    />
+  );
+}
+
 export default function Overlay() {
   const [sessionKey, setSessionKey] = useState(() => readSessionKey());
   const [remote, setRemote] = useState(() => isRemotePath());
   const [modePage, setModePage] = useState(() => isModePath());
+  const [openDisplay, setOpenDisplay] = useState(() => isOpenDisplayPath());
   const { catalog, ready } = useCatalog();
 
   useEffect(() => {
-    // Capture liveToken if auth page left it on the URL hash/query (legacy) —
-    // primary path is unlock JSON + ensureLiveToken.
     ensureLiveToken().then((token) => {
       if (token) rememberLiveToken(token);
     });
   }, []);
 
   useEffect(() => {
-    // Old /edit URL → library at base route.
+    // Canonicalize legacy / per-id overlay URLs onto the single open display.
+    const path = normalizePath();
     if (isEditorPath()) {
-      window.history.replaceState({}, "", "/clozzz-overlay");
+      window.history.replaceState({}, "", REMOTE_HOME);
       setSessionKey(null);
       setRemote(false);
       setModePage(false);
+      setOpenDisplay(false);
+    } else if (/\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path)) {
+      const key = readSessionKey();
+      if (key) {
+        window.history.replaceState(
+          {},
+          "",
+          `${REMOTE_HOME}/${encodeURIComponent(key)}`
+        );
+      }
+      setRemote(true);
+      setOpenDisplay(false);
+      setModePage(false);
+      setSessionKey(key);
+    } else if (
+      isOpenDisplayPath() &&
+      path !== OPEN_DISPLAY &&
+      path !== `${OPEN_DISPLAY}.html`
+    ) {
+      // /clozzz-overlay/<id> → fixed open display (channel comes from remote).
+      window.history.replaceState({}, "", OPEN_DISPLAY);
+      setOpenDisplay(true);
+      setRemote(false);
+      setModePage(false);
+      setSessionKey(null);
+    } else if (path === "/clozzz-overlay/mode") {
+      window.history.replaceState({}, "", `${REMOTE_HOME}/mode`);
+      setModePage(true);
+      setOpenDisplay(false);
     }
+
     const sync = () => {
       setSessionKey(readSessionKey());
       setRemote(isRemotePath());
       setModePage(isModePath());
+      setOpenDisplay(isOpenDisplayPath());
     };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
@@ -653,10 +807,12 @@ export default function Overlay() {
     return findSessionIn(catalog.routines, sessionKey);
   }, [catalog, sessionKey]);
 
+  // Open OBS display — never shows library/remote.
+  if (openDisplay && !remote && !modePage) {
+    return <OpenDisplayApp />;
+  }
+
   if (!ready) {
-    if (sessionKey && !remote && !modePage) {
-      return <div className="clozzz-overlay clozzz-overlay--live" aria-busy="true" />;
-    }
     return <LibraryLoading />;
   }
 
@@ -664,25 +820,15 @@ export default function Overlay() {
     return <ChooserApp catalog={catalog} />;
   }
 
-  if (!sessionKey) {
-    return <LibraryApp catalog={catalog} />;
-  }
-
-  if (!resolvedSession) {
-    return <SessionNotFound keyTried={sessionKey} />;
-  }
-
   if (remote) {
+    if (!resolvedSession) {
+      return <SessionNotFound keyTried={sessionKey || "?"} />;
+    }
     return (
       <RemoteApp sessionKey={resolvedSession.id} catalog={catalog} />
     );
   }
 
-  return (
-    <RunningOverlay
-      key={resolvedSession.id}
-      session={resolvedSession}
-      sessionKey={resolvedSession.id}
-    />
-  );
+  // /clozzz-remote library
+  return <LibraryApp catalog={catalog} />;
 }
