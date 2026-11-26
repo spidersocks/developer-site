@@ -1,0 +1,24 @@
+{
+  "name": "Clozzz Overlay",
+  "short_name": "Clozzz Overlay",
+  "description": "Chromeless evening-routine timer overlay for OBS Browser Source.",
+  "start_url": "/clozzz-overlay",
+  "scope": "/clozzz-overlay",
+  "display": "standalone",
+  "background_color": "#120e22",
+  "theme_color": "#120e22",
+  "icons": [
+    {
+      "src": "/clozzz/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/clozzz/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

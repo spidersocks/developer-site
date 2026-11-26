@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { rememberLastRoutineId } from "./Remote.jsx";
 
 const OPEN_DISPLAY = "/clozzz-overlay";
-const LIBRARY = "/clozzz-routines";
 
 function displayUrl() {
   if (typeof window === "undefined") return OPEN_DISPLAY;
@@ -10,9 +9,8 @@ function displayUrl() {
 }
 
 /**
- * Post-unlock chooser — remote-first.
- * OBS uses one fixed open display URL; channel select happens on Remote.
- * Library/editor lives at /clozzz-routines.
+ * Remote-only channel picker (post-unlock fallback).
+ * Hard isolation: no links into routines/editor — open that URL deliberately.
  */
 export default function ModeChooser({ catalog }) {
   const routines = catalog?.routines || [];
@@ -35,19 +33,11 @@ export default function ModeChooser({ catalog }) {
         <p className="clozzz-chooser__eyebrow">Clozzz Sleep</p>
         <h1 className="clozzz-chooser__title">Remote control</h1>
         <p className="clozzz-chooser__lead">
-          Unlock once on this phone. Pick a routine below — the OBS display
-          follows that channel. Browser Source stays fixed at{" "}
-          <code className="clozzz-chooser__code">{OPEN_DISPLAY}</code>.
+          Pick a channel. The OBS display follows it. Browser Source stays fixed
+          at <code className="clozzz-chooser__code">{OPEN_DISPLAY}</code>.
         </p>
 
         <div className="clozzz-chooser__modes">
-          <a className="clozzz-chooser__card" href={LIBRARY}>
-            <span className="clozzz-chooser__card-title">Routines</span>
-            <span className="clozzz-chooser__card-desc">
-              Library and editor — list, edit, duplicate, delete. Separate from
-              the phone remote.
-            </span>
-          </a>
           <button
             type="button"
             className="clozzz-chooser__card clozzz-chooser__card--action"
@@ -73,7 +63,7 @@ export default function ModeChooser({ catalog }) {
                   href={`/clozzz-remote/${encodeURIComponent(r.id)}`}
                   onClick={() => rememberLastRoutineId(r.id)}
                 >
-                  Remote
+                  Open
                 </a>
               </span>
             </li>

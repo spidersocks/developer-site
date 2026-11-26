@@ -588,18 +588,6 @@ function openDisplayUrl() {
   return `${window.location.origin}${OPEN_DISPLAY_PATH}`;
 }
 
-function remotePath(routine) {
-  return `/clozzz-remote/${encodeURIComponent(routine.id)}`;
-}
-
-function rememberRemoteChannel(routine) {
-  try {
-    localStorage.setItem("clozzz_last_routine_id", routine.id);
-  } catch {
-    /* private mode */
-  }
-}
-
 function makeDuplicate(source, existingRoutines) {
   const codes = blankRoutine(existingRoutines);
   return {
@@ -907,31 +895,22 @@ export default function Editor({ initialCatalog }) {
                   </div>
                   <div className="ce-item__actions">
                     {!routine.localOnly ? (
-                      <>
-                        <button
-                          type="button"
-                          className="ce-btn ce-btn--open ce-btn--display"
-                          title="Copy the fixed OBS display URL (channel is selected on Remote)"
-                          onClick={async () => {
-                            const url = openDisplayUrl();
-                            try {
-                              await navigator.clipboard.writeText(url);
-                              setToast("OBS display URL copied");
-                            } catch {
-                              window.prompt("Copy OBS display URL", url);
-                            }
-                          }}
-                        >
-                          Copy OBS link
-                        </button>
-                        <a
-                          className="ce-btn ce-btn--open ce-btn--remote"
-                          href={remotePath(routine)}
-                          onClick={() => rememberRemoteChannel(routine)}
-                        >
-                          Remote
-                        </a>
-                      </>
+                      <button
+                        type="button"
+                        className="ce-btn ce-btn--open ce-btn--display"
+                        title="Copy the fixed OBS display URL"
+                        onClick={async () => {
+                          const url = openDisplayUrl();
+                          try {
+                            await navigator.clipboard.writeText(url);
+                            setToast("OBS display URL copied");
+                          } catch {
+                            window.prompt("Copy OBS display URL", url);
+                          }
+                        }}
+                      >
+                        Copy OBS link
+                      </button>
                     ) : null}
                     <OverflowMenu
                       open={menuKey === `routine:${routine.id}`}

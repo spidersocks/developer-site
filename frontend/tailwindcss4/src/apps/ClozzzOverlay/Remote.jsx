@@ -11,6 +11,8 @@ const POLL_MS = 800;
 const PULL_THRESHOLD_PX = 72;
 const SWIPE_THRESHOLD_PX = 56;
 const LAST_ROUTINE_KEY = "clozzz_last_routine_id";
+const SWIPE_EXIT_MS = 280;
+const SWIPE_ENTER_MS = 340;
 
 export function readLastRoutineId() {
   try {
@@ -40,15 +42,9 @@ function navigateRemote(routineId, { replace = false } = {}) {
 }
 
 /**
- * Mobile remote — big controls. No mirrored clock.
- * Side-swipe switches routine channels; last channel is remembered.
- * Intro / stream-ended come from routine flags on the live snapshot.
- * @param {{
- *   sessionKey: string,
- *   sessionTitle?: string,
- *   introCountdownEnabled?: boolean,
- *   routines?: Array<{ id: string, title?: string }>,
- * }} props
+ * Control-only remote — no library/editor links.
+ * Mobile: side-swipe channels with springy stage animation.
+ * Desktop: sidebar channel list + keyboard-friendly control panel.
  */
 export default function Remote({
   sessionKey,
@@ -63,9 +59,15 @@ export default function Remote({
   const [pulling, setPulling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [swipeHint, setSwipeHint] = useState("");
+  const [slideX, setSlideX] = useState(0);
+  const [slideOpacity, setSlideOpacity] = useState(1);
+  const [slideTransition, setSlideTransition] = useState(false);
   const touchStart = useRef({ x: 0, y: 0 });
   const gesture = useRef(null); // null | "pull" | "swipe" | "ignore"
   const pullingRef = useRef(false);
+  const pendingDelta = useRef(null);
+  const enterAfterKey = useRef(null);
+  const stageRef = useRef(null);
 
   const channelIds = routines.map((r) => r.id);
   const channelIndex = channelIds.indexOf(sessionKey);
@@ -101,7 +103,6 @@ export default function Remote({
     };
   }, [refresh]);
 
-  // Selecting a remote channel steers the open OBS display.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,7 +119,28 @@ export default function Remote({
     };
   }, [sessionKey]);
 
-  // Optional deep-link still works: /remote?startCountdown=180
+  // Enter animation after a channel commit.
+  useEffect(() => {
+    if (!enterAfterKey.current) return;
+    if (enterAfterKey.current !== sessionKey) return;
+    enterAfterKey.current = null;
+    const from = pendingDelta.current;
+    pendingDelta.current = null;
+    const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
+    const startX = from < 0 ? width * 0.28 : -width * 0.28;
+    setSlideTransition(false);
+    setSlideX(startX);
+    setSlideOpacity(0.55);
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        setSlideTransition(true);
+        setSlideX(0);
+        setSlideOpacity(1);
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [sessionKey]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("startCountdown");
@@ -160,18 +182,45 @@ export default function Remote({
     [canSwipe, channelIndex, channelIds, sessionKey]
   );
 
+  const selectChannel = useCallback((id) => {
+    if (!id || id === sessionKey) return;
+    rememberLastRoutineId(id);
+    navigateRemote(id);
+  }, [sessionKey]);
+
+  const commitSwipe = useCallback(
+    (delta) => {
+      if (!canSwipe || channelIndex < 0 || pendingDelta.current != null) return;
+      const next =
+        channelIds[(channelIndex + delta + channelIds.length) % channelIds.length];
+      if (!next || next === sessionKey) return;
+      const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
+      pendingDelta.current = delta;
+      enterAfterKey.current = next;
+      setSlideTransition(true);
+      setSlideX(delta < 0 ? -width * 0.55 : width * 0.55);
+      setSlideOpacity(0);
+      window.setTimeout(() => {
+        rememberLastRoutineId(next);
+        navigateRemote(next);
+      }, SWIPE_EXIT_MS);
+    },
+    [canSwipe, channelIndex, channelIds, sessionKey]
+  );
+
   const onTouchStart = (e) => {
-    if (refreshing) return;
+    if (refreshing || pendingDelta.current != null) return;
     const t = e.touches?.[0];
     if (!t) return;
     touchStart.current = { x: t.clientX, y: t.clientY };
     gesture.current = null;
     pullingRef.current = false;
     setSwipeHint("");
+    setSlideTransition(false);
   };
 
   const onTouchMove = (e) => {
-    if (refreshing) return;
+    if (refreshing || pendingDelta.current != null) return;
     const t = e.touches?.[0];
     if (!t) return;
     const dx = t.clientX - touchStart.current.x;
@@ -195,6 +244,9 @@ export default function Remote({
 
     if (gesture.current === "swipe") {
       if (e.cancelable) e.preventDefault();
+      const damp = dx * 0.92;
+      setSlideX(damp);
+      setSlideOpacity(Math.max(0.42, 1 - Math.abs(damp) / 420));
       if (Math.abs(dx) > 24) {
         setSwipeHint(dx < 0 ? "Next channel →" : "← Previous channel");
       }
@@ -223,7 +275,11 @@ export default function Remote({
       if (t) {
         const dx = t.clientX - touchStart.current.x;
         if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) {
-          switchChannel(dx < 0 ? 1 : -1);
+          commitSwipe(dx < 0 ? 1 : -1);
+        } else {
+          setSlideTransition(true);
+          setSlideX(0);
+          setSlideOpacity(1);
         }
       }
       return;
@@ -263,11 +319,29 @@ export default function Remote({
     }
   };
 
+  // Desktop keyboard: ←/→ channels, Space primary when focused on shell.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || e.target?.isContentEditable) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        switchChannel(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        switchChannel(1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [switchChannel]);
+
   const status = live?.status || "idle";
   const inCountdown = status === "countdown";
   const inStreamEnded = status === "stream_ended";
   const chromeVisible = live?.chromeVisible !== false;
-  // Bridge stale live snapshots that lag an editor intro toggle.
   const introEnabled =
     Boolean(live?.introCountdownEnabled) ||
     (status === "idle" &&
@@ -286,7 +360,6 @@ export default function Remote({
     primary = { cmd: "restart", text: "Restart" };
   else if (introHeld) primary = { cmd: "start", text: "Start countdown" };
 
-  const library = "/clozzz-routines";
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
   const pullHint =
@@ -296,6 +369,155 @@ export default function Remote({
         ? "Pull to refresh"
         : "";
 
+  const statusLine = (() => {
+    let line = inCountdown
+      ? "Pre-stream countdown"
+      : introHeld
+        ? "Countdown held — waiting for Start"
+        : inStreamEnded
+          ? "Stream ended"
+          : status === "done"
+            ? "Routine complete"
+            : status === "idle"
+              ? "Armed — waiting for Start"
+              : status === "paused"
+                ? "Paused"
+                : "Live";
+    if (!inCountdown && !introHeld && !inStreamEnded && count > 0) {
+      line += ` · ${index + 1} / ${count}`;
+    }
+    if (!inCountdown && !introHeld && !inStreamEnded) {
+      line += chromeVisible ? " · Chrome on" : " · Logo only";
+    }
+    return line;
+  })();
+
+  const nowLabel =
+    inCountdown || introHeld
+      ? "Starting soon"
+      : inStreamEnded
+        ? live?.streamEndedMessage || "Thanks for watching"
+        : status === "done"
+          ? "Done"
+          : label;
+
+  const stageStyle = {
+    transform: `translate3d(${slideX}px, 0, 0)`,
+    opacity: slideOpacity,
+    transition: slideTransition
+      ? `transform ${slideX === 0 ? SWIPE_ENTER_MS : SWIPE_EXIT_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${slideX === 0 ? SWIPE_ENTER_MS : SWIPE_EXIT_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
+      : "none",
+  };
+
+  const controls = (
+    <div className="clozzz-remote__pad">
+      {inCountdown ? (
+        <button
+          type="button"
+          className="clozzz-remote__btn clozzz-remote__btn--primary"
+          disabled={noLive || isBusy("skip_countdown")}
+          onClick={() => send("skip_countdown")}
+        >
+          Skip countdown
+        </button>
+      ) : introHeld ? (
+        <>
+          <button
+            type="button"
+            className="clozzz-remote__btn clozzz-remote__btn--primary"
+            disabled={noLive || isBusy(primary.cmd)}
+            onClick={() => send(primary.cmd)}
+          >
+            {primary.text}
+          </button>
+          <button
+            type="button"
+            className="clozzz-remote__btn"
+            disabled={noLive || isBusy("skip_countdown")}
+            onClick={() => send("skip_countdown")}
+          >
+            Skip countdown
+          </button>
+        </>
+      ) : inStreamEnded ? (
+        <>
+          <button
+            type="button"
+            className="clozzz-remote__btn clozzz-remote__btn--primary"
+            disabled={noLive || isBusy("skip_stream_ended")}
+            onClick={() => send("skip_stream_ended")}
+          >
+            Dismiss ended screen
+          </button>
+          <button
+            type="button"
+            className="clozzz-remote__btn"
+            disabled={noLive || isBusy("restart")}
+            onClick={() => send("restart")}
+          >
+            Restart
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="clozzz-remote__btn clozzz-remote__btn--primary"
+            disabled={noLive || isBusy(primary.cmd)}
+            onClick={() => send(primary.cmd)}
+          >
+            {primary.text}
+          </button>
+          <div className="clozzz-remote__row">
+            <button
+              type="button"
+              className="clozzz-remote__btn"
+              disabled={noLive || status === "done" || isBusy("back")}
+              onClick={() => send("back")}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              className="clozzz-remote__btn"
+              disabled={noLive || status === "done" || isBusy("skip")}
+              onClick={() => send("skip")}
+            >
+              Skip
+            </button>
+          </div>
+        </>
+      )}
+
+      <p className="clozzz-remote__section">Overlay</p>
+      <button
+        type="button"
+        className="clozzz-remote__btn"
+        disabled={
+          noLive ||
+          inCountdown ||
+          introHeld ||
+          inStreamEnded ||
+          isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
+        }
+        onClick={() => send(chromeVisible ? "hide_chrome" : "show_chrome")}
+      >
+        {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
+      </button>
+
+      {status === "done" || inCountdown || introHeld || inStreamEnded ? null : (
+        <button
+          type="button"
+          className="clozzz-remote__btn clozzz-remote__btn--ghost"
+          disabled={noLive || isBusy("restart")}
+          onClick={() => send("restart")}
+        >
+          Reset to start
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div
       className="clozzz-remote"
@@ -304,178 +526,71 @@ export default function Remote({
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
     >
-      <div
-        className={`clozzz-remote__pull${pulling || refreshing ? " is-active" : ""}`}
-        style={{
-          height: refreshing ? 48 : pullY,
-          opacity: pulling || refreshing ? 1 : 0,
-        }}
-        aria-hidden="true"
-      >
-        <span>{refreshing ? "Refreshing…" : pullHint}</span>
-      </div>
-
-      <header className="clozzz-remote__head">
-        <p className="clozzz-remote__eyebrow">Clozzz remote</p>
-        <h1 className="clozzz-remote__title">{sessionTitle || sessionKey}</h1>
-        {canSwipe ? (
-          <p className="clozzz-remote__channel" aria-live="polite">
-            {swipeHint ||
-              `Channel ${channelIndex + 1} of ${channelIds.length} · swipe to switch`}
-          </p>
-        ) : null}
-        <p className="clozzz-remote__meta">
-          {inCountdown
-            ? "Pre-stream countdown"
-            : introHeld
-              ? "Countdown held — waiting for Start"
-              : inStreamEnded
-                ? "Stream ended"
-                : status === "done"
-                  ? "Routine complete"
-                  : status === "idle"
-                    ? "Armed — waiting for Start"
-                    : status === "paused"
-                      ? "Paused"
-                      : "Live"}
-          {!inCountdown && !introHeld && !inStreamEnded && count > 0
-            ? ` · ${index + 1} / ${count}`
-            : ""}
-          {!inCountdown && !introHeld && !inStreamEnded
-            ? chromeVisible
-              ? " · Chrome on"
-              : " · Logo only"
-            : ""}
-        </p>
-        <p className="clozzz-remote__label" aria-live="polite">
-          {inCountdown || introHeld
-            ? "Starting soon"
-            : inStreamEnded
-              ? live?.streamEndedMessage || "Thanks for watching"
-              : status === "done"
-                ? "Done"
-                : label}
-        </p>
-      </header>
-
-      {error ? (
-        <p className="clozzz-remote__error" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="clozzz-remote__pad">
-        {inCountdown ? (
-          <button
-            type="button"
-            className="clozzz-remote__btn clozzz-remote__btn--primary"
-            disabled={noLive || isBusy("skip_countdown")}
-            onClick={() => send("skip_countdown")}
-          >
-            Skip countdown
-          </button>
-        ) : introHeld ? (
-          <>
-            <button
-              type="button"
-              className="clozzz-remote__btn clozzz-remote__btn--primary"
-              disabled={noLive || isBusy(primary.cmd)}
-              onClick={() => send(primary.cmd)}
-            >
-              {primary.text}
-            </button>
-            <button
-              type="button"
-              className="clozzz-remote__btn"
-              disabled={noLive || isBusy("skip_countdown")}
-              onClick={() => send("skip_countdown")}
-            >
-              Skip countdown
-            </button>
-          </>
-        ) : inStreamEnded ? (
-          <>
-            <button
-              type="button"
-              className="clozzz-remote__btn clozzz-remote__btn--primary"
-              disabled={noLive || isBusy("skip_stream_ended")}
-              onClick={() => send("skip_stream_ended")}
-            >
-              Dismiss ended screen
-            </button>
-            <button
-              type="button"
-              className="clozzz-remote__btn"
-              disabled={noLive || isBusy("restart")}
-              onClick={() => send("restart")}
-            >
-              Restart
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="clozzz-remote__btn clozzz-remote__btn--primary"
-              disabled={noLive || isBusy(primary.cmd)}
-              onClick={() => send(primary.cmd)}
-            >
-              {primary.text}
-            </button>
-            <div className="clozzz-remote__row">
+      <aside className="clozzz-remote__sidebar" aria-label="Channels">
+        <p className="clozzz-remote__sidebar-eyebrow">Channels</p>
+        <ul className="clozzz-remote__channel-list">
+          {routines.map((r, i) => (
+            <li key={r.id}>
               <button
                 type="button"
-                className="clozzz-remote__btn"
-                disabled={noLive || status === "done" || isBusy("back")}
-                onClick={() => send("back")}
+                className={`clozzz-remote__channel-item${
+                  r.id === sessionKey ? " is-active" : ""
+                }`}
+                onClick={() => selectChannel(r.id)}
+                aria-current={r.id === sessionKey ? "true" : undefined}
               >
-                Back
+                <span className="clozzz-remote__channel-index">{i + 1}</span>
+                <span className="clozzz-remote__channel-name">
+                  {r.title || r.id}
+                </span>
               </button>
-              <button
-                type="button"
-                className="clozzz-remote__btn"
-                disabled={noLive || status === "done" || isBusy("skip")}
-                onClick={() => send("skip")}
-              >
-                Skip
-              </button>
-            </div>
-          </>
-        )}
+            </li>
+          ))}
+        </ul>
+        <p className="clozzz-remote__sidebar-hint">← → to switch</p>
+      </aside>
 
-        <p className="clozzz-remote__section">Overlay</p>
-        <button
-          type="button"
-          className="clozzz-remote__btn"
-          disabled={
-            noLive ||
-            inCountdown ||
-            introHeld ||
-            inStreamEnded ||
-            isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
-          }
-          onClick={() =>
-            send(chromeVisible ? "hide_chrome" : "show_chrome")
-          }
+      <div className="clozzz-remote__panel">
+        <div
+          className={`clozzz-remote__pull${pulling || refreshing ? " is-active" : ""}`}
+          style={{
+            height: refreshing ? 48 : pullY,
+            opacity: pulling || refreshing ? 1 : 0,
+          }}
+          aria-hidden="true"
         >
-          {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
-        </button>
+          <span>{refreshing ? "Refreshing…" : pullHint}</span>
+        </div>
 
-        {status === "done" || inCountdown || introHeld || inStreamEnded ? null : (
-          <button
-            type="button"
-            className="clozzz-remote__btn clozzz-remote__btn--ghost"
-            disabled={noLive || isBusy("restart")}
-            onClick={() => send("restart")}
-          >
-            Reset to start
-          </button>
-        )}
+        <div
+          ref={stageRef}
+          className="clozzz-remote__stage"
+          style={stageStyle}
+        >
+          <header className="clozzz-remote__head">
+            <p className="clozzz-remote__eyebrow">Clozzz remote</p>
+            <h1 className="clozzz-remote__title">{sessionTitle || sessionKey}</h1>
+            {canSwipe ? (
+              <p className="clozzz-remote__channel clozzz-remote__channel--mobile" aria-live="polite">
+                {swipeHint ||
+                  `Channel ${channelIndex + 1} of ${channelIds.length} · swipe to switch`}
+              </p>
+            ) : null}
+            <p className="clozzz-remote__meta">{statusLine}</p>
+            <p className="clozzz-remote__label" aria-live="polite">
+              {nowLabel}
+            </p>
+          </header>
+
+          {error ? (
+            <p className="clozzz-remote__error" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {controls}
+        </div>
       </div>
-
-      <footer className="clozzz-remote__foot">
-        <a href={library}>All routines</a>
-      </footer>
     </div>
   );
 }

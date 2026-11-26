@@ -19,6 +19,7 @@ import Remote, {
   rememberLastRoutineId,
 } from "./Remote.jsx";
 import ModeChooser from "./ModeChooser.jsx";
+import { applyClozzzPwa, detectClozzzPwaSurface } from "./pwa.js";
 import "./overlay.css";
 
 const LIVE_POLL_MS = 400;
@@ -773,6 +774,10 @@ export default function Overlay() {
   }, []);
 
   useEffect(() => {
+    applyClozzzPwa(detectClozzzPwaSurface());
+  }, [remote, bareRemote, routinesPage, modePage, openDisplay, sessionKey]);
+
+  useEffect(() => {
     // Canonicalize legacy / per-id overlay URLs onto the single open display.
     const path = normalizePath();
     if (isEditorPath()) {
@@ -825,6 +830,7 @@ export default function Overlay() {
       setRoutinesPage(isRoutinesSurface());
       setModePage(isModePath());
       setOpenDisplay(isOpenDisplayPath());
+      applyClozzzPwa(detectClozzzPwaSurface());
     };
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);

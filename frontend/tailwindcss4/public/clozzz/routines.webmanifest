@@ -1,0 +1,24 @@
+{
+  "name": "Clozzz Routines",
+  "short_name": "Clozzz Routines",
+  "description": "Password-gated evening exercise routine library and editor.",
+  "start_url": "/clozzz-routines",
+  "scope": "/clozzz-routines",
+  "display": "standalone",
+  "background_color": "#f6f4fb",
+  "theme_color": "#514b82",
+  "icons": [
+    {
+      "src": "/clozzz/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/clozzz/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Clozzz Remote",
+  "short_name": "Clozzz Remote",
+  "description": "Password-gated phone/desktop remote for Clozzz studio channels.",
+  "start_url": "/clozzz-remote",
+  "scope": "/clozzz-remote",
+  "display": "standalone",
+  "background_color": "#120e22",
+  "theme_color": "#120e22",
+  "icons": [
+    {
+      "src": "/clozzz/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/clozzz/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
