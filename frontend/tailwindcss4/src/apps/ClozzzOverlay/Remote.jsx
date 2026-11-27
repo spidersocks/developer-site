@@ -9,10 +9,16 @@ import {
 
 const POLL_MS = 800;
 const PULL_THRESHOLD_PX = 72;
-const SWIPE_THRESHOLD_PX = 56;
 const LAST_ROUTINE_KEY = "clozzz_last_routine_id";
-const SWIPE_EXIT_MS = 280;
-const SWIPE_ENTER_MS = 340;
+/** Premium carousel settle — slow enough to read as weight, not a hard cut. */
+const SWIPE_SETTLE_MS = 520;
+const SWIPE_ENTER_MS = 560;
+/** Distance threshold as fraction of stage width (or absolute floor). */
+const SWIPE_DISTANCE_RATIO = 0.22;
+const SWIPE_DISTANCE_MIN_PX = 64;
+/** Flick speed (px/ms) that commits even on a short drag. */
+const FLICK_SPEED = 0.45;
+const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export function readLastRoutineId() {
   try {
@@ -42,9 +48,8 @@ function navigateRemote(routineId, { replace = false } = {}) {
 }
 
 /**
- * Control-only remote — no library/editor links.
- * Mobile: side-swipe channels with springy stage animation.
- * Desktop: sidebar channel list + keyboard-friendly control panel.
+ * Control remote — mobile loop swipe + desktop sidebar.
+ * Finger left → next channel (content exits left, next enters from right).
  */
 export default function Remote({
   sessionKey,
@@ -62,7 +67,8 @@ export default function Remote({
   const [slideX, setSlideX] = useState(0);
   const [slideOpacity, setSlideOpacity] = useState(1);
   const [slideTransition, setSlideTransition] = useState(false);
-  const touchStart = useRef({ x: 0, y: 0 });
+  const touchStart = useRef({ x: 0, y: 0, t: 0 });
+  const samples = useRef([]);
   const gesture = useRef(null); // null | "pull" | "swipe" | "ignore"
   const pullingRef = useRef(false);
   const pendingDelta = useRef(null);
@@ -111,7 +117,7 @@ export default function Remote({
         if (cancelled || !sessionKey) return;
         await setStudioChannel(sessionKey, token);
       } catch {
-        /* display still polls; live commands also set channel */
+        /* display still polls */
       }
     })();
     return () => {
@@ -119,18 +125,18 @@ export default function Remote({
     };
   }, [sessionKey]);
 
-  // Enter animation after a channel commit.
+  // Enter from the opposite edge after a committed swipe (looping carousel).
   useEffect(() => {
-    if (!enterAfterKey.current) return;
-    if (enterAfterKey.current !== sessionKey) return;
+    if (!enterAfterKey.current || enterAfterKey.current !== sessionKey) return;
     enterAfterKey.current = null;
     const from = pendingDelta.current;
     pendingDelta.current = null;
     const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
-    const startX = from < 0 ? width * 0.28 : -width * 0.28;
+    // next (from > 0): enter from right; prev: enter from left
+    const startX = from > 0 ? width * 0.38 : -width * 0.38;
     setSlideTransition(false);
     setSlideX(startX);
-    setSlideOpacity(0.55);
+    setSlideOpacity(0.5);
     let raf = requestAnimationFrame(() => {
       raf = requestAnimationFrame(() => {
         setSlideTransition(true);
@@ -182,11 +188,14 @@ export default function Remote({
     [canSwipe, channelIndex, channelIds, sessionKey]
   );
 
-  const selectChannel = useCallback((id) => {
-    if (!id || id === sessionKey) return;
-    rememberLastRoutineId(id);
-    navigateRemote(id);
-  }, [sessionKey]);
+  const selectChannel = useCallback(
+    (id) => {
+      if (!id || id === sessionKey) return;
+      rememberLastRoutineId(id);
+      navigateRemote(id);
+    },
+    [sessionKey]
+  );
 
   const commitSwipe = useCallback(
     (delta) => {
@@ -198,21 +207,30 @@ export default function Remote({
       pendingDelta.current = delta;
       enterAfterKey.current = next;
       setSlideTransition(true);
-      setSlideX(delta < 0 ? -width * 0.55 : width * 0.55);
+      // Finger left (next, delta>0): content exits left. Finger right: exits right.
+      setSlideX(delta > 0 ? -width : width);
       setSlideOpacity(0);
       window.setTimeout(() => {
         rememberLastRoutineId(next);
         navigateRemote(next);
-      }, SWIPE_EXIT_MS);
+      }, SWIPE_SETTLE_MS);
     },
     [canSwipe, channelIndex, channelIds, sessionKey]
   );
+
+  const snapBack = useCallback(() => {
+    setSlideTransition(true);
+    setSlideX(0);
+    setSlideOpacity(1);
+  }, []);
 
   const onTouchStart = (e) => {
     if (refreshing || pendingDelta.current != null) return;
     const t = e.touches?.[0];
     if (!t) return;
-    touchStart.current = { x: t.clientX, y: t.clientY };
+    const now = performance.now();
+    touchStart.current = { x: t.clientX, y: t.clientY, t: now };
+    samples.current = [{ x: t.clientX, t: now }];
     gesture.current = null;
     pullingRef.current = false;
     setSwipeHint("");
@@ -223,8 +241,11 @@ export default function Remote({
     if (refreshing || pendingDelta.current != null) return;
     const t = e.touches?.[0];
     if (!t) return;
+    const now = performance.now();
     const dx = t.clientX - touchStart.current.x;
     const dy = t.clientY - touchStart.current.y;
+    samples.current.push({ x: t.clientX, t: now });
+    if (samples.current.length > 8) samples.current.shift();
 
     if (!gesture.current) {
       if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
@@ -244,10 +265,12 @@ export default function Remote({
 
     if (gesture.current === "swipe") {
       if (e.cancelable) e.preventDefault();
-      const damp = dx * 0.92;
-      setSlideX(damp);
-      setSlideOpacity(Math.max(0.42, 1 - Math.abs(damp) / 420));
-      if (Math.abs(dx) > 24) {
+      // 1:1 with finger — premium carousels follow the hand, no lag/smoothing.
+      setSlideX(dx);
+      const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
+      const fade = Math.max(0.55, 1 - Math.abs(dx) / (width * 1.35));
+      setSlideOpacity(fade);
+      if (Math.abs(dx) > 20) {
         setSwipeHint(dx < 0 ? "Next channel →" : "← Previous channel");
       }
       return;
@@ -265,6 +288,18 @@ export default function Remote({
     if (dy > 12 && e.cancelable) e.preventDefault();
   };
 
+  const releaseVelocity = () => {
+    const now = performance.now();
+    const recent = samples.current.filter((s) => now - s.t < 100);
+    if (recent.length < 2) return 0;
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const dt = Math.max(1, last.t - first.t);
+    // If the finger rested before lift, treat as no throw.
+    if (now - last.t > 60) return 0;
+    return (last.x - first.x) / dt; // px/ms
+  };
+
   const onTouchEnd = async (e) => {
     const mode = gesture.current;
     gesture.current = null;
@@ -272,15 +307,25 @@ export default function Remote({
 
     if (mode === "swipe") {
       const t = e.changedTouches?.[0];
-      if (t) {
-        const dx = t.clientX - touchStart.current.x;
-        if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) {
-          commitSwipe(dx < 0 ? 1 : -1);
-        } else {
-          setSlideTransition(true);
-          setSlideX(0);
-          setSlideOpacity(1);
-        }
+      if (!t) {
+        snapBack();
+        return;
+      }
+      const dx = t.clientX - touchStart.current.x;
+      const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
+      const threshold = Math.max(SWIPE_DISTANCE_MIN_PX, width * SWIPE_DISTANCE_RATIO);
+      const velocity = releaseVelocity(); // positive = finger right
+      const flickNext = velocity < -FLICK_SPEED;
+      const flickPrev = velocity > FLICK_SPEED;
+      const distanceNext = dx <= -threshold;
+      const distancePrev = dx >= threshold;
+
+      if (flickNext || distanceNext) {
+        commitSwipe(1);
+      } else if (flickPrev || distancePrev) {
+        commitSwipe(-1);
+      } else {
+        snapBack();
       }
       return;
     }
@@ -319,7 +364,6 @@ export default function Remote({
     }
   };
 
-  // Desktop keyboard: ←/→ channels, Space primary when focused on shell.
   useEffect(() => {
     const onKey = (e) => {
       const tag = (e.target?.tagName || "").toLowerCase();
@@ -349,6 +393,8 @@ export default function Remote({
       Boolean(catalogIntroEnabled));
   const introPending = introEnabled && !live?.introConsumed;
   const introHeld = status === "idle" && introPending;
+  const logoArmed =
+    status === "idle" && Boolean(live?.introConsumed) && !chromeVisible;
   const label = live?.currentLabel || "…";
   const index = typeof live?.segmentIndex === "number" ? live.segmentIndex : 0;
   const count = live?.segmentCount || 0;
@@ -359,6 +405,7 @@ export default function Remote({
   else if (status === "done" || inStreamEnded)
     primary = { cmd: "restart", text: "Restart" };
   else if (introHeld) primary = { cmd: "start", text: "Start countdown" };
+  else if (logoArmed) primary = { cmd: "start", text: "Start routine" };
 
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
@@ -374,19 +421,21 @@ export default function Remote({
       ? "Pre-stream countdown"
       : introHeld
         ? "Countdown held — waiting for Start"
-        : inStreamEnded
-          ? "Stream ended"
-          : status === "done"
-            ? "Routine complete"
-            : status === "idle"
-              ? "Armed — waiting for Start"
-              : status === "paused"
-                ? "Paused"
-                : "Live";
-    if (!inCountdown && !introHeld && !inStreamEnded && count > 0) {
+        : logoArmed
+          ? "Logo only — waiting for Start"
+          : inStreamEnded
+            ? "Stream ended"
+            : status === "done"
+              ? "Routine complete"
+              : status === "idle"
+                ? "Armed — waiting for Start"
+                : status === "paused"
+                  ? "Paused"
+                  : "Live";
+    if (!inCountdown && !introHeld && !logoArmed && !inStreamEnded && count > 0) {
       line += ` · ${index + 1} / ${count}`;
     }
-    if (!inCountdown && !introHeld && !inStreamEnded) {
+    if (!inCountdown && !introHeld && !logoArmed && !inStreamEnded) {
       line += chromeVisible ? " · Chrome on" : " · Logo only";
     }
     return line;
@@ -395,17 +444,23 @@ export default function Remote({
   const nowLabel =
     inCountdown || introHeld
       ? "Starting soon"
-      : inStreamEnded
-        ? live?.streamEndedMessage || "Thanks for watching"
-        : status === "done"
-          ? "Done"
-          : label;
+      : logoArmed
+        ? "Ready when you are"
+        : inStreamEnded
+          ? live?.streamEndedMessage || "Thanks for watching"
+          : status === "done"
+            ? "Done"
+            : label;
 
   const stageStyle = {
     transform: `translate3d(${slideX}px, 0, 0)`,
     opacity: slideOpacity,
     transition: slideTransition
-      ? `transform ${slideX === 0 ? SWIPE_ENTER_MS : SWIPE_EXIT_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${slideX === 0 ? SWIPE_ENTER_MS : SWIPE_EXIT_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
+      ? `transform ${
+          slideX === 0 ? SWIPE_ENTER_MS : SWIPE_SETTLE_MS
+        }ms ${EASE_OUT}, opacity ${
+          slideX === 0 ? SWIPE_ENTER_MS : SWIPE_SETTLE_MS
+        }ms ${EASE_OUT}`
       : "none",
   };
 
@@ -468,44 +523,54 @@ export default function Remote({
           >
             {primary.text}
           </button>
-          <div className="clozzz-remote__row">
-            <button
-              type="button"
-              className="clozzz-remote__btn"
-              disabled={noLive || status === "done" || isBusy("back")}
-              onClick={() => send("back")}
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              className="clozzz-remote__btn"
-              disabled={noLive || status === "done" || isBusy("skip")}
-              onClick={() => send("skip")}
-            >
-              Skip
-            </button>
-          </div>
+          {logoArmed ? null : (
+            <div className="clozzz-remote__row">
+              <button
+                type="button"
+                className="clozzz-remote__btn"
+                disabled={noLive || status === "done" || isBusy("back")}
+                onClick={() => send("back")}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="clozzz-remote__btn"
+                disabled={noLive || status === "done" || isBusy("skip")}
+                onClick={() => send("skip")}
+              >
+                Skip
+              </button>
+            </div>
+          )}
         </>
       )}
 
-      <p className="clozzz-remote__section">Overlay</p>
-      <button
-        type="button"
-        className="clozzz-remote__btn"
-        disabled={
-          noLive ||
-          inCountdown ||
-          introHeld ||
-          inStreamEnded ||
-          isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
-        }
-        onClick={() => send(chromeVisible ? "hide_chrome" : "show_chrome")}
-      >
-        {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
-      </button>
+      {logoArmed ? null : (
+        <>
+          <p className="clozzz-remote__section">Overlay</p>
+          <button
+            type="button"
+            className="clozzz-remote__btn"
+            disabled={
+              noLive ||
+              inCountdown ||
+              introHeld ||
+              inStreamEnded ||
+              isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
+            }
+            onClick={() => send(chromeVisible ? "hide_chrome" : "show_chrome")}
+          >
+            {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
+          </button>
+        </>
+      )}
 
-      {status === "done" || inCountdown || introHeld || inStreamEnded ? null : (
+      {status === "done" ||
+      inCountdown ||
+      introHeld ||
+      logoArmed ||
+      inStreamEnded ? null : (
         <button
           type="button"
           className="clozzz-remote__btn clozzz-remote__btn--ghost"
@@ -562,16 +627,15 @@ export default function Remote({
           <span>{refreshing ? "Refreshing…" : pullHint}</span>
         </div>
 
-        <div
-          ref={stageRef}
-          className="clozzz-remote__stage"
-          style={stageStyle}
-        >
+        <div ref={stageRef} className="clozzz-remote__stage" style={stageStyle}>
           <header className="clozzz-remote__head">
             <p className="clozzz-remote__eyebrow">Clozzz remote</p>
             <h1 className="clozzz-remote__title">{sessionTitle || sessionKey}</h1>
             {canSwipe ? (
-              <p className="clozzz-remote__channel clozzz-remote__channel--mobile" aria-live="polite">
+              <p
+                className="clozzz-remote__channel clozzz-remote__channel--mobile"
+                aria-live="polite"
+              >
                 {swipeHint ||
                   `Channel ${channelIndex + 1} of ${channelIds.length} · swipe to switch`}
               </p>

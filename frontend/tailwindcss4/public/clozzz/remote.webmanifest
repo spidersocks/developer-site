@@ -2,6 +2,7 @@
   "name": "Clozzz Remote",
   "short_name": "Clozzz Remote",
   "description": "Password-gated phone/desktop remote for Clozzz studio channels.",
+  "id": "/clozzz-remote",
   "start_url": "/clozzz-remote",
   "scope": "/clozzz-remote",
   "display": "standalone",

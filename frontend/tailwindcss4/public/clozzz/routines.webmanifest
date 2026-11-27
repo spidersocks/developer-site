@@ -2,6 +2,7 @@
   "name": "Clozzz Routines",
   "short_name": "Clozzz Routines",
   "description": "Password-gated evening exercise routine library and editor.",
+  "id": "/clozzz-routines",
   "start_url": "/clozzz-routines",
   "scope": "/clozzz-routines",
   "display": "standalone",

@@ -544,6 +544,26 @@
   margin-bottom: 0.45rem;
 }
 
+.ce-library-foot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.ce-library-foot .ce-btn {
+  min-height: 2.85rem;
+  border-radius: 0.65rem;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 640px) {
+  .ce-library-foot .ce-btn {
+    min-height: 3.15rem;
+    font-size: 1.05rem;
+  }
+}
+
 .ce-add-row {
   list-style: none;
 }

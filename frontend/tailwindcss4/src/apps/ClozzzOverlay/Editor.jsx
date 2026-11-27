@@ -582,10 +582,15 @@ function EditRoutineModal({
 }
 
 const OPEN_DISPLAY_PATH = "/clozzz-overlay";
+const REMOTE_HOME = "/clozzz-remote";
 
 function openDisplayUrl() {
   if (typeof window === "undefined") return OPEN_DISPLAY_PATH;
   return `${window.location.origin}${OPEN_DISPLAY_PATH}`;
+}
+
+function openRemoteHome() {
+  window.location.assign(REMOTE_HOME);
 }
 
 function makeDuplicate(source, existingRoutines) {
@@ -894,24 +899,6 @@ export default function Editor({ initialCatalog }) {
                     </p>
                   </div>
                   <div className="ce-item__actions">
-                    {!routine.localOnly ? (
-                      <button
-                        type="button"
-                        className="ce-btn ce-btn--open ce-btn--display"
-                        title="Copy the fixed OBS display URL"
-                        onClick={async () => {
-                          const url = openDisplayUrl();
-                          try {
-                            await navigator.clipboard.writeText(url);
-                            setToast("OBS display URL copied");
-                          } catch {
-                            window.prompt("Copy OBS display URL", url);
-                          }
-                        }}
-                      >
-                        Copy OBS link
-                      </button>
-                    ) : null}
                     <OverflowMenu
                       open={menuKey === `routine:${routine.id}`}
                       onToggle={() =>
@@ -960,6 +947,31 @@ export default function Editor({ initialCatalog }) {
             </button>
           </li>
         </ul>
+
+        <div className="ce-library-foot">
+          <button
+            type="button"
+            className="ce-btn ce-btn--open"
+            onClick={async () => {
+              const url = openDisplayUrl();
+              try {
+                await navigator.clipboard.writeText(url);
+                setToast("OBS display URL copied");
+              } catch {
+                window.prompt("Copy OBS display URL", url);
+              }
+            }}
+          >
+            Copy OBS link
+          </button>
+          <button
+            type="button"
+            className="ce-btn ce-btn--primary"
+            onClick={openRemoteHome}
+          >
+            Open remote
+          </button>
+        </div>
       </div>
 
       {editDraft ? (

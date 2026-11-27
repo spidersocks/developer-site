@@ -185,27 +185,27 @@
     },
     {
       "source": "/clozzz-remote",
-      "destination": "/clozzz-overlay/index.html"
+      "destination": "/clozzz-remote/index.html"
     },
     {
       "source": "/clozzz-remote/",
-      "destination": "/clozzz-overlay/index.html"
+      "destination": "/clozzz-remote/index.html"
     },
     {
       "source": "/clozzz-remote/:path*",
-      "destination": "/clozzz-overlay/index.html"
+      "destination": "/clozzz-remote/index.html"
     },
     {
       "source": "/clozzz-routines",
-      "destination": "/clozzz-overlay/index.html"
+      "destination": "/clozzz-routines/index.html"
     },
     {
       "source": "/clozzz-routines/",
-      "destination": "/clozzz-overlay/index.html"
+      "destination": "/clozzz-routines/index.html"
     },
     {
       "source": "/clozzz-routines/:path*",
-      "destination": "/clozzz-overlay/index.html"
+      "destination": "/clozzz-routines/index.html"
     },
 
     {

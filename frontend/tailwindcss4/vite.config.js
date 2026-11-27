@@ -206,9 +206,9 @@ function clozzzOverlayGate(env) {
 }
 
 /**
- * Dev/preview: map /clozzz-overlay, /clozzz-remote, /clozzz-routines to the MPA
- * directory entry (dist/clozzz-overlay/index.html). Vite's SPA fallback would
- * otherwise steal these paths to /index.html (plaza).
+ * Dev/preview: map each Clozzz surface to its own MPA HTML entry so iOS
+ * Add to Home Screen sees the correct manifest in the initial document.
+ * Vite's SPA fallback would otherwise steal these paths to /index.html.
  */
 function clozzzOverlayRewrite() {
   const rewrite = (req, _res, next) => {
@@ -216,19 +216,27 @@ function clozzzOverlayRewrite() {
     const qIndex = url.indexOf('?')
     const path = qIndex >= 0 ? url.slice(0, qIndex) : url
     const query = qIndex >= 0 ? url.slice(qIndex) : ''
+    let entry = null
     if (
       path === '/clozzz-overlay' ||
       path === '/clozzz-overlay/' ||
-      path.startsWith('/clozzz-overlay/') ||
+      path.startsWith('/clozzz-overlay/')
+    ) {
+      entry = '/clozzz-overlay/index.html'
+    } else if (
       path === '/clozzz-remote' ||
       path === '/clozzz-remote/' ||
-      path.startsWith('/clozzz-remote/') ||
+      path.startsWith('/clozzz-remote/')
+    ) {
+      entry = '/clozzz-remote/index.html'
+    } else if (
       path === '/clozzz-routines' ||
       path === '/clozzz-routines/' ||
       path.startsWith('/clozzz-routines/')
     ) {
-      req.url = `/clozzz-overlay/index.html${query}`
+      entry = '/clozzz-routines/index.html'
     }
+    if (entry) req.url = `${entry}${query}`
     next()
   }
   return {
@@ -264,6 +272,8 @@ export default defineConfig(({ mode }) => {
           littleScholarsBot: 'little-scholars-bot.html',
           comp6708A3Demo: 'comp6708-a3-demo.html',
           clozzzOverlay: 'clozzz-overlay/index.html',
+          clozzzRemote: 'clozzz-remote/index.html',
+          clozzzRoutines: 'clozzz-routines/index.html',
         }
       }
     }

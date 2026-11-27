@@ -147,13 +147,12 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
     button:hover { filter: brightness(1.05); }
     button:disabled { opacity: 0.65; cursor: wait; }
     .err { color: var(--danger); font-size: 0.88rem; margin: 0 0 0.75rem; }
-    .hint { margin: 1rem 0 0; font-size: 0.78rem; color: var(--muted); line-height: 1.35; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Unlock Clozzz</h1>
-    <p class="lead">Remote and routines are separate gated apps. The OBS display at <strong>/clozzz-overlay</strong> stays open — no password there.</p>
+    <h1>Admin-gated content</h1>
+    <p class="lead">Please enter password to continue.</p>
     ${errBlock}
     <form id="gate" method="post" action="${escapeHtml(action)}" autocomplete="current-password">
       <input type="hidden" name="next" value="${escapeHtml(next)}" />
@@ -162,7 +161,6 @@ export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
       <label class="row"><input type="checkbox" name="remember" value="1" /> Remember on this device (30 days)</label>
       <button type="submit">Unlock</button>
     </form>
-    <p class="hint">Paste <code>/clozzz-overlay</code> once into OBS Browser Source. Open <code>/clozzz-remote</code> or <code>/clozzz-routines</code> deliberately — they do not link to each other.</p>
   </main>
   <script>
     const form = document.getElementById("gate");

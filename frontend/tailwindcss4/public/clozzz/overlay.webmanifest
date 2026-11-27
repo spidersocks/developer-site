@@ -2,6 +2,7 @@
   "name": "Clozzz Overlay",
   "short_name": "Clozzz Overlay",
   "description": "Chromeless evening-routine timer overlay for OBS Browser Source.",
+  "id": "/clozzz-overlay",
   "start_url": "/clozzz-overlay",
   "scope": "/clozzz-overlay",
   "display": "standalone",
