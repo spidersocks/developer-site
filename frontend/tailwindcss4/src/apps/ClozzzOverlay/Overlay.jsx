@@ -531,24 +531,62 @@ function StreamEndedStage({ elapsedSec, title, message }) {
 }
 
 // Cache-bust so OBS Browser Source picks up cue replacements.
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=sean5-final";
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=sean5-final2";
 /**
  * Countdown bed length in the cue file (before the final chime).
- * Playback seeks to (CUE_SEC - remainingSec) so audio locks to the painted timer.
+ * Initial seek uses (CUE_SEC - remainingSec); then audio plays freely with
+ * occasional drift correction — NOT every rAF (that silenced OBS/CEF).
  */
 const SEGMENT_END_CUE_SEC = 5;
+/** Only re-seek if display vs audio drift exceeds this (seconds). */
+const CUE_DRIFT_RESYNC_SEC = 0.28;
 
 /**
- * Hard-sync segment-end cue to the same remainingSec the overlay paints.
- * Backend/remote lag must not delay ticks — only the display clock drives audio.
+ * Hard-sync segment-end cue to the painted remainingSec, without seek-thrash.
+ * Backend/remote lag must not delay the start; display clock owns the cue.
  */
 function useSegmentEndCue(live, remainingSec) {
   const audioRef = useRef(null);
+  /** Segment key we already armed play() for (avoid restart loops). */
+  const armedKeyRef = useRef(null);
+  const unlockTriedRef = useRef(false);
 
   useEffect(() => {
     const audio = new Audio(SEGMENT_END_CUE_SRC);
     audio.preload = "auto";
+    audio.playsInline = true;
+    // OBS CEF: keep element unmuted for Control-audio-via-OBS; volume is set live.
+    audio.muted = false;
+    audio.volume = 0.75;
     audioRef.current = audio;
+
+    // Warm decode + unlock autoplay policies where CEF allows muted gesture-free play.
+    const unlock = () => {
+      if (unlockTriedRef.current) return;
+      unlockTriedRef.current = true;
+      const prevVol = audio.volume;
+      audio.muted = true;
+      audio.volume = 0;
+      const p = audio.play();
+      const finish = () => {
+        audio.pause();
+        try {
+          audio.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        audio.muted = false;
+        audio.volume = prevVol || 0.75;
+      };
+      if (p && typeof p.then === "function") {
+        p.then(finish).catch(finish);
+      } else {
+        finish();
+      }
+    };
+    if (audio.readyState >= 2) unlock();
+    else audio.addEventListener("canplaythrough", unlock, { once: true });
+
     return () => {
       audio.pause();
       audioRef.current = null;
@@ -558,10 +596,13 @@ function useSegmentEndCue(live, remainingSec) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    const muted = Boolean(live?.cueMuted);
     const vol =
       typeof live?.cueVolume === "number" ? live.cueVolume : 0.75;
-    audio.volume = Math.max(0, Math.min(1, vol));
-    audio.muted = Boolean(live?.cueMuted);
+    const nextVol = Math.max(0, Math.min(1, Number.isFinite(vol) ? vol : 0.75));
+    audio.muted = muted;
+    // Keep a tiny floor when unmuted so OBS isn't left at absolute 0 by accident.
+    audio.volume = muted ? 0 : nextVol > 0 ? nextVol : 0.75;
   }, [live?.cueVolume, live?.cueMuted]);
 
   useEffect(() => {
@@ -572,21 +613,20 @@ function useSegmentEndCue(live, remainingSec) {
     const muted = Boolean(live?.cueMuted);
     const rem = Number(remainingSec);
     const valid = Number.isFinite(rem);
+    const segKey = `${live?.segmentStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}`;
     const displayTarget = valid
       ? Math.max(0, SEGMENT_END_CUE_SEC - rem)
       : 0;
 
     const seekTo = (t) => {
       try {
-        if (Math.abs((audio.currentTime || 0) - t) > 0.04) {
-          audio.currentTime = t;
-        }
+        audio.currentTime = t;
       } catch {
         /* metadata not ready */
       }
     };
 
-    // Paused inside the cue window: freeze audio on the frozen display clock.
+    // Paused inside the cue window: freeze on the frozen display clock.
     if (status === "paused" && valid && rem <= SEGMENT_END_CUE_SEC && rem > 0) {
       if (!audio.paused) audio.pause();
       seekTo(displayTarget);
@@ -603,23 +643,55 @@ function useSegmentEndCue(live, remainingSec) {
     if (!inWindow) {
       if (!audio.paused) audio.pause();
       if (status !== "running" || !valid || rem > SEGMENT_END_CUE_SEC) {
+        armedKeyRef.current = null;
         seekTo(0);
       }
       return;
     }
 
-    // Display-locked: t=0 at remaining=5 … t=5 at remaining=0 (final chime).
-    seekTo(displayTarget);
-    if (audio.paused) {
+    // Entering / re-entering the window for this segment: seek once, then play.
+    if (armedKeyRef.current !== segKey) {
+      armedKeyRef.current = segKey;
+      seekTo(displayTarget);
+      audio.muted = false;
+      if (typeof live?.cueVolume === "number" && live.cueVolume > 0) {
+        audio.volume = live.cueVolume;
+      } else if (audio.volume <= 0) {
+        audio.volume = 0.75;
+      }
       const play = audio.play();
-      if (play && typeof play.catch === "function") play.catch(() => {});
+      if (play && typeof play.catch === "function") {
+        play.catch(() => {
+          // One retry after a microtask (CEF sometimes needs a second kick).
+          window.setTimeout(() => {
+            seekTo(Math.max(0, SEGMENT_END_CUE_SEC - Number(remainingSec) || 0));
+            audio.play().catch(() => {});
+          }, 50);
+        });
+      }
+      return;
     }
+
+    // Already armed: let the file play. Only correct large drift vs display.
+    if (!audio.paused) {
+      const drift = Math.abs((audio.currentTime || 0) - displayTarget);
+      if (drift > CUE_DRIFT_RESYNC_SEC) {
+        seekTo(displayTarget);
+      }
+      return;
+    }
+
+    // Armed but paused (autoplay blocked / tab freeze): kick play without
+    // seeking every frame.
+    const play = audio.play();
+    if (play && typeof play.catch === "function") play.catch(() => {});
   }, [
     remainingSec,
     live?.status,
     live?.segmentIndex,
     live?.segmentStartedAtMs,
     live?.cueMuted,
+    live?.cueVolume,
   ]);
 }
 
