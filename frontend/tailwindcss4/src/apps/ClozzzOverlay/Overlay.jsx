@@ -16,8 +16,10 @@ import {
 import Editor from "./Editor.jsx";
 import Remote, {
   canonicalizeRemoteUrl,
+  clearLastRoutineId,
   readLastRoutineId,
   rememberLastRoutineId,
+  resolveChannelId,
 } from "./Remote.jsx";
 import ModeChooser from "./ModeChooser.jsx";
 import { applyClozzzPwa, detectClozzzPwaSurface } from "./pwa.js";
@@ -184,10 +186,11 @@ function timerBand(progress, remainingSec, done) {
   return "calm";
 }
 
-function BrandLockup({ backed = false, quiet = false }) {
+function BrandLockup({ backed = false, quiet = false, iconOnly = false }) {
   return (
     <div
-      className={`clozzz-brand${backed ? " clozzz-brand--backed" : ""}${quiet ? " clozzz-brand--quiet" : ""}`}
+      className={`clozzz-brand${backed ? " clozzz-brand--backed" : ""}${quiet ? " clozzz-brand--quiet" : ""}${iconOnly ? " clozzz-brand--icon-only" : ""}`}
+      aria-label={iconOnly ? "Clozzz Sleep" : undefined}
     >
       <span className="clozzz-brand__mark" aria-hidden="true">
         <img
@@ -199,9 +202,11 @@ function BrandLockup({ backed = false, quiet = false }) {
           decoding="async"
         />
       </span>
-      <span className="clozzz-brand__text">
-        <span className="clozzz-brand__name">Clozzz Sleep</span>
-      </span>
+      {iconOnly ? null : (
+        <span className="clozzz-brand__text">
+          <span className="clozzz-brand__name">Clozzz Sleep</span>
+        </span>
+      )}
     </div>
   );
 }
@@ -457,19 +462,21 @@ function CountdownStage({
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
         <p className="clozzz-countdown__label">Starting soon</p>
-        <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
-        <div
-          className="clozzz-countdown__rail"
-          style={{ "--clozzz-cd-elapsed": elapsed }}
-          aria-hidden="true"
-        >
-          <span className="clozzz-countdown__rail-track" />
-          <span className="clozzz-countdown__rail-fill" />
-          <span className="clozzz-countdown__rail-head" />
-        </div>
-        {!held && title ? (
-          <p className="clozzz-countdown__sub">{title}</p>
+        {title ? (
+          <p className="clozzz-countdown__tonight">Tonight: {title}</p>
         ) : null}
+        <div className="clozzz-countdown__timer-block">
+          <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
+          <div
+            className="clozzz-countdown__rail"
+            style={{ "--clozzz-cd-elapsed": elapsed }}
+            aria-hidden="true"
+          >
+            <span className="clozzz-countdown__rail-track" />
+            <span className="clozzz-countdown__rail-fill" />
+            <span className="clozzz-countdown__rail-head" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -491,15 +498,17 @@ function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, messag
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
         <p className="clozzz-countdown__label">Stream ended</p>
-        <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
-        <div
-          className="clozzz-countdown__rail"
-          style={{ "--clozzz-cd-elapsed": elapsed }}
-          aria-hidden="true"
-        >
-          <span className="clozzz-countdown__rail-track" />
-          <span className="clozzz-countdown__rail-fill" />
-          <span className="clozzz-countdown__rail-head" />
+        <div className="clozzz-countdown__timer-block">
+          <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
+          <div
+            className="clozzz-countdown__rail"
+            style={{ "--clozzz-cd-elapsed": elapsed }}
+            aria-hidden="true"
+          >
+            <span className="clozzz-countdown__rail-track" />
+            <span className="clozzz-countdown__rail-fill" />
+            <span className="clozzz-countdown__rail-head" />
+          </div>
         </div>
         <p className="clozzz-countdown__sub">
           {message || title || "Thanks for watching"}
@@ -594,7 +603,7 @@ function RunningOverlay({ session, sessionKey }) {
   return (
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
       <header className="clozzz-corner clozzz-corner--tl">
-        <BrandLockup quiet />
+        <BrandLockup quiet iconOnly />
       </header>
 
       {chromeVisible ? (
@@ -637,7 +646,7 @@ function RunningOverlay({ session, sessionKey }) {
   );
 }
 
-function useCatalog() {
+function useCatalog({ refreshKey = 0 } = {}) {
   const [catalog, setCatalog] = useState(() => normalizeCatalog(FALLBACK_CATALOG));
   const [ready, setReady] = useState(false);
 
@@ -645,7 +654,8 @@ function useCatalog() {
     let cancelled = false;
     fetchCatalog()
       .then((data) => {
-        if (!cancelled && data?.routines?.length) {
+        // Accept empty lists too — otherwise a deleted seed/fallback id can linger.
+        if (!cancelled && data && Array.isArray(data.routines)) {
           setCatalog(normalizeCatalog(data));
         }
       })
@@ -658,9 +668,9 @@ function useCatalog() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
-  return { catalog, ready };
+  return { catalog, ready, setCatalog };
 }
 
 function LibraryApp({ catalog: initial }) {
@@ -684,13 +694,21 @@ function RemoteApp({ sessionKey, catalog, onChannelChange }) {
   useEffect(() => {
     ensureLiveToken();
   }, []);
-  const session = findSessionIn(catalog.routines, sessionKey);
+  const routines = catalog.routines || [];
+  const session = findSessionIn(routines, sessionKey);
+  // If the active id vanished between renders, hop to a real channel.
+  useEffect(() => {
+    if (session) return;
+    const fallback = resolveChannelId(null, routines);
+    onChannelChange(fallback);
+  }, [session, sessionKey, catalog.routines, onChannelChange]);
+  if (!session) return <LibraryLoading />;
   return (
     <Remote
-      sessionKey={session?.id || sessionKey}
-      sessionTitle={session?.title}
-      introCountdownEnabled={Boolean(session?.introCountdownEnabled)}
-      routines={catalog.routines || []}
+      sessionKey={session.id}
+      sessionTitle={session.title}
+      introCountdownEnabled={Boolean(session.introCountdownEnabled)}
+      routines={routines}
       onChannelChange={onChannelChange}
     />
   );
@@ -767,10 +785,19 @@ export default function Overlay() {
   const [openDisplay, setOpenDisplay] = useState(() => isOpenDisplayPath());
   /** True once a channel is chosen for the single remote surface. */
   const [remoteReady, setRemoteReady] = useState(() => Boolean(deepLinkKey));
-  const { catalog, ready } = useCatalog();
+  // Refetch catalog when entering remote so deletes from the library aren't ghosts.
+  const catalogRefreshKey = remoteSurface || bareRemote ? "remote" : "other";
+  const { catalog, ready } = useCatalog({ refreshKey: catalogRefreshKey });
 
   const onChannelChange = useCallback((id) => {
-    if (!id) return;
+    if (!id) {
+      clearLastRoutineId();
+      setSessionKey(null);
+      setRemoteReady(false);
+      setModePage(true);
+      window.history.replaceState({}, "", `${REMOTE_HOME}/mode`);
+      return;
+    }
     rememberLastRoutineId(id);
     canonicalizeRemoteUrl();
     setSessionKey(id);
@@ -867,31 +894,42 @@ export default function Overlay() {
     return () => window.removeEventListener("popstate", sync);
   }, []);
 
-  // Bare /clozzz-remote → last channel (localStorage), else studio, else mode.
-  // Stay on `/clozzz-remote` — never rewrite to per-id subpaths.
+  // Bare /clozzz-remote → last channel (localStorage), else studio, else first
+  // remaining / mode. Never keep a deleted/missing routine id.
   useEffect(() => {
     if (!ready || !bareRemote || modePage || routinesPage || !remoteSurface) {
       return;
     }
-    if (sessionKey && findSessionIn(catalog.routines || [], sessionKey)) {
+    const routines = catalog.routines || [];
+    if (sessionKey && findSessionIn(routines, sessionKey)) {
       setRemoteReady(true);
       return;
     }
+    // Ghost id (deleted Demo, etc.) — drop memory immediately.
+    if (sessionKey) clearLastRoutineId(sessionKey);
+
     let cancelled = false;
     (async () => {
-      const routines = catalog.routines || [];
       const fromMemory = readLastRoutineId();
-      let pick =
-        (fromMemory && findSessionIn(routines, fromMemory)?.id) || null;
+      let pick = null;
+      if (fromMemory) {
+        const memHit = findSessionIn(routines, fromMemory);
+        if (memHit) pick = memHit.id;
+        else clearLastRoutineId(fromMemory);
+      }
       if (!pick) {
         try {
           const studio = await fetchStudioDisplay();
           const active = studio?.activeRoutineId;
-          if (active && findSessionIn(routines, active)) pick = active;
+          if (active) {
+            const studioHit = findSessionIn(routines, active);
+            if (studioHit) pick = studioHit.id;
+          }
         } catch {
           /* ignore */
         }
       }
+      if (!pick) pick = resolveChannelId(null, routines);
       if (cancelled) return;
       if (pick) {
         rememberLastRoutineId(pick);
@@ -900,9 +938,11 @@ export default function Overlay() {
         setRemoteReady(true);
         return;
       }
+      clearLastRoutineId();
+      setSessionKey(null);
+      setRemoteReady(false);
       window.history.replaceState({}, "", `${REMOTE_HOME}/mode`);
       setModePage(true);
-      setRemoteReady(false);
     })();
     return () => {
       cancelled = true;
@@ -949,8 +989,11 @@ export default function Overlay() {
     );
   }
 
+  // Deleted/missing channel — never leave the user on “unknown routine”.
+  // The restore effect above prunes localStorage + falls back; show loading
+  // (or mode via that effect) instead of SessionNotFound.
   if (remoteSurface && remoteReady && sessionKey && !resolvedSession) {
-    return <SessionNotFound keyTried={sessionKey || "?"} />;
+    return <LibraryLoading />;
   }
 
   // Bare remote restoring channel…

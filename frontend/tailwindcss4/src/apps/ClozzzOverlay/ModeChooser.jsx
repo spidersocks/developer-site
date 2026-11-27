@@ -6,7 +6,7 @@ const REMOTE_HOME = "/clozzz-remote";
 /**
  * Remote-only channel picker (post-unlock fallback when no last channel).
  * Opens the single `/clozzz-remote` surface with that channel remembered.
- * OBS copy lives on the routines library footer — not here.
+ * OBS copy lives on the routines library Tools menu — not here.
  */
 export default function ModeChooser({ catalog }) {
   const routines = catalog?.routines || [];

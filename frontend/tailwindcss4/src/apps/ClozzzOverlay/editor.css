@@ -58,6 +58,13 @@
   margin-bottom: 1.25rem;
 }
 
+.clozzz-editor__top-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .clozzz-editor__brand {
   display: flex;
   align-items: center;
@@ -544,13 +551,7 @@
   margin-bottom: 0.45rem;
 }
 
-.ce-library-foot {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 1rem;
-}
-
-/* Microsoft Fluent–style Tools control */
+/* Microsoft Fluent–style Tools control (header top-right) */
 .ce-tools {
   position: relative;
 }
@@ -606,7 +607,7 @@
 .ce-tools__menu {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 0.3rem);
+  top: calc(100% + 0.3rem);
   z-index: 30;
   min-width: 11.5rem;
   padding: 0.25rem;
@@ -645,24 +646,13 @@
 }
 
 @media (max-width: 640px) {
-  .ce-library-foot {
-    justify-content: stretch;
-  }
-
-  .ce-tools,
-  .ce-tools__btn {
-    width: 100%;
+  .clozzz-editor__top-actions {
+    margin-left: 0;
   }
 
   .ce-tools__btn {
-    min-height: 3rem;
-    font-size: 1rem;
-  }
-
-  .ce-tools__menu {
-    left: 0;
-    right: 0;
-    min-width: 0;
+    min-height: 2.75rem;
+    font-size: 0.95rem;
   }
 
   .ce-tools__item {

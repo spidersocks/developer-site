@@ -16,6 +16,7 @@ import {
   reorderRoutines,
   saveRoutine,
 } from "./api.js";
+import { clearLastRoutineId } from "./Remote.jsx";
 import "./editor.css";
 
 const DURATION_STEP = 15;
@@ -253,7 +254,7 @@ function OverflowMenu({ open, onToggle, onClose, items }) {
   );
 }
 
-/** Microsoft-style Tools split control for library footer actions. */
+/** Microsoft-style Tools control — library header (top right). */
 function ToolsMenu({ onCopyObs, onOpenRemote }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -809,6 +810,7 @@ export default function Editor({ initialCatalog }) {
         setBusy(true);
         try {
           const saved = await deleteRoutine(routine.id);
+          clearLastRoutineId(routine.id);
           setCatalog(cloneCatalog(saved));
           if (editDraft?.id === routine.id) closeEdit();
           setToast("Deleted");
@@ -868,6 +870,20 @@ export default function Editor({ initialCatalog }) {
           <div className="clozzz-editor__brand">
             <img src="/clozzz/clozzz-logo.png" alt="" width="32" height="32" />
             <h1>Evening exercise routines</h1>
+          </div>
+          <div className="clozzz-editor__top-actions">
+            <ToolsMenu
+              onCopyObs={async () => {
+                const url = openDisplayUrl();
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setToast("OBS display URL copied");
+                } catch {
+                  window.prompt("Copy OBS display URL", url);
+                }
+              }}
+              onOpenRemote={openRemoteHome}
+            />
           </div>
           {status.text ? (
             <div
@@ -1022,20 +1038,6 @@ export default function Editor({ initialCatalog }) {
           </li>
         </ul>
 
-        <div className="ce-library-foot">
-          <ToolsMenu
-            onCopyObs={async () => {
-              const url = openDisplayUrl();
-              try {
-                await navigator.clipboard.writeText(url);
-                setToast("OBS display URL copied");
-              } catch {
-                window.prompt("Copy OBS display URL", url);
-              }
-            }}
-            onOpenRemote={openRemoteHome}
-          />
-        </div>
       </div>
 
       {editDraft ? (

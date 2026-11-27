@@ -47,6 +47,44 @@ export function rememberLastRoutineId(id) {
   }
 }
 
+/** Drop last-channel memory (optionally only when it matches `id`). */
+export function clearLastRoutineId(id = null) {
+  try {
+    if (id != null) {
+      const cur = localStorage.getItem(LAST_ROUTINE_KEY) || "";
+      if (cur.toLowerCase() !== String(id).toLowerCase()) return;
+    }
+    localStorage.removeItem(LAST_ROUTINE_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+/**
+ * Pick a catalog-backed channel id: prefer `preferred` if still present,
+ * else first remaining routine, else null. Prunes localStorage ghosts.
+ */
+export function resolveChannelId(preferred, routines = []) {
+  const list = Array.isArray(routines) ? routines : [];
+  const found = preferred
+    ? list.find(
+        (r) =>
+          r?.id === preferred ||
+          String(r?.id || "").toLowerCase() === String(preferred).toLowerCase() ||
+          String(r?.name || "").toLowerCase() === String(preferred).toLowerCase()
+      )
+    : null;
+  if (found?.id) {
+    rememberLastRoutineId(found.id);
+    return found.id;
+  }
+  if (preferred) clearLastRoutineId(preferred);
+  const first = list[0]?.id || null;
+  if (first) rememberLastRoutineId(first);
+  else clearLastRoutineId();
+  return first;
+}
+
 /** Keep the product URL on the single remote surface. */
 export function canonicalizeRemoteUrl() {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -133,10 +171,24 @@ export default function Remote({
       setError("");
       return snap;
     } catch (e) {
-      setError(e.message || "Could not load live state");
+      const status = e?.status;
+      const msg = e.message || "Could not load live state";
+      // Deleted / missing routine — leave this channel; never keep a ghost.
+      if (status === 404) {
+        clearLastRoutineId(sessionKey);
+        const fallback =
+          routines.find((r) => r.id !== sessionKey)?.id ||
+          resolveChannelId(null, routines.filter((r) => r.id !== sessionKey));
+        if (typeof onChannelChange === "function") {
+          onChannelChange(fallback || null);
+        }
+        setError("");
+        return null;
+      }
+      setError(msg);
       return null;
     }
-  }, [sessionKey]);
+  }, [sessionKey, routines, onChannelChange]);
 
   useEffect(() => {
     rememberLastRoutineId(sessionKey);

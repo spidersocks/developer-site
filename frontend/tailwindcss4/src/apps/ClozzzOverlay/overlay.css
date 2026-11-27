@@ -153,8 +153,8 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-corner--tl {
-  top: var(--clozzz-pad);
-  left: var(--clozzz-pad);
+  top: 2.5%;
+  left: 2.5%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -163,15 +163,16 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-corner--tr {
-  top: var(--clozzz-pad);
-  right: var(--clozzz-pad);
+  top: 2.5%;
+  right: 2.5%;
 }
 
 .clozzz-corner--bl {
-  bottom: var(--clozzz-pad);
-  left: var(--clozzz-pad);
-  /* Compact so the card leaves most of the movement visible */
-  max-width: min(34rem, 46vw);
+  /* 2–3% inset from left + bottom; card ~35–38% of OBS frame */
+  bottom: 2.5%;
+  left: 2.5%;
+  width: 37vw;
+  max-width: 37vw;
 }
 
 /* ——— Brand ——— */
@@ -182,25 +183,22 @@ html.clozzz-stage-preview #root {
   gap: 0.7rem;
 }
 
-/* Quiet live branding: moon + soft wordmark, second to the exercise card */
+/* Quiet live branding: moon icon only (wordmark stays on starting screen) */
 .clozzz-brand--quiet {
-  gap: 0.55rem;
-  opacity: 0.88;
+  gap: 0;
+  opacity: 0.92;
 }
 
-.clozzz-brand--quiet .clozzz-brand__mark {
-  width: 2.15rem;
-  height: 2.15rem;
-  border-radius: 0.55rem;
+.clozzz-brand--quiet .clozzz-brand__mark,
+.clozzz-brand--icon-only .clozzz-brand__mark {
+  width: clamp(2.35rem, 2.6vw, 2.85rem);
+  height: clamp(2.35rem, 2.6vw, 2.85rem);
+  border-radius: 0.6rem;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
-.clozzz-brand--quiet .clozzz-brand__name {
-  font-size: clamp(1.05rem, 1.7vw, 1.35rem);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: rgba(243, 234, 215, 0.82);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+.clozzz-brand--icon-only .clozzz-brand__text {
+  display: none;
 }
 
 .clozzz-brand--backed {
@@ -300,32 +298,38 @@ html.clozzz-stage-preview #root {
   opacity: 0.9;
 }
 
-/* ——— Live exercise card (BL) — move + timer together ——— */
+/* ——— Live exercise card (BL) — ~35–38% frame; type tuned for 1920×1080 ——— */
 
 .clozzz-current-panel {
-  --clozzz-move-size: clamp(1.7rem, 3.4vw, 2.55rem);
-  --clozzz-support-size: clamp(0.95rem, 1.75vw, 1.3rem);
+  /* ~54–58 / 62–67 / 33–36 px at 1920×1080 */
+  --clozzz-move-size: clamp(1.85rem, 2.9vw, 3.5rem);
+  --clozzz-timer-size: clamp(2.05rem, 3.35vw, 4rem);
+  --clozzz-next-size: clamp(1.05rem, 1.8vw, 2.15rem);
+  --clozzz-count-size: clamp(0.82rem, 1.15vw, 1.35rem);
   --clozzz-support: #cdd3de;
+  --clozzz-next: #e8edf4;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.95rem 1.15rem 1.05rem;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 1rem 1.2rem 1.1rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(213, 220, 229, 0.14);
-  background: rgba(10, 8, 28, 0.78);
-  backdrop-filter: blur(16px) saturate(1.08);
-  -webkit-backdrop-filter: blur(16px) saturate(1.08);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(213, 220, 229, 0.16);
+  /* More opaque midnight-navy for contrast on bright camera */
+  background: rgba(8, 6, 22, 0.92);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 .clozzz-exercise-count {
   margin: 0;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  font-size: var(--clozzz-support-size);
-  font-weight: 600;
+  font-size: var(--clozzz-count-size);
+  font-weight: 560;
   letter-spacing: 0.01em;
   line-height: 1.2;
-  color: var(--clozzz-support);
+  color: rgba(205, 211, 222, 0.72);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
@@ -395,9 +399,9 @@ html.clozzz-stage-preview #root {
   min-width: 5ch;
   width: 5ch;
   margin: 0;
-  padding-top: 0.06em;
+  padding-top: 0.02em;
   font-family: var(--clozzz-font-display);
-  font-size: var(--clozzz-move-size);
+  font-size: var(--clozzz-timer-size);
   font-weight: 600;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums lining-nums;
@@ -432,13 +436,14 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-up-next {
-  margin: 0.15rem 0 0;
+  margin: 0.2rem 0 0;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  font-size: var(--clozzz-support-size);
-  font-weight: 500;
+  font-size: var(--clozzz-next-size);
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0.01em;
-  color: var(--clozzz-support);
+  /* Brighter priority over quiet Exercise N of M */
+  color: var(--clozzz-next);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -546,12 +551,15 @@ html.clozzz-stage-preview #root {
 @media (max-width: 720px) {
   .clozzz-corner--tl,
   .clozzz-corner--bl {
-    max-width: calc(100% - 2 * var(--clozzz-pad));
+    width: auto;
+    max-width: calc(100% - 5%);
   }
 
   .clozzz-current-panel {
     --clozzz-move-size: clamp(1.35rem, 5.6vw, 1.85rem);
-    --clozzz-support-size: clamp(0.85rem, 3.4vw, 1.05rem);
+    --clozzz-timer-size: clamp(1.5rem, 6.2vw, 2.05rem);
+    --clozzz-next-size: clamp(0.95rem, 3.8vw, 1.2rem);
+    --clozzz-count-size: clamp(0.78rem, 3vw, 0.95rem);
     padding: 0.8rem 0.95rem 0.9rem;
   }
 
@@ -1273,7 +1281,7 @@ html.clozzz-stage-remote #root {
 }
 
 .clozzz-countdown__center--minimal {
-  gap: clamp(0.85rem, 2vw, 1.35rem);
+  gap: clamp(0.65rem, 1.6vw, 1.15rem);
 }
 
 .clozzz-countdown__label {
@@ -1288,6 +1296,30 @@ html.clozzz-stage-remote #root {
   animation: clozzz-cd-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Same sans as Starting soon · ~⅔ size · soft off-white */
+.clozzz-countdown__tonight {
+  margin: 0;
+  font-family: "Segoe UI Variable", "Segoe UI", "Segoe UI Semibold", system-ui, sans-serif;
+  font-size: clamp(1.2rem, 3.5vw, 2.4rem);
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  letter-spacing: normal;
+  line-height: 1.2;
+  color: rgba(243, 234, 215, 0.88);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
+  animation: clozzz-cd-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both;
+}
+
+/* Clock + rail share one width so bar ends align to timer */
+.clozzz-countdown__timer-block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
 .clozzz-countdown__clock {
   margin: 0;
   font-family: var(--clozzz-font-display);
@@ -1300,7 +1332,6 @@ html.clozzz-stage-remote #root {
   color: var(--clozzz-cream);
   -webkit-font-smoothing: antialiased;
   text-shadow: 0 2px 28px rgba(0, 0, 0, 0.35);
-  animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
 .clozzz-countdown--soon .clozzz-countdown__clock {
@@ -1311,10 +1342,9 @@ html.clozzz-stage-remote #root {
 .clozzz-countdown__rail {
   --clozzz-cd-elapsed: 0;
   position: relative;
-  width: min(22rem, 42vw);
-  height: 0.7rem;
-  margin-top: 0.35rem;
-  animation: clozzz-cd-enter 1.05s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  width: 100%;
+  height: 0.95rem;
+  margin-top: 0.55rem;
 }
 
 .clozzz-countdown__rail-track {
@@ -1322,17 +1352,17 @@ html.clozzz-stage-remote #root {
   left: 0;
   right: 0;
   top: 50%;
-  height: 1.5px;
+  height: 4px;
   transform: translateY(-50%);
   border-radius: 999px;
-  background: rgba(243, 234, 215, 0.22);
+  background: rgba(243, 234, 215, 0.24);
 }
 
 .clozzz-countdown__rail-fill {
   position: absolute;
   left: 0;
   top: 50%;
-  height: 1.5px;
+  height: 4px;
   width: calc(var(--clozzz-cd-elapsed) * 100%);
   transform: translateY(-50%);
   border-radius: 999px;
@@ -1343,8 +1373,8 @@ html.clozzz-stage-remote #root {
   position: absolute;
   top: 50%;
   left: calc(var(--clozzz-cd-elapsed) * 100%);
-  width: 0.55rem;
-  height: 0.55rem;
+  width: 0.7rem;
+  height: 0.7rem;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: var(--clozzz-cream);
