@@ -530,17 +530,20 @@ function StreamEndedStage({ elapsedSec, title, message }) {
   );
 }
 
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav";
-/** Soft ASMR countdown window — last N seconds of each exercise. */
-const SEGMENT_END_CUE_SEC = 10;
+// Cache-bust so OBS Browser Source picks up cue replacements.
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=sean5-final";
+/**
+ * Countdown bed length in the cue file (before the final chime).
+ * Playback seeks to (CUE_SEC - remainingSec) so audio locks to the painted timer.
+ */
+const SEGMENT_END_CUE_SEC = 5;
 
 /**
- * Play a soft 10s ASMR countdown (gentle ticks + final chime) near segment end.
- * Volume/mute follow the live run so the phone remote can drive them.
+ * Hard-sync segment-end cue to the same remainingSec the overlay paints.
+ * Backend/remote lag must not delay ticks — only the display clock drives audio.
  */
 function useSegmentEndCue(live, remainingSec) {
   const audioRef = useRef(null);
-  const firedKeyRef = useRef(null);
 
   useEffect(() => {
     const audio = new Audio(SEGMENT_END_CUE_SRC);
@@ -563,39 +566,53 @@ function useSegmentEndCue(live, remainingSec) {
 
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio) return;
+
     const status = live?.status;
-    if (status !== "running") {
-      if (audio && !audio.paused) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
-      if (status !== "paused") firedKeyRef.current = null;
-      return;
-    }
-    if (live?.cueMuted) {
-      if (audio && !audio.paused) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
-      return;
-    }
-    const cueKey = `${live.segmentStartedAtMs ?? "x"}:${live.segmentIndex ?? 0}`;
-    if (remainingSec <= SEGMENT_END_CUE_SEC + 0.05 && remainingSec > 0.05) {
-      if (firedKeyRef.current === cueKey) return;
-      firedKeyRef.current = cueKey;
-      if (!audio) return;
+    const muted = Boolean(live?.cueMuted);
+    const rem = Number(remainingSec);
+    const valid = Number.isFinite(rem);
+    const displayTarget = valid
+      ? Math.max(0, SEGMENT_END_CUE_SEC - rem)
+      : 0;
+
+    const seekTo = (t) => {
       try {
-        // If segment is shorter than the cue window, start mid-file so the
-        // final chime still lands near 0:00.
-        const overdue = Math.max(0, SEGMENT_END_CUE_SEC - remainingSec);
-        const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
-        audio.currentTime =
-          dur > 0 ? Math.min(overdue, Math.max(0, dur - 0.5)) : overdue;
-        const play = audio.play();
-        if (play && typeof play.catch === "function") play.catch(() => {});
+        if (Math.abs((audio.currentTime || 0) - t) > 0.04) {
+          audio.currentTime = t;
+        }
       } catch {
-        /* OBS autoplay edge cases */
+        /* metadata not ready */
       }
+    };
+
+    // Paused inside the cue window: freeze audio on the frozen display clock.
+    if (status === "paused" && valid && rem <= SEGMENT_END_CUE_SEC && rem > 0) {
+      if (!audio.paused) audio.pause();
+      seekTo(displayTarget);
+      return;
+    }
+
+    const inWindow =
+      status === "running" &&
+      !muted &&
+      valid &&
+      rem <= SEGMENT_END_CUE_SEC &&
+      rem > 0;
+
+    if (!inWindow) {
+      if (!audio.paused) audio.pause();
+      if (status !== "running" || !valid || rem > SEGMENT_END_CUE_SEC) {
+        seekTo(0);
+      }
+      return;
+    }
+
+    // Display-locked: t=0 at remaining=5 … t=5 at remaining=0 (final chime).
+    seekTo(displayTarget);
+    if (audio.paused) {
+      const play = audio.play();
+      if (play && typeof play.catch === "function") play.catch(() => {});
     }
   }, [
     remainingSec,

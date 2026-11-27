@@ -1,12 +1,9 @@
 segment-end-cue.wav
 ===================
 
-Original Clozzz soft ASMR segment-end cue generated for this project:
+Countdown bed: first 5.0s of user-provided 5-second-countdown-sound
+(upload: 5-second-countdown-sound--hjmjpfg6).
 
-- Nine gentle wood/pebble-style ticks (~1s apart) for a calm bedtime countdown
-- Distinct warmer soft-bell final chime as the next-exercise transition
+Final: original Clozzz soft bell chime (distinct next-exercise cue), CC0.
 
-Designed for the last ~10 seconds of each exercise (OBS Browser Source).
-
-License: CC0 1.0 Universal (public domain dedication).
-You may copy, modify, and redistribute freely with or without attribution.
+Playback is hard-synced to the on-screen overlay timer.
