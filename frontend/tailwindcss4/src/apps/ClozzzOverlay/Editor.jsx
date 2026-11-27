@@ -93,6 +93,28 @@ function ChevronDownIcon() {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg className="ce-tools__item-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4 1.75A1.75 1.75 0 0 1 5.75 0h4.5A1.75 1.75 0 0 1 12 1.75V3h.25A1.75 1.75 0 0 1 14 4.75v8.5A1.75 1.75 0 0 1 12.25 15h-4.5A1.75 1.75 0 0 1 6 13.25V12H5.75A1.75 1.75 0 0 1 4 10.25v-8.5ZM5.75 1.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25H6V4.75A1.75 1.75 0 0 1 7.75 3H10.5V1.75a.25.25 0 0 0-.25-.25h-4.5ZM7.75 4.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h4.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25h-4.5Z"
+      />
+    </svg>
+  );
+}
+
+function OpenExternalIcon() {
+  return (
+    <svg className="ce-tools__item-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M9.5 2a.5.5 0 0 0 0 1h2.793L6.146 9.146a.5.5 0 1 0 .708.708L13 3.707V6.5a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5h-4ZM3.5 4A1.5 1.5 0 0 0 2 5.5v7A1.5 1.5 0 0 0 3.5 14h7a1.5 1.5 0 0 0 1.5-1.5V9a.5.5 0 0 0-1 0v3.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5H7a.5.5 0 0 0 0-1H3.5Z"
+      />
+    </svg>
+  );
+}
+
 function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }) {
   return (
     <div className="ce-modal-backdrop" role="dialog" aria-modal="true">
@@ -298,7 +320,8 @@ function ToolsMenu({ onCopyObs, onOpenRemote }) {
               onCopyObs();
             }}
           >
-            Copy OBS link
+            <CopyIcon />
+            <span>Copy OBS link</span>
           </button>
           <button
             type="button"
@@ -309,7 +332,8 @@ function ToolsMenu({ onCopyObs, onOpenRemote }) {
               onOpenRemote();
             }}
           >
-            Open remote
+            <OpenExternalIcon />
+            <span>Open remote</span>
           </button>
         </div>
       ) : null}
@@ -665,7 +689,7 @@ function openDisplayUrl() {
 }
 
 function openRemoteHome() {
-  window.location.assign(REMOTE_HOME);
+  window.open(REMOTE_HOME, "_blank", "noopener,noreferrer");
 }
 
 function makeDuplicate(source, existingRoutines) {

@@ -438,13 +438,47 @@ function CountdownBackdrop() {
   );
 }
 
+/** Thin SVG ring — starts 12 o'clock, sweeps with remaining fraction. */
+function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
+  const p = Math.min(1, Math.max(0, Number(progress) || 0));
+  const r = 18;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 40 40"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle className="clozzz-timer-ring__track" cx="20" cy="20" r={r} />
+      <circle
+        className="clozzz-timer-ring__sweep"
+        cx="20"
+        cy="20"
+        r={r}
+        style={{
+          strokeDasharray: c,
+          strokeDashoffset: c * (1 - p),
+        }}
+      />
+    </svg>
+  );
+}
+
 function CountdownStage({
   remainingSec,
+  remainingMs,
+  durationMs,
   title,
   held = false,
 }) {
   const critical = !held && remainingSec <= 10;
   const beginsLabel = title ? `${title} begins in` : "Begins in";
+  const ringProgress = held
+    ? 1
+    : durationMs > 0
+      ? Math.min(1, Math.max(0, remainingMs / durationMs))
+      : 1;
 
   return (
     <div
@@ -458,7 +492,14 @@ function CountdownStage({
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
         <p className="clozzz-countdown__label">{beginsLabel}</p>
-        <div className="clozzz-countdown__timer-block">
+        <div
+          className="clozzz-countdown__timer-block"
+          style={{ "--clozzz-timer-p": ringProgress }}
+        >
+          <TimerProgressRing
+            progress={ringProgress}
+            className="clozzz-timer-ring clozzz-countdown__ring"
+          />
           <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
         </div>
       </div>
@@ -560,6 +601,8 @@ function RunningOverlay({ session, sessionKey }) {
     return (
       <CountdownStage
         remainingSec={remainingSec}
+        remainingMs={derived.remainingMs}
+        durationMs={derived.durationMs || 1800000}
         title={live?.title || session.title || session.name}
         held={Boolean(derived.countdownHeld)}
       />
@@ -600,8 +643,10 @@ function RunningOverlay({ session, sessionKey }) {
                 <h1 className="clozzz-current">Routine complete</h1>
                 <span
                   className={`clozzz-card-timer clozzz-card-timer--${band}`}
+                  style={{ "--clozzz-timer-p": 0 }}
                 >
-                  {timerText}
+                  <TimerProgressRing progress={0} />
+                  <span className="clozzz-card-timer__digits">{timerText}</span>
                 </span>
               </div>
             </>
@@ -615,8 +660,10 @@ function RunningOverlay({ session, sessionKey }) {
                 <CrossfadeTitle text={moveLabel} />
                 <span
                   className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
+                  style={{ "--clozzz-timer-p": progress }}
                 >
-                  {timerText}
+                  <TimerProgressRing progress={progress} />
+                  <span className="clozzz-card-timer__digits">{timerText}</span>
                 </span>
               </div>
               <p className="clozzz-up-next">Next: {nextCue}</p>

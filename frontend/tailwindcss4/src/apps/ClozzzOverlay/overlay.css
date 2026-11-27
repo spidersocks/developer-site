@@ -398,40 +398,89 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-card-timer {
+  --clozzz-timer-p: 1;
+  --clozzz-ring-fill: var(--clozzz-gold);
+  --clozzz-ring-track: rgba(243, 234, 215, 0.2);
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
-  /* Fixed-width tabular slot so digits never shove the layout */
-  min-width: 5ch;
-  width: 5ch;
-  margin: 0;
-  padding-top: 0.02em;
-  font-family: var(--clozzz-font-display);
-  font-size: var(--clozzz-timer-size);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  line-height: 1.15;
-  text-align: right;
+  width: calc(var(--clozzz-timer-size) * 2.55);
+  height: calc(var(--clozzz-timer-size) * 2.55);
+  margin: -0.15rem 0 0;
+  padding: 0;
   color: #f3ead7;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
   -webkit-font-smoothing: antialiased;
   transition: color 0.3s ease;
 }
 
+.clozzz-card-timer__digits {
+  position: relative;
+  z-index: 1;
+  font-family: var(--clozzz-font-display);
+  font-size: calc(var(--clozzz-timer-size) * 0.72);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
+  min-width: 4.2ch;
+}
+
+/* Thin premium ring — 12 o'clock origin, remaining arc. */
+.clozzz-timer-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.clozzz-timer-ring__track,
+.clozzz-timer-ring__sweep {
+  fill: none;
+  stroke-width: 1.15;
+  vector-effect: non-scaling-stroke;
+}
+
+.clozzz-timer-ring__track {
+  stroke: var(--clozzz-ring-track, rgba(243, 234, 215, 0.2));
+}
+
+.clozzz-timer-ring__sweep {
+  stroke: var(--clozzz-ring-fill, var(--clozzz-gold));
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+
 .clozzz-card-timer--late {
   color: #f3ead7;
+  --clozzz-ring-fill: var(--clozzz-gold);
 }
 
 .clozzz-card-timer--warn {
   color: var(--clozzz-warn);
+  --clozzz-ring-fill: var(--clozzz-warn);
+  --clozzz-ring-track: rgba(240, 181, 106, 0.22);
 }
 
 .clozzz-card-timer--critical {
   color: var(--clozzz-critical);
+  --clozzz-ring-fill: var(--clozzz-critical);
+  --clozzz-ring-track: rgba(240, 138, 106, 0.25);
 }
 
 .clozzz-card-timer--done {
   color: #f3ead7;
+  --clozzz-ring-fill: rgba(228, 201, 137, 0.55);
+}
+
+.clozzz-card-timer--calm {
+  --clozzz-ring-fill: var(--clozzz-gold);
 }
 
 .clozzz-card-timer.is-armed,
@@ -568,8 +617,8 @@ html.clozzz-stage-preview #root {
   }
 
   .clozzz-card-timer {
-    min-width: 4.4ch;
-    width: 4.4ch;
+    width: calc(var(--clozzz-timer-size) * 2.45);
+    height: calc(var(--clozzz-timer-size) * 2.45);
   }
 }
 
@@ -1337,13 +1386,17 @@ html.clozzz-stage-remote #root {
   animation: clozzz-cd-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Clock width only — starting countdown has no progress rail */
+/* Clock + thin remaining ring (no linear progress rail on intro) */
 .clozzz-countdown__timer-block {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  --clozzz-timer-p: 1;
+  --clozzz-ring-fill: rgba(228, 201, 137, 0.92);
+  --clozzz-ring-track: rgba(243, 234, 215, 0.16);
+  position: relative;
+  display: grid;
+  place-items: center;
   width: fit-content;
   max-width: 100%;
+  padding: clamp(0.85rem, 2.2vw, 1.6rem);
   animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
@@ -1351,7 +1404,20 @@ html.clozzz-stage-remote #root {
   margin-top: 0.15rem;
 }
 
+.clozzz-countdown__ring {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.clozzz-countdown__ring .clozzz-timer-ring__track,
+.clozzz-countdown__ring .clozzz-timer-ring__sweep {
+  stroke-width: 0.9;
+}
+
 .clozzz-countdown__clock {
+  position: relative;
+  z-index: 1;
   margin: 0;
   font-family: var(--clozzz-font-display);
   font-size: clamp(5.5rem, 16vw, 11rem);
@@ -1368,6 +1434,11 @@ html.clozzz-stage-remote #root {
 .clozzz-countdown--soon .clozzz-countdown__clock {
   /* Warmer ivory — distinct from cool #D5DCE5 label */
   color: #f3ead7;
+}
+
+.clozzz-countdown.is-critical {
+  --clozzz-ring-fill: var(--clozzz-critical);
+  --clozzz-ring-track: rgba(240, 138, 106, 0.22);
 }
 
 .clozzz-countdown__rail {

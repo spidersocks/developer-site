@@ -122,7 +122,8 @@ async function main() {
     const locked = await page.locator(".clozzz-remote.is-swipe-locked").count();
     if (locked) throw new Error("Idle remote should not be swipe-locked");
     const cards = await page.locator(".clozzz-remote__card").count();
-    if (cards !== 1) throw new Error(`Idle should show 1 panel, got ${cards}`);
+    // Idle Embla deck mounts prev/current/next (neighbors off-screen at rest).
+    if (cards < 1 || cards > 3) throw new Error(`Idle deck should be 1–3 cards, got ${cards}`);
     await page.screenshot({ path: path.join(MEDIA, "remote-idle-channel.png") });
     await page.close();
     console.log("ok remote-idle-channel.png");

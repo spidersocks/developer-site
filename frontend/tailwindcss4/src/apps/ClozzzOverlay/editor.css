@@ -621,7 +621,9 @@
 
 .ce-tools__item {
   appearance: none;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   width: 100%;
   border: 0;
   border-radius: 0.2rem;
@@ -635,9 +637,20 @@
   cursor: pointer;
 }
 
+.ce-tools__item-icon {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.78;
+}
+
 .ce-tools__item:hover {
   background: rgba(81, 75, 130, 0.1);
   color: var(--ce-accent);
+}
+
+.ce-tools__item:hover .ce-tools__item-icon {
+  opacity: 1;
 }
 
 .ce-tools__item:focus-visible {

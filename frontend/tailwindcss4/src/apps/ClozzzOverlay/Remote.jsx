@@ -19,6 +19,13 @@ const REMOTE_HOME = "/clozzz-remote";
 const EASE_APPLE = "cubic-bezier(0.39, 0.14, 0.26, 1)";
 const SWIPE_SETTLE_MS = 520;
 
+/** Embla scale-on-focus tween factor (distance → t). */
+const TWEEN_FACTOR = 0.72;
+const SCALE_MIN = 0.82;
+const SCALE_RANGE = 0.18;
+const OPACITY_MIN = 0.45;
+const OPACITY_RANGE = 0.55;
+
 const SWIPE_DISTANCE_RATIO = 0.22;
 const SWIPE_DISTANCE_MIN_PX = 64;
 const FLICK_SPEED = 0.45;
@@ -91,8 +98,22 @@ function clamp(n, a, b) {
 }
 
 /**
- * Control remote — mobile title-plane channel swipe + desktop sidebar.
- * Live run locks swipe. Product URL stays `/clozzz-remote`.
+ * Embla center-scale tween:
+ * t = clamp(1 - abs(offset) * factor, 0, 1)
+ * scale = 0.82 + 0.18 * t ; opacity = 0.45 + 0.55 * t
+ */
+function tweenFromOffset(offset) {
+  const t = clamp(1 - Math.abs(offset) * TWEEN_FACTOR, 0, 1);
+  return {
+    t,
+    scale: SCALE_MIN + SCALE_RANGE * t,
+    opacity: OPACITY_MIN + OPACITY_RANGE * t,
+  };
+}
+
+/**
+ * Control remote — mobile Embla scale-on-focus channel swipe + desktop sidebar.
+ * Live/countdown locks swipe (no neighbor peeks). Product URL stays `/clozzz-remote`.
  */
 export default function Remote({
   sessionKey,
@@ -140,7 +161,8 @@ export default function Remote({
 
   const pitchPx = () => {
     const w = viewportRef.current?.offsetWidth || window.innerWidth || 360;
-    return Math.max(240, w * 0.88);
+    // Full viewport pitch — neighbors stay off-screen at rest (no idle peeks).
+    return Math.max(280, w);
   };
 
   const refresh = useCallback(async () => {
@@ -277,6 +299,7 @@ export default function Remote({
       setProgress(delta > 0 ? 1 : -1);
       settleTimer.current = window.setTimeout(() => {
         pendingDelta.current = null;
+        // Drop settle easing before remount so progress 1→0 does not reverse-jump.
         setSettling(false);
         setProgress(0);
         applyChannel(next);
@@ -661,10 +684,18 @@ export default function Remote({
     </div>
   );
 
-  // Never render neighbor peeks — title-plane swipe only (no framed deck edges).
-  const slots = [{ id: sessionKey }];
+  // Idle/paused: Embla three-slot deck. Live lock: active panel only (no peeks).
+  const prevId = canSwipe ? neighborId(-1) : null;
+  const nextId = canSwipe ? neighborId(1) : null;
+  const slots = canSwipe
+    ? [
+        { id: prevId, slot: -1 },
+        { id: sessionKey, slot: 0 },
+        { id: nextId, slot: 1 },
+      ]
+    : [{ id: sessionKey, slot: 0 }];
 
-  const cardStyle = () => {
+  const cardStyle = (slot) => {
     if (swipeLocked || !canSwipe) {
       return {
         transform: "none",
@@ -673,12 +704,14 @@ export default function Remote({
         transition: "none",
       };
     }
-    // Single panel follows the finger; commit swaps the channel (no side cards).
+    // Swiper/Embla offsetMultiplier: distance of card from visual center.
+    const offset = slot - progress;
+    const { scale, opacity, t } = tweenFromOffset(offset);
     const pitch = pitchPx();
     return {
-      transform: `translate3d(${-progress * pitch}px, 0, 0)`,
-      opacity: 1 - Math.min(0.35, Math.abs(progress) * 0.28),
-      zIndex: 1,
+      transform: `translate3d(${offset * pitch}px, 0, 0) scale(${scale})`,
+      opacity,
+      zIndex: Math.round(t * 20),
       transition: settling
         ? `transform ${SWIPE_SETTLE_MS}ms ${EASE_APPLE}, opacity ${SWIPE_SETTLE_MS}ms ${EASE_APPLE}`
         : "none",
@@ -792,14 +825,15 @@ export default function Remote({
 
         <div ref={viewportRef} className="clozzz-remote__viewport">
           <div className="clozzz-remote__stage">
-            {slots.map(({ id }) =>
+            {slots.map(({ id, slot }) =>
               id ? (
                 <div
                   key={id}
-                  className="clozzz-remote__card is-active"
-                  style={cardStyle()}
+                  className={`clozzz-remote__card${slot === 0 ? " is-active" : ""}`}
+                  style={cardStyle(slot)}
+                  aria-hidden={slot !== 0}
                 >
-                  {renderCardBody(id, true)}
+                  {renderCardBody(id, slot === 0)}
                 </div>
               ) : null
             )}
