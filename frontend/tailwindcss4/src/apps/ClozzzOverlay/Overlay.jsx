@@ -530,14 +530,15 @@ function StreamEndedStage({ elapsedSec, title, message }) {
   );
 }
 
-// Cache-bust so OBS Browser Source picks up cue replacements.
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=sean5-final2";
+// Mixkit “Simple countdown” (922, Mixkit License). Cache-bust for OBS CEF.
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922";
 /**
- * Countdown bed length in the cue file (before the final chime).
- * Initial seek uses (CUE_SEC - remainingSec); then audio plays freely with
- * occasional drift correction — NOT every rAF (that silenced OBS/CEF).
+ * Amplitude peaks in the WAV (stereo 44.1kHz RMS): ~0.01, 1.01, 2.01, 3.01s.
+ * Three countdown tones, then a fourth for exercise switch. Cue window =
+ * time from first peak to fourth; seek = (CUE_SEC - remainingSec).
+ * Arm-once + drift resync only — never every-frame seek (silences OBS/CEF).
  */
-const SEGMENT_END_CUE_SEC = 5;
+const SEGMENT_END_CUE_SEC = 3;
 /** Only re-seek if display vs audio drift exceeds this (seconds). */
 const CUE_DRIFT_RESYNC_SEC = 0.28;
 

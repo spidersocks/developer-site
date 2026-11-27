@@ -528,10 +528,14 @@ export default function Remote({
     }, SWIPE_SETTLE_MS);
   }, []);
 
-  /** Channel switch + pull-to-refresh only when idle/paused. Live/countdown locks both. */
+  /**
+   * Channel switch + pull-to-refresh only when idle.
+   * Pause/resume must keep the same locked layout (no Embla reflow/resize).
+   */
   const liveStatus = live?.status || "idle";
   const swipeLocked =
     liveStatus === "running" ||
+    liveStatus === "paused" ||
     liveStatus === "countdown" ||
     liveStatus === "stream_ended";
   const canSwipe = multiChannel && !swipeLocked;
@@ -686,12 +690,13 @@ export default function Remote({
 
   const send = async (command, extras = {}) => {
     const busyKey = extras._busyKey || command;
+    const skipBusy = Boolean(extras._skipBusy);
     const expectedKey = sessionKey;
-    setBusyCmd(busyKey);
+    if (!skipBusy) setBusyCmd(busyKey);
     setError("");
     try {
       const token = (await ensureLiveToken()) || readLiveToken();
-      const { _busyKey, ...payload } = extras;
+      const { _busyKey, _skipBusy, ...payload } = extras;
       const snap = await postLiveCommand(expectedKey, command, token, payload);
       applyLiveSnap(snap, expectedKey);
     } catch (e) {
@@ -701,7 +706,7 @@ export default function Remote({
         setError(e.message || "Command failed");
       }
     } finally {
-      setBusyCmd(null);
+      if (!skipBusy) setBusyCmd(null);
     }
   };
 
@@ -737,11 +742,11 @@ export default function Remote({
   const introHeld = status === "idle" && introPending;
   const logoArmed =
     status === "idle" && Boolean(live?.introConsumed) && !chromeVisible;
-  const label = live?.currentLabel || "…";
   const index = typeof live?.segmentIndex === "number" ? live.segmentIndex : 0;
   const count = live?.segmentCount || 0;
 
   let primary = { cmd: "start", text: "Start routine" };
+  // Pause/Resume share the same primary slot — fixed min-height prevents reflow.
   if (status === "running") primary = { cmd: "pause", text: "Pause" };
   else if (status === "paused") primary = { cmd: "resume", text: "Resume" };
   else if (status === "done" || inStreamEnded)
@@ -769,11 +774,12 @@ export default function Remote({
         ? { ...prev, cueVolume: nextVol, cueMuted: nextMuted }
         : prev
     );
+    // Volume/mute: never set busyCmd — slider must not blink/disable on each tick.
     const push = () =>
       send("set_cue_audio", {
         cueVolume: nextVol,
         cueMuted: nextMuted,
-        _busyKey: "set_cue_audio",
+        _skipBusy: true,
       });
     if (debounceMs > 0) {
       if (cueVolTimerRef.current) window.clearTimeout(cueVolTimerRef.current);
@@ -794,43 +800,38 @@ export default function Remote({
         ? "Pull to refresh"
         : "";
 
+  // Lean OBS-dock strip: status + segment count only — no exercise / ended copy.
   const statusLine = (() => {
+    if (inStreamEnded || status === "done") return "";
     let line = inCountdown
       ? "Pre-stream countdown"
       : introHeld
         ? "Countdown held — waiting for Start"
         : logoArmed
           ? "Logo only — waiting for Start"
-          : inStreamEnded
-            ? "Stream ended"
-            : status === "done"
-              ? "Routine complete"
-              : status === "idle"
-                ? "Armed — waiting for Start"
-                : status === "paused"
-                  ? "Paused"
-                  : "Live";
-    if (!inCountdown && !introHeld && !logoArmed && !inStreamEnded && count > 0) {
+          : status === "idle"
+            ? "Armed — waiting for Start"
+            : status === "paused"
+              ? "Paused"
+              : "Live";
+    if (!inCountdown && !introHeld && !logoArmed && count > 0) {
       line += ` · ${index + 1} / ${count}`;
     }
-    if (!inCountdown && !introHeld && !logoArmed && !inStreamEnded) {
+    if (!inCountdown && !introHeld && !logoArmed) {
       line += chromeVisible ? " · Chrome on" : " · Logo only";
     }
     return line;
   })();
 
   const introMessage = String(live?.introCountdownMessage || "").trim();
+  // No current-exercise / thanks-for-watching / stream-ended labels on the strip.
   const nowLabel =
     inCountdown || introHeld
       ? introMessage ||
         (sessionTitle ? `${sessionTitle} begins in` : "Begins in")
       : logoArmed
         ? "Ready when you are"
-        : inStreamEnded
-          ? live?.streamEndedMessage || "Thanks for watching"
-          : status === "done"
-            ? "Done"
-            : label;
+        : "";
 
   const controls = (
     <div className="clozzz-remote__pad">
@@ -927,7 +928,7 @@ export default function Remote({
         <button
           type="button"
           className="clozzz-remote__btn clozzz-remote__btn--mute"
-          disabled={noLive || isBusy("set_cue_audio")}
+          disabled={noLive}
           aria-pressed={cueMuted}
           aria-label={cueMuted ? "Unmute timer cue" : "Mute timer cue"}
           title={cueMuted ? "Unmute" : "Mute"}
@@ -945,7 +946,7 @@ export default function Remote({
             max={100}
             step={1}
             value={Math.round(cueVolume * 100)}
-            disabled={noLive || cueMuted || isBusy("set_cue_audio")}
+            disabled={noLive || cueMuted}
             aria-label="Cue volume"
             onChange={(e) =>
               setCueAudio(
@@ -1049,17 +1050,21 @@ export default function Remote({
                   `Channel ${idx + 1} of ${channelIds.length} · swipe title to switch`
                 : `Channel ${idx + 1} of ${channelIds.length}`}
             </p>
-          ) : multiChannel && swipeLocked ? (
+          ) : multiChannel ? (
             <p className="clozzz-remote__channel clozzz-remote__channel--mobile">
-              Channel locked while live
+              {`Channel ${idx + 1} of ${channelIds.length}`}
             </p>
           ) : null}
           {isActive ? (
             <>
-              <p className="clozzz-remote__meta">{statusLine}</p>
-              <p className="clozzz-remote__label" aria-live="polite">
-                {nowLabel}
-              </p>
+              {statusLine ? (
+                <p className="clozzz-remote__meta">{statusLine}</p>
+              ) : null}
+              {nowLabel ? (
+                <p className="clozzz-remote__label" aria-live="polite">
+                  {nowLabel}
+                </p>
+              ) : null}
             </>
           ) : (
             <p className="clozzz-remote__meta">Swipe to switch</p>
@@ -1118,7 +1123,7 @@ export default function Remote({
           ))}
         </ul>
         <p className="clozzz-remote__sidebar-hint">
-          {swipeLocked ? "Channel locked while live" : "← → to switch"}
+          {swipeLocked ? "← → when idle" : "← → to switch"}
         </p>
       </aside>
 

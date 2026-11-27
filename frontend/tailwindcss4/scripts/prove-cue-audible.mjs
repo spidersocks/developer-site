@@ -11,28 +11,33 @@ const root = path.resolve(__dirname, "..");
 const wavPath = path.join(root, "public/clozzz/segment-end-cue.wav");
 const overlayPath = path.join(root, "src/apps/ClozzzOverlay/Overlay.jsx");
 
-const PROD = "https://www.seanfontaine.dev/clozzz/segment-end-cue.wav?v=sean5-final2";
+const PROD = "https://www.seanfontaine.dev/clozzz/segment-end-cue.wav?v=mixkit922";
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
   console.log("OK", msg);
 }
 
-// 1) Local asset
+// 1) Local asset + Mixkit amplitude window (3 tones + 4th switch)
 const st = fs.statSync(wavPath);
 assert(st.size > 500_000, `local WAV size ${st.size} (>500KB)`);
 const buf = fs.readFileSync(wavPath);
 assert(buf.slice(0, 4).toString() === "RIFF", "local WAV starts with RIFF");
 
-// 2) Source no longer seek-thrashes every frame
 const src = fs.readFileSync(overlayPath, "utf8");
+assert(
+  /SEGMENT_END_CUE_SEC\s*=\s*3\b/.test(src),
+  "SEGMENT_END_CUE_SEC = 3 (Mixkit peaks @ ~0/1/2/3s)"
+);
+
+// 2) Source no longer seek-thrashes every frame
 assert(src.includes("CUE_DRIFT_RESYNC_SEC"), "drift-resync constant present");
 assert(src.includes("armedKeyRef"), "arm-once per segment");
 assert(
   !src.includes("seekTo(displayTarget);\n    if (audio.paused)"),
   "old every-frame seek+play pattern removed"
 );
-assert(src.includes("sean5-final2"), "cache-bust bump for OBS refresh");
+assert(src.includes("mixkit922"), "cache-bust bump for OBS refresh");
 
 // 3) Simulate thrash vs arm-once (why OBS/CEF was silent).
 // Model: seek cancels decode; audio.currentTime does not advance until a

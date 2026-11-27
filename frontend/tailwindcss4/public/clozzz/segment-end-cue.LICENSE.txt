@@ -1,9 +1,13 @@
 segment-end-cue.wav
 ===================
 
-Countdown bed: first 5.0s of user-provided 5-second-countdown-sound
-(upload: 5-second-countdown-sound--hjmjpfg6).
+Source: Mixkit “Simple countdown” (sound id 922)
+File: mixkit-simple-countdown-922.wav
+License: Mixkit License (free for commercial & personal use; attribution
+not required). https://mixkit.co/license/#sfxFree
 
-Final: original Clozzz soft bell chime (distinct next-exercise cue), CC0.
+Amplitude peaks (44.1 kHz stereo RMS): ~0.01s, 1.01s, 2.01s, 3.01s —
+three countdown tones, then a fourth for exercise switch.
 
-Playback is hard-synced to the on-screen overlay timer.
+Display-locked playback: arm once per segment against remainingSec;
+no every-frame seek thrash.
