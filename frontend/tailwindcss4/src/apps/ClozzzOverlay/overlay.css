@@ -1798,3 +1798,142 @@ html.clozzz-stage-remote #root {
     transform: translateY(0);
   }
 }
+
+/* —— Branded boot / loading (remote + routines) —— */
+.clozzz-boot {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.85rem;
+  padding: 2rem 1.25rem;
+  text-align: center;
+  font-family: var(--clozzz-font-sans);
+}
+
+.clozzz-boot--remote {
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(228, 201, 137, 0.14), transparent 42%),
+    radial-gradient(ellipse at 88% 12%, rgba(110, 91, 184, 0.26), transparent 46%),
+    #120e22;
+  color: var(--clozzz-cream);
+}
+
+.clozzz-boot--routines {
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(246, 197, 107, 0.14) 0%, transparent 42%),
+    radial-gradient(ellipse at 88% 8%, rgba(81, 75, 130, 0.12) 0%, transparent 45%),
+    #f6f4fb;
+  color: #2a2540;
+}
+
+.clozzz-boot__orb {
+  position: relative;
+  width: 5.5rem;
+  height: 5.5rem;
+  display: grid;
+  place-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.clozzz-boot__logo {
+  position: relative;
+  z-index: 1;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.85rem;
+  box-shadow: 0 10px 28px rgba(18, 14, 34, 0.28);
+  animation: clozzz-boot-breathe 2.4s ease-in-out infinite;
+}
+
+.clozzz-boot__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: rgba(246, 197, 107, 0.85);
+  border-right-color: rgba(81, 75, 130, 0.35);
+  animation: clozzz-boot-spin 1.35s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.clozzz-boot__ring--lag {
+  inset: 0.45rem;
+  border-top-color: rgba(81, 75, 130, 0.55);
+  border-right-color: rgba(246, 197, 107, 0.25);
+  animation-duration: 2.1s;
+  animation-direction: reverse;
+}
+
+.clozzz-boot--remote .clozzz-boot__ring {
+  border-top-color: rgba(228, 201, 137, 0.9);
+  border-right-color: rgba(160, 140, 220, 0.35);
+}
+
+.clozzz-boot--remote .clozzz-boot__ring--lag {
+  border-top-color: rgba(160, 140, 220, 0.55);
+  border-right-color: rgba(228, 201, 137, 0.22);
+}
+
+.clozzz-boot__brand {
+  margin: 0;
+  font-family: var(--clozzz-font-display);
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.clozzz-boot--remote .clozzz-boot__brand {
+  color: var(--clozzz-cream);
+}
+
+.clozzz-boot--routines .clozzz-boot__brand {
+  color: #313161;
+}
+
+.clozzz-boot__label {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+  animation: clozzz-boot-fade 1.8s ease-in-out infinite;
+}
+
+@keyframes clozzz-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes clozzz-boot-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.04);
+    filter: brightness(1.06);
+  }
+}
+
+@keyframes clozzz-boot-fade {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clozzz-boot__ring,
+  .clozzz-boot__ring--lag,
+  .clozzz-boot__logo,
+  .clozzz-boot__label {
+    animation: none;
+  }
+}

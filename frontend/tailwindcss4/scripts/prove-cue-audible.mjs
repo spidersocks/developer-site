@@ -107,7 +107,12 @@ assert(src.includes("carryingRef"), "carry flag across segment boundary");
 assert(src.includes("mixkit922orig"), "cache-bust bump for original Mixkit");
 assert(/createObjectURL|force-cache/.test(src), "cue WAV prefetched into blob buffer");
 assert(/CUE_PREWARM_SEC/.test(src), "prewarm before arm window");
-assert(/rel=["']preload["']/.test(src) || true, "preload documented in overlay HTML separately");
+assert(/seekReady/.test(src), "seekReady awaits seeked before play");
+assert(/makeCueAudio|poolRef|activeIdxRef/.test(src), "dual-player pool for consistent re-arms");
+assert(
+  !/CUE_DRIFT_RESYNC_SEC/.test(src),
+  "no mid-cue drift seeks (caused 2nd-play lateness)"
+);
 assert(
   /Do NOT pitch\/warp\/speed-rebuild|original file|natural 1×|Never set playbackRate ≠ 1/i.test(
     src
@@ -115,8 +120,7 @@ assert(
   "original-file / natural-rate intent documented"
 );
 
-// 2) Source no longer seek-thrashes every frame
-assert(src.includes("CUE_DRIFT_RESYNC_SEC"), "drift-resync constant present");
+// 2) Arm-once; no every-frame seek thrash
 assert(src.includes("armedKeyRef"), "arm-once per segment");
 assert(
   !src.includes("seekTo(displayTarget);\n    if (audio.paused)"),

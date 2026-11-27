@@ -672,12 +672,12 @@ const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
 const CUE_LEAD_SEC = 0.28;
 /** Cover 4th peak + short tail (audio time) before allowing the next arm. */
 const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
-/** Re-seek only if audio-time drift vs display target exceeds this. */
-const CUE_DRIFT_RESYNC_SEC = 0.35;
-/** Near the top of the window → seek 0 so tone 1 isn't clipped (wall sec). */
+/** Near the top of the window → start at 0 so tone 1 isn't clipped (wall sec). */
 const CUE_CLEAN_ARM_EPS_SEC = 0.2;
-/** Start ensuring the cue buffer is hot this many seconds before the arm window. */
+/** Start parking the idle player at 0 this many seconds before the arm window. */
 const CUE_PREWARM_SEC = SEGMENT_END_CUE_SEC + 5;
+/** Max wait for CEF seeked before play (ms). */
+const CUE_SEEK_TIMEOUT_MS = 120;
 
 /** Audio currentTime that matches painted remainingSec (+ lead). */
 function cueAudioTarget(remainingSec) {
@@ -690,39 +690,80 @@ function cueAudioTarget(remainingSec) {
   );
 }
 
+function makeCueAudio(src) {
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.playsInline = true;
+  audio.playbackRate = CUE_PLAYBACK_RATE;
+  audio.muted = false;
+  audio.volume = 0.75;
+  audio.src = src;
+  try {
+    audio.load();
+  } catch {
+    /* ignore */
+  }
+  return audio;
+}
+
 /**
- * Hard-sync segment-end cue to the painted remainingSec, without seek-thrash.
- * Backend/remote lag must not delay the start; display clock owns the cue.
- * Carry lets the 4th tone finish after rem hits 0 / the next segment starts.
- *
- * Prefetch: HTML preload + fetch→blob URL so the full WAV is buffered before
- * arm (avoids first-beep network/decode lag in OBS CEF).
+ * Wait until currentTime lands (or timeout). CEF often starts play() before an
+ * unfinished seek — that made play #1 fine and play #2 late after ended→reuse.
+ */
+function seekReady(audio, timeSec, timeoutMs = CUE_SEEK_TIMEOUT_MS) {
+  const target = Math.max(0, Number(timeSec) || 0);
+  if (
+    !audio.ended &&
+    audio.readyState >= 2 &&
+    Math.abs((audio.currentTime || 0) - target) < 0.02
+  ) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      audio.removeEventListener("seeked", finish);
+      resolve();
+    };
+    audio.addEventListener("seeked", finish);
+    try {
+      if (!audio.paused) audio.pause();
+      audio.currentTime = target;
+    } catch {
+      finish();
+      return;
+    }
+    // Sync CEF sometimes never fires seeked when already at target.
+    window.setTimeout(finish, timeoutMs);
+  });
+}
+
+/**
+ * Dual-player pool + seek-before-play.
+ * Root cause of 1st-perfect / 2nd-late: reusing an `ended` HTMLAudio, seek+play
+ * racing, and mid-cue drift seeks. Fix: alternate two fully-buffered players,
+ * await seeked before play, never seek while carrying, reset the idle player.
  */
 function useSegmentEndCue(live, remainingSec) {
-  const audioRef = useRef(null);
-  /** Segment key we already armed play() for (avoid restart loops). */
+  /** @type {React.MutableRefObject<HTMLAudioElement[]>} */
+  const poolRef = useRef([]);
+  const activeIdxRef = useRef(0);
   const armedKeyRef = useRef(null);
-  /** True after arm until the WAV passes the 4th tone (survives segment switch). */
   const carryingRef = useRef(false);
+  const armingRef = useRef(false);
   const unlockTriedRef = useRef(false);
-  /** True once canplaythrough on the buffered blob (or URL fallback). */
   const readyRef = useRef(false);
-  const prewarmedRef = useRef(false);
+  const prewarmedKeyRef = useRef(null);
+  const blobUrlRef = useRef(null);
+
+  const activeAudio = () => poolRef.current[activeIdxRef.current] || null;
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = null;
-    const audio = new Audio();
-    audio.preload = "auto";
-    audio.playsInline = true;
-    audio.playbackRate = CUE_PLAYBACK_RATE;
-    // OBS CEF: keep element unmuted for Control-audio-via-OBS; volume is set live.
-    audio.muted = false;
-    audio.volume = 0.75;
-    audioRef.current = audio;
-    readyRef.current = false;
 
-    // Runtime preload hint (covers SPA navigations that skip the static <link>).
     if (
       typeof document !== "undefined" &&
       !document.querySelector('link[data-clozzz-cue-preload]')
@@ -736,51 +777,44 @@ function useSegmentEndCue(live, remainingSec) {
       document.head.appendChild(link);
     }
 
-    // Warm decode + unlock autoplay policies where CEF allows muted gesture-free play.
-    const unlock = () => {
+    const unlockAll = (players) => {
       if (unlockTriedRef.current || cancelled) return;
       unlockTriedRef.current = true;
-      const prevVol = audio.volume;
-      audio.muted = true;
-      audio.volume = 0;
-      const p = audio.play();
-      const finish = () => {
-        if (cancelled) return;
-        audio.pause();
-        try {
-          audio.currentTime = 0;
-        } catch {
-          /* ignore */
+      players.forEach((audio) => {
+        const prevVol = audio.volume;
+        audio.muted = true;
+        audio.volume = 0;
+        const p = audio.play();
+        const finish = () => {
+          if (cancelled) return;
+          audio.pause();
+          seekReady(audio, 0).finally(() => {
+            if (cancelled) return;
+            audio.muted = false;
+            audio.volume = prevVol || 0.75;
+          });
+        };
+        if (p && typeof p.then === "function") p.then(finish).catch(finish);
+        else finish();
+      });
+    };
+
+    const waitCanPlay = (audio) =>
+      new Promise((resolve) => {
+        if (audio.readyState >= 4) {
+          resolve();
+          return;
         }
-        audio.muted = false;
-        audio.volume = prevVol || 0.75;
-      };
-      if (p && typeof p.then === "function") {
-        p.then(finish).catch(finish);
-      } else {
-        finish();
-      }
-    };
+        const done = () => {
+          audio.removeEventListener("canplaythrough", done);
+          resolve();
+        };
+        audio.addEventListener("canplaythrough", done, { once: true });
+        window.setTimeout(done, 4000);
+      });
 
-    const markReady = () => {
-      if (cancelled) return;
-      readyRef.current = true;
-      unlock();
-    };
-
-    const bindSrc = (src) => {
-      audio.src = src;
-      try {
-        audio.load();
-      } catch {
-        /* ignore */
-      }
-      if (audio.readyState >= 4) markReady();
-      else audio.addEventListener("canplaythrough", markReady, { once: true });
-    };
-
-    // Fetch the whole WAV into a blob so arm never waits on the network.
     (async () => {
+      let src = SEGMENT_END_CUE_SRC;
       try {
         const res = await fetch(SEGMENT_END_CUE_SRC, {
           cache: "force-cache",
@@ -790,19 +824,33 @@ function useSegmentEndCue(live, remainingSec) {
         const blob = await res.blob();
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
-        bindSrc(objectUrl);
+        blobUrlRef.current = objectUrl;
+        src = objectUrl;
       } catch {
-        if (cancelled) return;
-        // Fallback: let the element stream the static URL.
-        bindSrc(SEGMENT_END_CUE_SRC);
+        /* static URL fallback */
       }
+      if (cancelled) return;
+
+      const players = [makeCueAudio(src), makeCueAudio(src)];
+      poolRef.current = players;
+      activeIdxRef.current = 0;
+      await Promise.all(players.map(waitCanPlay));
+      if (cancelled) return;
+      readyRef.current = true;
+      unlockAll(players);
     })();
 
     return () => {
       cancelled = true;
-      audio.pause();
-      audioRef.current = null;
       readyRef.current = false;
+      poolRef.current.forEach((a) => {
+        try {
+          a.pause();
+        } catch {
+          /* ignore */
+        }
+      });
+      poolRef.current = [];
       if (objectUrl) {
         try {
           URL.revokeObjectURL(objectUrl);
@@ -810,127 +858,116 @@ function useSegmentEndCue(live, remainingSec) {
           /* ignore */
         }
       }
+      blobUrlRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
     const muted = Boolean(live?.cueMuted);
     const vol =
       typeof live?.cueVolume === "number" ? live.cueVolume : 0.75;
     const nextVol = Math.max(0, Math.min(1, Number.isFinite(vol) ? vol : 0.75));
-    audio.muted = muted;
-    // Keep a tiny floor when unmuted so OBS isn't left at absolute 0 by accident.
-    audio.volume = muted ? 0 : nextVol > 0 ? nextVol : 0.75;
+    poolRef.current.forEach((audio) => {
+      audio.muted = muted;
+      audio.volume = muted ? 0 : nextVol > 0 ? nextVol : 0.75;
+    });
   }, [live?.cueVolume, live?.cueMuted]);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
     const status = live?.status;
     const muted = Boolean(live?.cueMuted);
     const rem = Number(remainingSec);
     const valid = Number.isFinite(rem);
     const segKey = `${live?.segmentStartedAtMs ?? live?.breakStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}:${live?.status ?? ""}`;
     const displayTarget = valid ? cueAudioTarget(rem) : 0;
-    if (audio.playbackRate !== CUE_PLAYBACK_RATE) {
-      audio.playbackRate = CUE_PLAYBACK_RATE;
+    const audio = activeAudio();
+    if (!audio) return;
+
+    const stopAndPark = () => {
+      carryingRef.current = false;
+      armedKeyRef.current = null;
+      armingRef.current = false;
+      const a = activeAudio();
+      if (a && !a.paused) a.pause();
+      // Reset BOTH players to 0 so the next arm never inherits ended/tail state.
+      poolRef.current.forEach((p) => {
+        seekReady(p, 0).catch(() => {});
+      });
+    };
+
+    const cueFinished = (a) =>
+      a.ended || (a.currentTime || 0) >= CUE_CARRY_UNTIL_SEC;
+
+    if (muted) {
+      stopAndPark();
+      return;
     }
 
-    // Approaching the cue window: re-assert buffer / decode while we still have time.
+    // Prewarm idle player while approaching the window (no load() thrash).
     if (
       valid &&
       rem <= CUE_PREWARM_SEC &&
       rem > SEGMENT_END_CUE_SEC &&
-      !prewarmedRef.current &&
+      prewarmedKeyRef.current !== segKey &&
       !carryingRef.current
     ) {
-      prewarmedRef.current = true;
-      if (audio.readyState < 4) {
-        try {
-          audio.load();
-        } catch {
-          /* ignore */
-        }
-      } else {
-        try {
-          audio.currentTime = 0;
-        } catch {
-          /* ignore */
-        }
-      }
+      prewarmedKeyRef.current = segKey;
+      const idle =
+        poolRef.current[(activeIdxRef.current + 1) % poolRef.current.length] ||
+        audio;
+      seekReady(idle, 0).catch(() => {});
     }
     if (valid && rem > CUE_PREWARM_SEC) {
-      prewarmedRef.current = false;
+      prewarmedKeyRef.current = null;
     }
 
-    const seekTo = (t) => {
-      try {
-        audio.currentTime = t;
-      } catch {
-        /* metadata not ready */
-      }
-    };
-
-    const stopAndReset = () => {
-      carryingRef.current = false;
-      armedKeyRef.current = null;
-      if (!audio.paused) audio.pause();
-      seekTo(0);
-    };
-
-    const cueFinished = () =>
-      audio.ended || (audio.currentTime || 0) >= CUE_CARRY_UNTIL_SEC;
-
-    // Mute always wins.
-    if (muted) {
-      stopAndReset();
-      return;
-    }
-
-    // Carry across segment boundary (and last-segment → done/ended): keep playing
-    // through the 4th tone. Never seek against the next rem / Infinity.
     if (carryingRef.current) {
-      if (cueFinished()) {
-        stopAndReset();
+      const a = activeAudio();
+      if (!a) return;
+      if (cueFinished(a)) {
+        // Swap to the other player for the next segment (fresh head).
+        const finished = a;
+        finished.pause();
+        activeIdxRef.current =
+          (activeIdxRef.current + 1) % Math.max(1, poolRef.current.length);
+        carryingRef.current = false;
+        armedKeyRef.current = null;
+        armingRef.current = false;
+        seekReady(finished, 0).catch(() => {});
         return;
       }
-      // Fresh idle/countdown (restart / new intro) — drop the cue.
       if (status === "idle" || status === "countdown") {
-        stopAndReset();
+        stopAndPark();
         return;
       }
-      if (status === "paused" || (status === "break" && live?.breakStartedAtMs == null)) {
-        if (!audio.paused) audio.pause();
+      if (
+        status === "paused" ||
+        (status === "break" && live?.breakStartedAtMs == null)
+      ) {
+        if (!a.paused) a.pause();
         return;
       }
-      // running | break (ticking) | done | stream_ended — finish the 4th tone.
-      if (audio.paused) {
-        const play = audio.play();
-        if (play && typeof play.catch === "function") play.catch(() => {});
+      if (a.paused) {
+        a.play().catch(() => {});
       }
       return;
     }
 
-    // Not carrying: running / break (ticking) / paused may arm or freeze.
     const breakTicking = status === "break" && live?.breakStartedAtMs != null;
     const breakHeld = status === "break" && live?.breakStartedAtMs == null;
     if (status !== "running" && status !== "paused" && !breakTicking && !breakHeld) {
-      stopAndReset();
+      if (armedKeyRef.current) stopAndPark();
       return;
     }
 
-    // Paused / held break inside the cue window: freeze on the frozen display clock.
     if (
       (status === "paused" || breakHeld) &&
       valid &&
       rem <= SEGMENT_END_CUE_SEC &&
       rem > 0
     ) {
-      if (!audio.paused) audio.pause();
-      if (armedKeyRef.current === segKey) seekTo(displayTarget);
+      const a = activeAudio();
+      if (a && !a.paused) a.pause();
       return;
     }
 
@@ -941,62 +978,70 @@ function useSegmentEndCue(live, remainingSec) {
       rem > 0;
 
     if (!inWindow) {
-      // Outside window and not carrying — stay quiet (do not thrash seek every frame).
-      if (!audio.paused) audio.pause();
-      if (
-        armedKeyRef.current &&
-        ((status !== "running" && !breakTicking) ||
-          !valid ||
-          rem > SEGMENT_END_CUE_SEC)
-      ) {
-        armedKeyRef.current = null;
-        seekTo(0);
+      return;
+    }
+
+    if (armedKeyRef.current === segKey || armingRef.current) {
+      // Armed: play through. Never mid-cue seek (drift seeks caused 2nd-play lag).
+      const a = activeAudio();
+      if (a && a.paused && carryingRef.current) {
+        a.play().catch(() => {});
       }
       return;
     }
 
-    // Entering the window for this segment: seek once, then play through carry.
-    if (armedKeyRef.current !== segKey) {
-      armedKeyRef.current = segKey;
-      carryingRef.current = true;
-      // Near the top of the window → start at 0 so tone 1 isn't truncated.
-      const armAt =
-        rem >= SEGMENT_END_CUE_SEC - CUE_CLEAN_ARM_EPS_SEC ? 0 : displayTarget;
-      seekTo(armAt);
-      audio.muted = false;
-      if (typeof live?.cueVolume === "number" && live.cueVolume > 0) {
-        audio.volume = live.cueVolume;
-      } else if (audio.volume <= 0) {
-        audio.volume = 0.75;
-      }
-      const play = audio.play();
-      if (play && typeof play.catch === "function") {
-        play.catch(() => {
-          // One retry (CEF sometimes needs a second kick) — same armAt, no rem recompute thrash.
-          window.setTimeout(() => {
-            if (armedKeyRef.current !== segKey || !carryingRef.current) return;
-            seekTo(armAt);
-            audio.playbackRate = CUE_PLAYBACK_RATE;
-            audio.play().catch(() => {});
-          }, 50);
-        });
-      }
+    // Arm once: pick a parked player, seekReady, then play.
+    armedKeyRef.current = segKey;
+    armingRef.current = true;
+    carryingRef.current = true;
+    const armAt =
+      rem >= SEGMENT_END_CUE_SEC - CUE_CLEAN_ARM_EPS_SEC ? 0 : displayTarget;
+
+    // Prefer the idle (non-active-if-dirty) player — after swap, active is already parked.
+    let player = activeAudio();
+    if (
+      player &&
+      (player.ended || (player.currentTime || 0) > CUE_CARRY_UNTIL_SEC * 0.5)
+    ) {
+      activeIdxRef.current =
+        (activeIdxRef.current + 1) % Math.max(1, poolRef.current.length);
+      player = activeAudio();
+    }
+    if (!player) {
+      armingRef.current = false;
+      carryingRef.current = false;
+      armedKeyRef.current = null;
       return;
     }
 
-    // Already armed in-window: let the file play. Drift-resync only vs display
-    // while rem is still in the cue window (never after boundary / carry).
-    if (!audio.paused) {
-      const drift = Math.abs((audio.currentTime || 0) - displayTarget);
-      if (drift > CUE_DRIFT_RESYNC_SEC) {
-        seekTo(displayTarget);
-      }
-      return;
-    }
+    const vol =
+      typeof live?.cueVolume === "number" && live.cueVolume > 0
+        ? live.cueVolume
+        : player.volume > 0
+          ? player.volume
+          : 0.75;
+    player.muted = false;
+    player.volume = vol;
+    player.playbackRate = CUE_PLAYBACK_RATE;
 
-    // Armed but paused (autoplay blocked / tab freeze): kick play without seeking.
-    const play = audio.play();
-    if (play && typeof play.catch === "function") play.catch(() => {});
+    const gen = segKey;
+    seekReady(player, armAt)
+      .then(() => {
+        if (armedKeyRef.current !== gen || !carryingRef.current) return;
+        return player.play();
+      })
+      .then(() => {
+        armingRef.current = false;
+      })
+      .catch(() => {
+        // One retry after a fresh seek — still no mid-stream drift seeks.
+        seekReady(player, armAt)
+          .then(() => player.play())
+          .catch(() => {})
+          .finally(() => {
+            armingRef.current = false;
+          });
+      });
   }, [
     remainingSec,
     live?.status,
@@ -1192,15 +1237,46 @@ function LibraryApp({ catalog: initial }) {
   return <Editor initialCatalog={initial} />;
 }
 
-function LibraryLoading() {
-  useStageClass("editor");
+/**
+ * Branded boot screen for remote + routines (not the OBS overlay).
+ * @param {{ surface?: "remote" | "routines", label?: string }} props
+ */
+function SurfaceLoading({ surface = "routines", label }) {
+  const isRemote = surface === "remote";
+  useStageClass(isRemote ? "remote" : "editor");
+  const copy =
+    label || (isRemote ? "Preparing remote…" : "Loading routines…");
   return (
-    <div className="clozzz-editor">
-      <div className="clozzz-editor__shell">
-        <p>Loading routines…</p>
+    <div
+      className={`clozzz-boot${isRemote ? " clozzz-boot--remote" : " clozzz-boot--routines"}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="clozzz-boot__orb" aria-hidden="true">
+        <span className="clozzz-boot__ring" />
+        <span className="clozzz-boot__ring clozzz-boot__ring--lag" />
+        <img
+          className="clozzz-boot__logo"
+          src="/clozzz/clozzz-logo.png"
+          alt=""
+          width="52"
+          height="52"
+          decoding="async"
+        />
       </div>
+      <p className="clozzz-boot__brand">Clozzz Sleep</p>
+      <p className="clozzz-boot__label">{copy}</p>
     </div>
   );
+}
+
+function LibraryLoading() {
+  return <SurfaceLoading surface="routines" />;
+}
+
+function RemoteLoading() {
+  return <SurfaceLoading surface="remote" />;
 }
 
 function RemoteApp({ sessionKey, catalog, onChannelChange }) {
@@ -1216,7 +1292,7 @@ function RemoteApp({ sessionKey, catalog, onChannelChange }) {
     const fallback = resolveChannelId(null, routines);
     onChannelChange(fallback);
   }, [session, sessionKey, catalog.routines, onChannelChange]);
-  if (!session) return <LibraryLoading />;
+  if (!session) return <RemoteLoading />;
   return (
     <Remote
       sessionKey={session.id}
@@ -1483,6 +1559,7 @@ export default function Overlay() {
   }
 
   if (!ready) {
+    if (remoteSurface || bareRemote) return <RemoteLoading />;
     return <LibraryLoading />;
   }
 
@@ -1508,12 +1585,12 @@ export default function Overlay() {
   // The restore effect above prunes localStorage + falls back; show loading
   // (or mode via that effect) instead of SessionNotFound.
   if (remoteSurface && remoteReady && sessionKey && !resolvedSession) {
-    return <LibraryLoading />;
+    return <RemoteLoading />;
   }
 
   // Bare remote restoring channel…
   if (remoteSurface && bareRemote) {
-    return <LibraryLoading />;
+    return <RemoteLoading />;
   }
 
   // Fallback: routine library
