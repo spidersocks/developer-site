@@ -668,11 +668,11 @@ export default function Remote({
     return line;
   })();
 
+  const introMessage = String(live?.introCountdownMessage || "").trim();
   const nowLabel =
     inCountdown || introHeld
-      ? sessionTitle
-        ? `${sessionTitle} begins in`
-        : "Begins in"
+      ? introMessage ||
+        (sessionTitle ? `${sessionTitle} begins in` : "Begins in")
       : logoArmed
         ? "Ready when you are"
         : inStreamEnded

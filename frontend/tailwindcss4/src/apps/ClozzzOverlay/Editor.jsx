@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   blankRoutine,
+  clampCountdownSec,
   DEFAULT_EXERCISE_DURATION_SEC,
   DEFAULT_INTRO_COUNTDOWN_SEC,
-  DEFAULT_STREAM_ENDED_SEC,
   formatDuration,
   newId,
   sessionTotalSec,
   slugify,
+  SPACE_OPTIONS,
   toServerRoutine,
 } from "./routines.js";
 import {
@@ -20,6 +21,8 @@ import { clearLastRoutineId } from "./Remote.jsx";
 import "./editor.css";
 
 const DURATION_STEP = 15;
+/** Pre-stream countdown steppers: ±1 minute, floor ≥1 min. */
+const COUNTDOWN_STEP_SEC = 60;
 
 /** + always lands on a multiple of 5; 1 → 15; − by 15 floored at 1. */
 export function stepDuration(current, delta) {
@@ -30,6 +33,13 @@ export function stepDuration(current, delta) {
   if (cur <= 1) return 15;
   const stepped = cur + Math.abs(delta || DURATION_STEP);
   return Math.ceil(stepped / 5) * 5;
+}
+
+/** ±1 minute per press; floor ≥1 minute. */
+export function stepCountdownMinutes(current, deltaMinutes) {
+  const cur = clampCountdownSec(current, DEFAULT_INTRO_COUNTDOWN_SEC);
+  const next = cur + Math.round(Number(deltaMinutes) || 0) * COUNTDOWN_STEP_SEC;
+  return clampCountdownSec(next, DEFAULT_INTRO_COUNTDOWN_SEC);
 }
 
 function cloneCatalog(catalog) {
@@ -138,7 +148,13 @@ function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }
   );
 }
 
-function DurationField({ value, onChange, ariaLabel }) {
+/**
+ * @param {"exercise" | "countdown"} [mode]
+ *        exercise: ±15s snap-5 (floor 1s)
+ *        countdown: ±1 minute (floor ≥1 min)
+ */
+function DurationField({ value, onChange, ariaLabel, mode = "exercise" }) {
+  const isCountdown = mode === "countdown";
   const [draft, setDraft] = useState(formatMmSs(value));
   const [editing, setEditing] = useState(false);
 
@@ -153,21 +169,28 @@ function DurationField({ value, onChange, ariaLabel }) {
       setDraft(formatMmSs(value));
       return;
     }
-    onChange(parsed);
-    setDraft(formatMmSs(parsed));
+    const next = isCountdown ? clampCountdownSec(parsed) : Math.max(1, parsed);
+    onChange(next);
+    setDraft(formatMmSs(next));
   }
 
-  function nudge(delta) {
-    onChange(stepDuration(value, delta));
+  function nudge(signedStep) {
+    if (isCountdown) {
+      onChange(stepCountdownMinutes(value, signedStep > 0 ? 1 : -1));
+      return;
+    }
+    onChange(stepDuration(value, signedStep));
   }
+
+  const stepAmount = isCountdown ? COUNTDOWN_STEP_SEC : DURATION_STEP;
 
   return (
     <div className="ce-duration" role="group" aria-label={ariaLabel}>
       <button
         type="button"
         className="ce-duration__step"
-        aria-label="Decrease duration"
-        onClick={() => nudge(-DURATION_STEP)}
+        aria-label={isCountdown ? "Decrease by 1 minute" : "Decrease duration"}
+        onClick={() => nudge(-stepAmount)}
       >
         −
       </button>
@@ -192,11 +215,11 @@ function DurationField({ value, onChange, ariaLabel }) {
             }
             if (e.key === "ArrowUp") {
               e.preventDefault();
-              nudge(DURATION_STEP);
+              nudge(stepAmount);
             }
             if (e.key === "ArrowDown") {
               e.preventDefault();
-              nudge(-DURATION_STEP);
+              nudge(-stepAmount);
             }
           }}
         />
@@ -213,11 +236,46 @@ function DurationField({ value, onChange, ariaLabel }) {
       <button
         type="button"
         className="ce-duration__step"
-        aria-label="Increase duration"
-        onClick={() => nudge(DURATION_STEP)}
+        aria-label={isCountdown ? "Increase by 1 minute" : "Increase duration"}
+        onClick={() => nudge(stepAmount)}
       >
         +
       </button>
+    </div>
+  );
+}
+
+function SpacePills({ value, onChange }) {
+  const selected = Array.isArray(value) ? value : [];
+
+  function toggle(option) {
+    if (selected.includes(option)) {
+      onChange(selected.filter((s) => s !== option));
+    } else {
+      onChange([...selected, option]);
+    }
+  }
+
+  return (
+    <div
+      className="ce-space-pills"
+      role="group"
+      aria-label="Space — press all that apply"
+    >
+      {SPACE_OPTIONS.map((option) => {
+        const on = selected.includes(option);
+        return (
+          <button
+            key={option}
+            type="button"
+            className={`ce-space-pill${on ? " is-on" : ""}`}
+            aria-pressed={on}
+            onClick={() => toggle(option)}
+          >
+            {option}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -447,12 +505,14 @@ function EditRoutineModal({
         <div className="ce-edit-dialog__body">
           <div className="ce-fields">
             <div className="ce-field">
-              <label htmlFor="ce-edit-space">Space</label>
-              <input
-                id="ce-edit-space"
+              <span className="ce-field__label" id="ce-edit-space-label">
+                Space
+              </span>
+              <SpacePills
                 value={draft.space}
-                onChange={(e) => patchDraft({ space: e.target.value })}
+                onChange={(space) => patchDraft({ space })}
               />
+              <span className="ce-field__hint">Press all that apply</span>
             </div>
             <div className="ce-field">
               <label htmlFor="ce-edit-description">Description</label>
@@ -474,7 +534,7 @@ function EditRoutineModal({
                     patchDraft({
                       introCountdownEnabled: e.target.checked,
                       introCountdownSec:
-                        draft.introCountdownSec > 0
+                        draft.introCountdownSec >= 60
                           ? draft.introCountdownSec
                           : DEFAULT_INTRO_COUNTDOWN_SEC,
                     })
@@ -490,16 +550,37 @@ function EditRoutineModal({
                 </span>
               </label>
               {draft.introCountdownEnabled ? (
-                <div className="ce-toggle-block__expand">
+                <div className="ce-toggle-block__expand ce-toggle-block__expand--intro">
                   <div className="ce-toggle-block__field">
                     <span className="ce-toggle-block__label">Duration</span>
                     <DurationField
+                      mode="countdown"
                       value={
                         draft.introCountdownSec || DEFAULT_INTRO_COUNTDOWN_SEC
                       }
                       ariaLabel="Pre-stream countdown duration"
                       onChange={(introCountdownSec) =>
-                        patchDraft({ introCountdownSec })
+                        patchDraft({
+                          introCountdownSec:
+                            clampCountdownSec(introCountdownSec),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="ce-toggle-block__field ce-toggle-block__field--msg">
+                    <label
+                      className="ce-toggle-block__label"
+                      htmlFor="ce-intro-msg"
+                    >
+                      Message
+                    </label>
+                    <input
+                      id="ce-intro-msg"
+                      className="ce-toggle-block__input"
+                      value={draft.introCountdownMessage || ""}
+                      placeholder="{Routine} begins in"
+                      onChange={(e) =>
+                        patchDraft({ introCountdownMessage: e.target.value })
                       }
                     />
                   </div>
@@ -515,10 +596,6 @@ function EditRoutineModal({
                   onChange={(e) =>
                     patchDraft({
                       streamEndedEnabled: e.target.checked,
-                      streamEndedSec:
-                        draft.streamEndedSec > 0
-                          ? draft.streamEndedSec
-                          : DEFAULT_STREAM_ENDED_SEC,
                     })
                   }
                 />
@@ -526,24 +603,13 @@ function EditRoutineModal({
                 <span className="ce-toggle__copy">
                   <span className="ce-toggle__title">Stream ended graphic</span>
                   <span className="ce-toggle__hint">
-                    After the last exercise, show an ended screen
+                    After the last exercise, show an ended screen until you
+                    dismiss it from the remote
                   </span>
                 </span>
               </label>
               {draft.streamEndedEnabled ? (
-                <div className="ce-toggle-block__expand ce-toggle-block__expand--ended">
-                  <div className="ce-toggle-block__field">
-                    <span className="ce-toggle-block__label">Duration</span>
-                    <DurationField
-                      value={
-                        draft.streamEndedSec || DEFAULT_STREAM_ENDED_SEC
-                      }
-                      ariaLabel="Stream ended graphic duration"
-                      onChange={(streamEndedSec) =>
-                        patchDraft({ streamEndedSec })
-                      }
-                    />
-                  </div>
+                <div className="ce-toggle-block__expand">
                   <div className="ce-toggle-block__field ce-toggle-block__field--msg">
                     <label
                       className="ce-toggle-block__label"

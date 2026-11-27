@@ -337,8 +337,9 @@ export function remainingFromLive(
   }
 
   if (status === "stream_ended") {
+    /* Soft cap ~1h for auto-finish; UI counts up until then / remote skip. */
     const durationMs =
-      (live.streamEndedDurationSec || live.streamEndedSec || 45) * 1000;
+      (live.streamEndedDurationSec || live.streamEndedSec || 3600) * 1000;
     if (live.streamEndedStartedAtMs != null) {
       const elapsed = Math.max(0, serverNow - live.streamEndedStartedAtMs);
       return {
@@ -472,10 +473,13 @@ function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
 function CountdownStage({
   remainingSec,
   title,
+  message,
   held = false,
 }) {
   const critical = !held && remainingSec <= 10;
-  const beginsLabel = title ? `${title} begins in` : "Begins in";
+  const trimmed = message && String(message).trim();
+  const beginsLabel =
+    trimmed || (title ? `${title} begins in` : "Begins in");
 
   return (
     <div
@@ -588,6 +592,9 @@ function RunningOverlay({ session, sessionKey }) {
       <CountdownStage
         remainingSec={remainingSec}
         title={live?.title || session.title || session.name}
+        message={
+          live?.introCountdownMessage ?? session.introCountdownMessage
+        }
         held={Boolean(derived.countdownHeld)}
       />
     );
@@ -774,6 +781,7 @@ function OpenDisplayApp() {
     title: routine.title || routine.name || routine.id,
     introCountdownEnabled: Boolean(routine.introCountdownEnabled),
     introCountdownSec: routine.introCountdownSec,
+    introCountdownMessage: routine.introCountdownMessage || "",
     segments: routine.segments || [],
   };
 

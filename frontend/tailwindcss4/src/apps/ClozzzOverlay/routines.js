@@ -4,16 +4,21 @@
  */
 
 /** @typedef {{ id: string, label: string, durationSec: number }} Segment */
+
+/** Bounded space options for the editor multi-select. */
+export const SPACE_OPTIONS = ["Floor mat", "Bed", "Others"];
+
 /**
  * @typedef {{
  *   id: string,
  *   name: string,
  *   title: string,
  *   routineId: string,
- *   space: string,
+ *   space: string[],
  *   description: string,
  *   introCountdownEnabled?: boolean,
  *   introCountdownSec?: number,
+ *   introCountdownMessage?: string,
  *   streamEndedEnabled?: boolean,
  *   streamEndedSec?: number,
  *   streamEndedMessage?: string,
@@ -24,13 +29,48 @@
 
 /** New-routine defaults (existing saved routines keep their stored values). */
 export const DEFAULT_INTRO_COUNTDOWN_SEC = 1800; // 30 min
-export const DEFAULT_STREAM_ENDED_SEC = 1800; // 30 min
+/** Soft cap for stream-ended count-up (~1h); not edited in the UI. */
+export const STREAM_ENDED_SOFT_CAP_SEC = 3600;
+/** @deprecated use STREAM_ENDED_SOFT_CAP_SEC — kept for older imports */
+export const DEFAULT_STREAM_ENDED_SEC = STREAM_ENDED_SOFT_CAP_SEC;
 export const DEFAULT_EXERCISE_DURATION_SEC = 60;
 
+/** Floor 1s (exercises); countdown fields use clampCountdownSec. */
 function clampDurationSec(value, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(60 * 60, Math.round(n)));
+}
+
+/** Pre-stream countdown: floor ≥1 minute. */
+export function clampCountdownSec(value, fallback = DEFAULT_INTRO_COUNTDOWN_SEC) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(60, Math.min(60 * 60, Math.round(n)));
+}
+
+/**
+ * Migrate legacy free-text `space` string → bounded multi-select array.
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+export function normalizeSpace(raw) {
+  const allowed = new Set(SPACE_OPTIONS);
+  if (Array.isArray(raw)) {
+    const out = [];
+    for (const item of raw) {
+      const s = String(item || "").trim();
+      if (allowed.has(s) && !out.includes(s)) out.push(s);
+    }
+    return out;
+  }
+  const text = String(raw || "").trim();
+  if (!text) return [];
+  if (allowed.has(text)) return [text];
+  const lower = text.toLowerCase();
+  if (lower.includes("floor") || lower.includes("mat")) return ["Floor mat"];
+  if (lower.includes("bed")) return ["Bed"];
+  return ["Others"];
 }
 
 /** Migrate legacy `intent` → `description` on read; keep stored intro/end flags. */
@@ -40,19 +80,20 @@ export function normalizeRoutine(routine) {
     routine.description ?? routine.intent ?? ""
   ).trim();
   const { intent: _legacyIntent, ...rest } = routine;
+  const endedEnabled = Boolean(routine.streamEndedEnabled);
   return {
     ...rest,
     description,
+    space: normalizeSpace(routine.space),
     introCountdownEnabled: Boolean(routine.introCountdownEnabled),
-    introCountdownSec: clampDurationSec(
+    introCountdownSec: clampCountdownSec(
       routine.introCountdownSec,
       DEFAULT_INTRO_COUNTDOWN_SEC
     ),
-    streamEndedEnabled: Boolean(routine.streamEndedEnabled),
-    streamEndedSec: clampDurationSec(
-      routine.streamEndedSec,
-      DEFAULT_STREAM_ENDED_SEC
-    ),
+    introCountdownMessage: String(routine.introCountdownMessage || "").trim(),
+    streamEndedEnabled: endedEnabled,
+    // Soft cap only — editor no longer edits duration.
+    streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
     streamEndedMessage: String(routine.streamEndedMessage || "").trim(),
   };
 }
@@ -74,7 +115,7 @@ export const FALLBACK_CATALOG = {
       name: "demo-smoke",
       title: "Demo Smoke",
       routineId: "DEMO",
-      space: "Anywhere",
+      space: ["Others"],
       description: "Short segments to verify OBS Browser Source + auto-advance.",
       segments: [
         { id: "demo-s1", label: "Settle in", durationSec: 5 },
@@ -88,7 +129,7 @@ export const FALLBACK_CATALOG = {
       name: "r1-floor-unwind",
       title: "Floor Unwind",
       routineId: "R1",
-      space: "Floor mat",
+      space: ["Floor mat"],
       description: "Gentle floor mobility to downshift before sleep.",
       segments: [
         { id: "r1-s1", label: "Settle & breathe", durationSec: 45 },
@@ -106,7 +147,7 @@ export const FALLBACK_CATALOG = {
       name: "r2-from-bed-stretch",
       title: "From-Bed Stretch",
       routineId: "R2",
-      space: "Bedside",
+      space: ["Bed"],
       description: "Low-effort stretches you can do sitting or standing by the bed.",
       segments: [
         { id: "r2-s1", label: "Seated neck rolls", durationSec: 40 },
@@ -125,7 +166,7 @@ export const FALLBACK_CATALOG = {
       name: "r3-small-space-strength",
       title: "Small-Space Strength",
       routineId: "R3",
-      space: "Hotel footprint",
+      space: ["Others"],
       description: "Quiet standing strength in a hotel-room footprint.",
       segments: [
         { id: "r3-s1", label: "March in place", durationSec: 50 },
@@ -143,7 +184,7 @@ export const FALLBACK_CATALOG = {
       name: "r4-hip-back-release",
       title: "Hip & Back Release",
       routineId: "R4",
-      space: "Floor mat",
+      space: ["Floor mat"],
       description: "Target hips and low back after a desk day.",
       segments: [
         { id: "r4-s1", label: "World's greatest stretch L", durationSec: 50 },
@@ -162,7 +203,7 @@ export const FALLBACK_CATALOG = {
       name: "r5-wind-down-circuit",
       title: "Wind-Down Circuit",
       routineId: "R5",
-      space: "Open floor",
+      space: ["Others"],
       description: "Short mixed circuit that ends in stillness.",
       segments: [
         { id: "r5-s1", label: "Box breath ×4", durationSec: 64 },
@@ -266,24 +307,22 @@ export function blankRoutine(existing = [], overrides = {}) {
     name: overrides.name || `${id}-${slugify(title)}`,
     title,
     routineId: overrides.routineId || routineId,
-    space: overrides.space || "",
+    space: normalizeSpace(overrides.space),
     description: overrides.description || overrides.intent || "",
     introCountdownEnabled:
       overrides.introCountdownEnabled !== undefined
         ? Boolean(overrides.introCountdownEnabled)
         : true,
-    introCountdownSec: clampDurationSec(
+    introCountdownSec: clampCountdownSec(
       overrides.introCountdownSec,
       DEFAULT_INTRO_COUNTDOWN_SEC
     ),
+    introCountdownMessage: String(overrides.introCountdownMessage || "").trim(),
     streamEndedEnabled:
       overrides.streamEndedEnabled !== undefined
         ? Boolean(overrides.streamEndedEnabled)
         : true,
-    streamEndedSec: clampDurationSec(
-      overrides.streamEndedSec,
-      DEFAULT_STREAM_ENDED_SEC
-    ),
+    streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
     streamEndedMessage: String(overrides.streamEndedMessage || "").trim(),
     segments: overrides.segments || [
       {
@@ -299,5 +338,10 @@ export function blankRoutine(existing = [], overrides = {}) {
 /** Strip client-only flags before sending to the API. */
 export function toServerRoutine(routine) {
   const { localOnly, dirty, ...rest } = routine;
-  return rest;
+  return {
+    ...rest,
+    space: normalizeSpace(rest.space),
+    introCountdownMessage: String(rest.introCountdownMessage || "").trim(),
+    streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
+  };
 }
