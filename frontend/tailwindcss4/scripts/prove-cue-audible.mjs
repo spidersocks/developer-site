@@ -1,6 +1,6 @@
 /**
- * Evidence that the segment-end cue is reachable, arm-once (no seek-thrash),
- * plays at natural rate (1×) with ~1s peaks, and lands the 4th peak at rem=0.
+ * Evidence: original Mixkit cue, natural 1×, digit-synced 3→2→1→switch,
+ * Web Audio BufferSource (no HTMLAudio seek lag).
  * Run: node scripts/prove-cue-audible.mjs
  */
 import fs from "node:fs";
@@ -31,7 +31,6 @@ function measurePeaks(buf) {
     const id = buf.toString("ascii", off, off + 4);
     const size = dv.getUint32(off + 4, true);
     if (id === "fmt ") {
-      // PCM fmt: audioFormat@+8, channels@+10, sampleRate@+12, bits@+22
       channels = dv.getUint16(off + 10, true);
       rate = dv.getUint32(off + 12, true);
       bits = dv.getUint16(off + 22, true);
@@ -76,7 +75,6 @@ function measurePeaks(buf) {
   return peaks;
 }
 
-// 1) Local ORIGINAL Mixkit 922 asset (3 tones + 4th at rem=0, natural 1×)
 const st = fs.statSync(wavPath);
 assert(st.size > 1_000_000, `local original WAV size ${st.size} (~1.1MB)`);
 const buf = fs.readFileSync(wavPath);
@@ -100,233 +98,43 @@ const src = fs.readFileSync(overlayPath, "utf8");
 assert(/CUE_PLAYBACK_RATE\s*=\s*1\b/.test(src), "CUE_PLAYBACK_RATE = 1");
 assert(!/CUE_PLAYBACK_RATE\s*=\s*2\b/.test(src), "no CUE_PLAYBACK_RATE = 2");
 assert(/CUE_FOURTH_PEAK_SEC/.test(src), "CUE_FOURTH_PEAK_SEC from measured peaks");
-assert(/CUE_LEAD_SEC/.test(src), "CUE_LEAD_SEC delay compensation");
-assert(/CUE_LEAD_SEC\s*=\s*0\.2[5-9]|CUE_LEAD_SEC\s*=\s*0\.3/.test(src), "lead ≥0.25 (earlier sync)");
-assert(/cueAudioTarget/.test(src), "cueAudioTarget(rem) maps peaks→remainingSec");
+assert(/cueBufferOffset|cueAudioTarget/.test(src), "offset maps rem→peaks");
+assert(/decodeAudioData|AudioContext|createBufferSource/.test(src), "Web Audio BufferSource");
+assert(/CUE_ARM_EARLY_SEC/.test(src), "tiny arm-early so tone1 lands on painted 3");
+assert(!/CUE_LEAD_SEC\s*=/.test(src), "no lead baked into buffer seek (skipped peak0)");
 assert(src.includes("carryingRef"), "carry flag across segment boundary");
-assert(src.includes("mixkit922orig"), "cache-bust bump for original Mixkit");
-assert(/createObjectURL|force-cache/.test(src), "cue WAV prefetched into blob buffer");
-assert(/CUE_PREWARM_SEC/.test(src), "prewarm before arm window");
-assert(/seekReady/.test(src), "seekReady awaits seeked before play");
-assert(/makeCueAudio|poolRef|activeIdxRef/.test(src), "dual-player pool for consistent re-arms");
+assert(src.includes("mixkit922orig"), "cache-bust for original Mixkit");
+assert(/force-cache|decodeAudioData/.test(src), "cue fully decoded before arm");
+assert(src.includes("armedKeyRef"), "arm-once per segment");
 assert(
-  !/CUE_DRIFT_RESYNC_SEC/.test(src),
-  "no mid-cue drift seeks (caused 2nd-play lateness)"
-);
-assert(
-  /Do NOT pitch\/warp\/speed-rebuild|original file|natural 1×|Never set playbackRate ≠ 1/i.test(
+  /Do NOT pitch\/warp\/speed-rebuild|original file|natural 1×|playbackRate always 1/i.test(
     src
   ) || /CUE_PLAYBACK_RATE = 1/.test(src),
   "original-file / natural-rate intent documented"
 );
 
-// 2) Arm-once; no every-frame seek thrash
-assert(src.includes("armedKeyRef"), "arm-once per segment");
-assert(
-  !src.includes("seekTo(displayTarget);\n    if (audio.paused)"),
-  "old every-frame seek+play pattern removed"
-);
-
 const FOURTH = peaks[3];
-const RATE = 1;
-const CUE_SEC = FOURTH / RATE;
-const leadMatch = src.match(/CUE_LEAD_SEC\s*=\s*([0-9.]+)/);
-const LEAD = leadMatch ? Number(leadMatch[1]) : 0.16;
-const CARRY_UNTIL = FOURTH + 0.35;
+const CUE_SEC = FOURTH;
 
 function audioTarget(rem) {
-  const wallElapsed = CUE_SEC - rem + LEAD;
-  return Math.max(0, Math.min(FOURTH, wallElapsed * RATE));
+  // Digit sync: no lead in offset
+  return Math.max(0, Math.min(FOURTH, CUE_SEC - rem));
 }
 
-// 3) Fourth peak aligns to rem=0 (minus lead → heard at ~0 after CEF delay)
-const atZero = audioTarget(0);
+assert(Math.abs(audioTarget(3) - 0) < 0.05, `rem=3 → ~0 (tone1), got ${audioTarget(3)}`);
 assert(
-  Math.abs(atZero - (FOURTH + LEAD * RATE)) < 0.001 ||
-    Math.abs(atZero - FOURTH) < 0.02,
-  `at rem=0 audioTarget≈fourth (+lead clamped): got ${atZero}, fourth=${FOURTH}`
+  Math.abs(audioTarget(2) - peaks[1]) < 0.05,
+  `rem=2 → peak1, got ${audioTarget(2)} vs ${peaks[1]}`
 );
-const atLead = audioTarget(LEAD);
 assert(
-  Math.abs(atLead - FOURTH) < 0.02,
-  `at rem=LEAD audioTarget=fourth (heard≈0): ${atLead} vs ${FOURTH}`
+  Math.abs(audioTarget(1) - peaks[2]) < 0.05,
+  `rem=1 → peak2, got ${audioTarget(1)} vs ${peaks[2]}`
 );
-
-// Wall beeps: rem 3→2→1→0 maps to peaks 0→1→2→3 at rate 1
-for (const [rem, peakIdx] of [
-  [3, 0],
-  [2, 1],
-  [1, 2],
-  [0, 3],
-]) {
-  const t = audioTarget(rem);
-  const peak = peaks[peakIdx];
-  // rem=3 arms near start (lead pulls slightly past peak0); rem=LEAD→fourth exact
-  if (rem === 0) {
-    assert(
-      Math.abs(t - FOURTH) < 0.02 || Math.abs(t - (FOURTH + LEAD)) < 0.02,
-      `rem=${rem} → near fourth peak (${t} vs ${peak})`
-    );
-  } else {
-    const expected = Math.max(0, Math.min(FOURTH, CUE_SEC - rem + LEAD));
-    assert(
-      Math.abs(t - expected) < 0.001,
-      `rem=${rem} audioTarget=${t} (peak${peakIdx}=${peak})`
-    );
-  }
-}
-
-// 4) Simulate thrash vs arm-once (why OBS/CEF was silent).
-function simulateThrash(frames = 120) {
-  let seeks = 0;
-  let plays = 0;
-  let audibleFrames = 0;
-  let currentTime = 0;
-  let paused = true;
-  let framesSinceSeek = 999;
-  const rem0 = CUE_SEC - 0.1;
-  for (let i = 0; i < frames; i++) {
-    const rem = rem0 - i / 60;
-    const target = audioTarget(rem);
-    if (Math.abs(currentTime - target) > 0.04) {
-      currentTime = target;
-      seeks += 1;
-      paused = true;
-      framesSinceSeek = 0;
-    } else {
-      framesSinceSeek += 1;
-    }
-    if (paused) {
-      plays += 1;
-      if (framesSinceSeek >= 3) paused = false;
-    } else {
-      audibleFrames += 1;
-      currentTime += RATE / 60;
-    }
-  }
-  return { seeks, plays, audibleFrames };
-}
-
-function simulateArmOnce(frames = 120) {
-  let seeks = 0;
-  let plays = 0;
-  let audibleFrames = 0;
-  let currentTime = 0;
-  let paused = true;
-  let armed = false;
-  const rem0 = CUE_SEC - 0.1;
-  for (let i = 0; i < frames; i++) {
-    const rem = rem0 - i / 60;
-    const target = audioTarget(rem);
-    if (!armed) {
-      currentTime = target;
-      seeks += 1;
-      plays += 1;
-      paused = false;
-      armed = true;
-    } else {
-      const drift = Math.abs(currentTime - target);
-      if (drift > 0.35) {
-        currentTime = target;
-        seeks += 1;
-      }
-      if (paused) {
-        plays += 1;
-        paused = false;
-      } else {
-        audibleFrames += 1;
-        currentTime += RATE / 60;
-      }
-    }
-  }
-  return { seeks, plays, audibleFrames };
-}
-
-/** Carry: after rem hits 0 / next segment rem=60, keep playing until 4th peak+tail. */
-function simulateCarry() {
-  let seeks = 0;
-  let currentTime = 0;
-  let paused = true;
-  let carrying = false;
-  let armedKey = null;
-  let maxTime = 0;
-  const frames = 240;
-  for (let i = 0; i < frames; i++) {
-    const t = i / 60;
-    const rem = t < CUE_SEC ? CUE_SEC - t : 60 - (t - CUE_SEC);
-    const segKey = t < CUE_SEC ? "A" : "B";
-    const status = "running";
-    const displayTarget = audioTarget(rem);
-    const inWindow = status === "running" && rem <= CUE_SEC && rem > 0;
-
-    if (carrying) {
-      if (currentTime >= CARRY_UNTIL) {
-        carrying = false;
-        armedKey = null;
-        paused = true;
-        currentTime = 0;
-        seeks += 1;
-        continue;
-      }
-      if (!paused) {
-        currentTime += RATE / 60;
-        maxTime = Math.max(maxTime, currentTime);
-      }
-      continue;
-    }
-
-    if (!inWindow) {
-      if (!paused) {
-        paused = true;
-        currentTime = 0;
-        seeks += 1;
-        armedKey = null;
-      }
-      continue;
-    }
-
-    if (armedKey !== segKey) {
-      armedKey = segKey;
-      carrying = true;
-      currentTime = rem >= CUE_SEC - 0.2 ? 0 : displayTarget;
-      seeks += 1;
-      paused = false;
-      continue;
-    }
-
-    if (!paused) {
-      currentTime += RATE / 60;
-      maxTime = Math.max(maxTime, currentTime);
-    }
-  }
-  return {
-    seeks,
-    maxTime,
-    carrying,
-    reachedFourthTone: maxTime >= FOURTH - 0.05,
-  };
-}
-
-const thrash = simulateThrash();
-const once = simulateArmOnce();
-const carry = simulateCarry();
-assert(thrash.seeks >= 40, `thrash seeks=${thrash.seeks} (repeated seeks)`);
 assert(
-  thrash.audibleFrames < once.audibleFrames / 2,
-  `thrash audibleFrames=${thrash.audibleFrames} << arm-once ${once.audibleFrames}`
+  Math.abs(audioTarget(0) - FOURTH) < 0.02,
+  `rem=0 → fourth (switch), got ${audioTarget(0)}`
 );
-assert(once.seeks <= 2, `arm-once seeks=${once.seeks}`);
-assert(once.plays === 1, `arm-once plays=${once.plays}`);
-assert(
-  once.audibleFrames >= 100,
-  `arm-once audibleFrames=${once.audibleFrames} (continuous play)`
-);
-assert(carry.seeks <= 2, `carry seeks=${carry.seeks} (arm + reset only)`);
-assert(carry.reachedFourthTone, `carry reached 4th peak (maxTime=${carry.maxTime})`);
-assert(!carry.carrying, "carry cleared after 4th tone");
 
-// 5) Production WAV (cache-bust query ignored by static host) — may still be
-// the old asset until Vercel deploys; only fail hard on transport errors.
 let prodBytes = null;
 let prodType = null;
 try {
@@ -347,14 +155,12 @@ console.log(
       peaks,
       cueSec: CUE_SEC,
       fourth: FOURTH,
-      rate: RATE,
-      atLead,
-      atZero,
+      at3: audioTarget(3),
+      at2: audioTarget(2),
+      at1: audioTarget(1),
+      at0: audioTarget(0),
       prodBytes,
       prodType,
-      thrash,
-      armOnce: once,
-      carry,
       prodUrl: PROD,
     },
     null,

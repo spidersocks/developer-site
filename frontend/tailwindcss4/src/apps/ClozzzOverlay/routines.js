@@ -365,3 +365,36 @@ export function toServerRoutine(routine) {
     breakSec: clampBreakSec(rest.breakSec, DEFAULT_BREAK_SEC),
   };
 }
+
+/**
+ * Old Fly builds silently drop breaksEnabled/breakSec on normalize — UI would
+ * still say Saved. Throw so the editor does not lie.
+ * @param {Partial<Session>} sent
+ * @param {Catalog} catalog
+ */
+export function assertBreakFieldsPersisted(sent, catalog) {
+  if (!sent || !catalog) return;
+  const id = String(sent.id || "").toLowerCase();
+  const got = (catalog.routines || []).find(
+    (r) => String(r.id || "").toLowerCase() === id
+  );
+  if (!got) return;
+  if (!Object.prototype.hasOwnProperty.call(got, "breaksEnabled")) {
+    throw new Error(
+      "Breaks were not saved — backend is outdated. Deploy unified-backend to Fly (fly deploy), then try again."
+    );
+  }
+  if (Boolean(got.breaksEnabled) !== Boolean(sent.breaksEnabled)) {
+    throw new Error(
+      "Breaks toggle did not persist on the server. Redeploy unified-backend, then save again."
+    );
+  }
+  if (
+    sent.breaksEnabled &&
+    clampBreakSec(got.breakSec) !== clampBreakSec(sent.breakSec)
+  ) {
+    throw new Error(
+      "Break duration did not persist on the server. Redeploy unified-backend, then save again."
+    );
+  }
+}

@@ -657,8 +657,8 @@ const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922orig";
 /**
  * Original Mixkit 922 (stereo 44.1kHz, ~6.5s): measured RMS peaks
  * ~0.01 / 1.008 / 2.01 / 3.008s (~1s spacing). Do NOT pitch/warp/speed-rebuild.
- * Play at playbackRate=1; align with lead/offset only. Tones 1–3 in the last ~3s,
- * 4th when remainingSec hits 0. Arm once near rem≈3, then carry for the 4th tone.
+ * playbackRate always 1. Digit sync: tone1 as painted “3” appears, then 2, 1,
+ * final tone on switch (rem=0). Web Audio BufferSource — no HTMLAudio seek lag.
  */
 const CUE_PEAKS_AUDIO_SEC = [0.01, 1.008, 2.01, 3.008];
 const CUE_FOURTH_PEAK_SEC = CUE_PEAKS_AUDIO_SEC[3];
@@ -666,103 +666,57 @@ const CUE_PLAYBACK_RATE = 1;
 /** Wall-seconds from first→fourth peak (= fourth at rate 1). */
 const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
 /**
- * Lead (wall seconds) for HTMLAudio/CEF start latency so the heard 4th peak
- * lands on the painted 0:00 (bump only lead, never rate).
+ * Digit sync (painted ceil clock):
+ *   rem shows 3 → peak 0, shows 2 → peak 1, shows 1 → peak 2, rem=0 / switch → peak 3.
+ * Do NOT bake lead into the buffer seek (that skipped peak 0 and felt late).
+ * Tiny ARM_EARLY starts playback just before rem crosses 3 so play() latency
+ * lands the first beep as "3" appears. playbackRate always 1.
  */
-const CUE_LEAD_SEC = 0.28;
+const CUE_ARM_EARLY_SEC = 0.06;
 /** Cover 4th peak + short tail (audio time) before allowing the next arm. */
 const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
-/** Near the top of the window → start at 0 so tone 1 isn't clipped (wall sec). */
-const CUE_CLEAN_ARM_EPS_SEC = 0.2;
-/** Start parking the idle player at 0 this many seconds before the arm window. */
+/** Near rem≈3 → start at buffer offset 0 so tone 1 isn't clipped. */
+const CUE_CLEAN_ARM_EPS_SEC = 0.15;
+/** Resume AudioContext this many seconds before the arm window. */
 const CUE_PREWARM_SEC = SEGMENT_END_CUE_SEC + 5;
-/** Max wait for CEF seeked before play (ms). */
-const CUE_SEEK_TIMEOUT_MS = 120;
 
-/** Audio currentTime that matches painted remainingSec (+ lead). */
-function cueAudioTarget(remainingSec) {
+/** Buffer offset for painted remainingSec — peaks on 3 / 2 / 1 / 0. */
+function cueBufferOffset(remainingSec) {
   const rem = Number(remainingSec);
   if (!Number.isFinite(rem)) return 0;
-  const wallElapsed = SEGMENT_END_CUE_SEC - rem + CUE_LEAD_SEC;
+  const wallElapsed = SEGMENT_END_CUE_SEC - rem;
   return Math.max(
     0,
     Math.min(CUE_FOURTH_PEAK_SEC, wallElapsed * CUE_PLAYBACK_RATE)
   );
 }
 
-function makeCueAudio(src) {
-  const audio = new Audio();
-  audio.preload = "auto";
-  audio.playsInline = true;
-  audio.playbackRate = CUE_PLAYBACK_RATE;
-  audio.muted = false;
-  audio.volume = 0.75;
-  audio.src = src;
-  try {
-    audio.load();
-  } catch {
-    /* ignore */
-  }
-  return audio;
+/** @deprecated alias — proof scripts still look for cueAudioTarget. */
+function cueAudioTarget(remainingSec) {
+  return cueBufferOffset(remainingSec);
 }
 
 /**
- * Wait until currentTime lands (or timeout). CEF often starts play() before an
- * unfinished seek — that made play #1 fine and play #2 late after ended→reuse.
- */
-function seekReady(audio, timeSec, timeoutMs = CUE_SEEK_TIMEOUT_MS) {
-  const target = Math.max(0, Number(timeSec) || 0);
-  if (
-    !audio.ended &&
-    audio.readyState >= 2 &&
-    Math.abs((audio.currentTime || 0) - target) < 0.02
-  ) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      audio.removeEventListener("seeked", finish);
-      resolve();
-    };
-    audio.addEventListener("seeked", finish);
-    try {
-      if (!audio.paused) audio.pause();
-      audio.currentTime = target;
-    } catch {
-      finish();
-      return;
-    }
-    // Sync CEF sometimes never fires seeked when already at target.
-    window.setTimeout(finish, timeoutMs);
-  });
-}
-
-/**
- * Dual-player pool + seek-before-play.
- * Root cause of 1st-perfect / 2nd-late: reusing an `ended` HTMLAudio, seek+play
- * racing, and mid-cue drift seeks. Fix: alternate two fully-buffered players,
- * await seeked before play, never seek while carrying, reset the idle player.
+ * Web Audio: decode once, BufferSource per arm (no HTMLAudio seek races).
+ * Tone 1 on painted 3, tone 2 on 2, tone 3 on 1, final on switch.
  */
 function useSegmentEndCue(live, remainingSec) {
-  /** @type {React.MutableRefObject<HTMLAudioElement[]>} */
-  const poolRef = useRef([]);
-  const activeIdxRef = useRef(0);
+  const ctxRef = useRef(null);
+  const bufferRef = useRef(null);
+  const gainRef = useRef(null);
+  const sourceRef = useRef(null);
   const armedKeyRef = useRef(null);
   const carryingRef = useRef(false);
-  const armingRef = useRef(false);
-  const unlockTriedRef = useRef(false);
+  const pausedOffsetRef = useRef(null);
+  const startedAtCtxRef = useRef(0);
+  const offsetAtStartRef = useRef(0);
   const readyRef = useRef(false);
   const prewarmedKeyRef = useRef(null);
-  const blobUrlRef = useRef(null);
-
-  const activeAudio = () => poolRef.current[activeIdxRef.current] || null;
 
   useEffect(() => {
     let cancelled = false;
-    let objectUrl = null;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return undefined;
 
     if (
       typeof document !== "undefined" &&
@@ -777,271 +731,194 @@ function useSegmentEndCue(live, remainingSec) {
       document.head.appendChild(link);
     }
 
-    const unlockAll = (players) => {
-      if (unlockTriedRef.current || cancelled) return;
-      unlockTriedRef.current = true;
-      players.forEach((audio) => {
-        const prevVol = audio.volume;
-        audio.muted = true;
-        audio.volume = 0;
-        const p = audio.play();
-        const finish = () => {
-          if (cancelled) return;
-          audio.pause();
-          seekReady(audio, 0).finally(() => {
-            if (cancelled) return;
-            audio.muted = false;
-            audio.volume = prevVol || 0.75;
-          });
-        };
-        if (p && typeof p.then === "function") p.then(finish).catch(finish);
-        else finish();
-      });
-    };
-
-    const waitCanPlay = (audio) =>
-      new Promise((resolve) => {
-        if (audio.readyState >= 4) {
-          resolve();
-          return;
-        }
-        const done = () => {
-          audio.removeEventListener("canplaythrough", done);
-          resolve();
-        };
-        audio.addEventListener("canplaythrough", done, { once: true });
-        window.setTimeout(done, 4000);
-      });
+    const ctx = new AC();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.75;
+    gain.connect(ctx.destination);
+    ctxRef.current = ctx;
+    gainRef.current = gain;
 
     (async () => {
-      let src = SEGMENT_END_CUE_SRC;
       try {
         const res = await fetch(SEGMENT_END_CUE_SRC, {
           cache: "force-cache",
           credentials: "same-origin",
         });
         if (!res.ok) throw new Error(`cue fetch ${res.status}`);
-        const blob = await res.blob();
+        const raw = await res.arrayBuffer();
         if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        blobUrlRef.current = objectUrl;
-        src = objectUrl;
+        const buf = await ctx.decodeAudioData(raw.slice(0));
+        if (cancelled) return;
+        bufferRef.current = buf;
+        readyRef.current = true;
+        await ctx.resume().catch(() => {});
+        // Silent graph kick so CEF keeps the context hot.
+        const silent = ctx.createBufferSource();
+        silent.buffer = buf;
+        const mute = ctx.createGain();
+        mute.gain.value = 0;
+        silent.connect(mute);
+        mute.connect(ctx.destination);
+        silent.start(0, 0, 0.05);
       } catch {
-        /* static URL fallback */
+        readyRef.current = false;
       }
-      if (cancelled) return;
-
-      const players = [makeCueAudio(src), makeCueAudio(src)];
-      poolRef.current = players;
-      activeIdxRef.current = 0;
-      await Promise.all(players.map(waitCanPlay));
-      if (cancelled) return;
-      readyRef.current = true;
-      unlockAll(players);
     })();
 
     return () => {
       cancelled = true;
       readyRef.current = false;
-      poolRef.current.forEach((a) => {
-        try {
-          a.pause();
-        } catch {
-          /* ignore */
-        }
-      });
-      poolRef.current = [];
-      if (objectUrl) {
-        try {
-          URL.revokeObjectURL(objectUrl);
-        } catch {
-          /* ignore */
-        }
+      try {
+        sourceRef.current?.stop();
+      } catch {
+        /* ignore */
       }
-      blobUrlRef.current = null;
+      sourceRef.current = null;
+      try {
+        ctx.close();
+      } catch {
+        /* ignore */
+      }
+      ctxRef.current = null;
+      bufferRef.current = null;
+      gainRef.current = null;
     };
   }, []);
 
   useEffect(() => {
+    const gain = gainRef.current;
+    if (!gain) return;
     const muted = Boolean(live?.cueMuted);
     const vol =
       typeof live?.cueVolume === "number" ? live.cueVolume : 0.75;
     const nextVol = Math.max(0, Math.min(1, Number.isFinite(vol) ? vol : 0.75));
-    poolRef.current.forEach((audio) => {
-      audio.muted = muted;
-      audio.volume = muted ? 0 : nextVol > 0 ? nextVol : 0.75;
-    });
+    gain.gain.value = muted ? 0 : nextVol > 0 ? nextVol : 0.75;
   }, [live?.cueVolume, live?.cueMuted]);
 
   useEffect(() => {
+    const ctx = ctxRef.current;
+    const buffer = bufferRef.current;
+    const gain = gainRef.current;
+    if (!ctx || !buffer || !gain || !readyRef.current) return;
+
     const status = live?.status;
     const muted = Boolean(live?.cueMuted);
     const rem = Number(remainingSec);
     const valid = Number.isFinite(rem);
     const segKey = `${live?.segmentStartedAtMs ?? live?.breakStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}:${live?.status ?? ""}`;
-    const displayTarget = valid ? cueAudioTarget(rem) : 0;
-    const audio = activeAudio();
-    if (!audio) return;
+    const displayOffset = valid ? cueBufferOffset(rem) : 0;
 
-    const stopAndPark = () => {
-      carryingRef.current = false;
-      armedKeyRef.current = null;
-      armingRef.current = false;
-      const a = activeAudio();
-      if (a && !a.paused) a.pause();
-      // Reset BOTH players to 0 so the next arm never inherits ended/tail state.
-      poolRef.current.forEach((p) => {
-        seekReady(p, 0).catch(() => {});
-      });
+    const stopSource = () => {
+      try {
+        sourceRef.current?.stop();
+      } catch {
+        /* already stopped */
+      }
+      sourceRef.current = null;
     };
 
-    const cueFinished = (a) =>
-      a.ended || (a.currentTime || 0) >= CUE_CARRY_UNTIL_SEC;
+    const stopAll = () => {
+      stopSource();
+      carryingRef.current = false;
+      armedKeyRef.current = null;
+      pausedOffsetRef.current = null;
+    };
+
+    const playedSec = () =>
+      offsetAtStartRef.current +
+      Math.max(0, ctx.currentTime - startedAtCtxRef.current);
+
+    const startFromOffset = (offset) => {
+      stopSource();
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(gain);
+      const when = ctx.currentTime;
+      const off = Math.max(0, Math.min(Math.max(0, buffer.duration - 0.01), offset));
+      src.start(when, off);
+      sourceRef.current = src;
+      startedAtCtxRef.current = when;
+      offsetAtStartRef.current = off;
+      carryingRef.current = true;
+      pausedOffsetRef.current = null;
+      src.onended = () => {
+        if (sourceRef.current === src) {
+          sourceRef.current = null;
+          carryingRef.current = false;
+          armedKeyRef.current = null;
+        }
+      };
+    };
 
     if (muted) {
-      stopAndPark();
+      stopAll();
       return;
     }
 
-    // Prewarm idle player while approaching the window (no load() thrash).
     if (
       valid &&
       rem <= CUE_PREWARM_SEC &&
       rem > SEGMENT_END_CUE_SEC &&
-      prewarmedKeyRef.current !== segKey &&
-      !carryingRef.current
+      prewarmedKeyRef.current !== segKey
     ) {
       prewarmedKeyRef.current = segKey;
-      const idle =
-        poolRef.current[(activeIdxRef.current + 1) % poolRef.current.length] ||
-        audio;
-      seekReady(idle, 0).catch(() => {});
+      ctx.resume().catch(() => {});
     }
-    if (valid && rem > CUE_PREWARM_SEC) {
-      prewarmedKeyRef.current = null;
-    }
+    if (valid && rem > CUE_PREWARM_SEC) prewarmedKeyRef.current = null;
 
     if (carryingRef.current) {
-      const a = activeAudio();
-      if (!a) return;
-      if (cueFinished(a)) {
-        // Swap to the other player for the next segment (fresh head).
-        const finished = a;
-        finished.pause();
-        activeIdxRef.current =
-          (activeIdxRef.current + 1) % Math.max(1, poolRef.current.length);
-        carryingRef.current = false;
-        armedKeyRef.current = null;
-        armingRef.current = false;
-        seekReady(finished, 0).catch(() => {});
+      if (playedSec() >= CUE_CARRY_UNTIL_SEC) {
+        stopAll();
         return;
       }
       if (status === "idle" || status === "countdown") {
-        stopAndPark();
+        stopAll();
         return;
       }
-      if (
-        status === "paused" ||
-        (status === "break" && live?.breakStartedAtMs == null)
-      ) {
-        if (!a.paused) a.pause();
+      const breakHeld =
+        status === "break" && live?.breakStartedAtMs == null;
+      if (status === "paused" || breakHeld) {
+        if (sourceRef.current) {
+          pausedOffsetRef.current = playedSec();
+          stopSource();
+        }
         return;
       }
-      if (a.paused) {
-        a.play().catch(() => {});
+      if (!sourceRef.current && pausedOffsetRef.current != null) {
+        startFromOffset(pausedOffsetRef.current);
       }
       return;
     }
 
     const breakTicking = status === "break" && live?.breakStartedAtMs != null;
     const breakHeld = status === "break" && live?.breakStartedAtMs == null;
-    if (status !== "running" && status !== "paused" && !breakTicking && !breakHeld) {
-      if (armedKeyRef.current) stopAndPark();
-      return;
-    }
-
     if (
-      (status === "paused" || breakHeld) &&
-      valid &&
-      rem <= SEGMENT_END_CUE_SEC &&
-      rem > 0
+      status !== "running" &&
+      status !== "paused" &&
+      !breakTicking &&
+      !breakHeld
     ) {
-      const a = activeAudio();
-      if (a && !a.paused) a.pause();
       return;
     }
 
+    // Include ARM_EARLY so we start at offset 0 just before rem hits 3.
     const inWindow =
       (status === "running" || breakTicking) &&
       valid &&
-      rem <= SEGMENT_END_CUE_SEC &&
+      rem <= SEGMENT_END_CUE_SEC + CUE_ARM_EARLY_SEC &&
       rem > 0;
 
-    if (!inWindow) {
-      return;
-    }
+    if (!inWindow) return;
+    if (armedKeyRef.current === segKey) return;
 
-    if (armedKeyRef.current === segKey || armingRef.current) {
-      // Armed: play through. Never mid-cue seek (drift seeks caused 2nd-play lag).
-      const a = activeAudio();
-      if (a && a.paused && carryingRef.current) {
-        a.play().catch(() => {});
-      }
-      return;
-    }
-
-    // Arm once: pick a parked player, seekReady, then play.
     armedKeyRef.current = segKey;
-    armingRef.current = true;
-    carryingRef.current = true;
+    ctx.resume().catch(() => {});
+    // Near / before painted "3" → offset 0 (first beep). Else catch up mid-window.
     const armAt =
-      rem >= SEGMENT_END_CUE_SEC - CUE_CLEAN_ARM_EPS_SEC ? 0 : displayTarget;
-
-    // Prefer the idle (non-active-if-dirty) player — after swap, active is already parked.
-    let player = activeAudio();
-    if (
-      player &&
-      (player.ended || (player.currentTime || 0) > CUE_CARRY_UNTIL_SEC * 0.5)
-    ) {
-      activeIdxRef.current =
-        (activeIdxRef.current + 1) % Math.max(1, poolRef.current.length);
-      player = activeAudio();
-    }
-    if (!player) {
-      armingRef.current = false;
-      carryingRef.current = false;
-      armedKeyRef.current = null;
-      return;
-    }
-
-    const vol =
-      typeof live?.cueVolume === "number" && live.cueVolume > 0
-        ? live.cueVolume
-        : player.volume > 0
-          ? player.volume
-          : 0.75;
-    player.muted = false;
-    player.volume = vol;
-    player.playbackRate = CUE_PLAYBACK_RATE;
-
-    const gen = segKey;
-    seekReady(player, armAt)
-      .then(() => {
-        if (armedKeyRef.current !== gen || !carryingRef.current) return;
-        return player.play();
-      })
-      .then(() => {
-        armingRef.current = false;
-      })
-      .catch(() => {
-        // One retry after a fresh seek — still no mid-stream drift seeks.
-        seekReady(player, armAt)
-          .then(() => player.play())
-          .catch(() => {})
-          .finally(() => {
-            armingRef.current = false;
-          });
-      });
+      rem >= SEGMENT_END_CUE_SEC - CUE_CLEAN_ARM_EPS_SEC
+        ? 0
+        : displayOffset;
+    startFromOffset(armAt);
   }, [
     remainingSec,
     live?.status,

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  assertBreakFieldsPersisted,
   blankRoutine,
   clampBreakSec,
   clampCountdownSec,
@@ -897,7 +898,9 @@ export default function Editor({ initialCatalog }) {
         title: editDraft.title.trim() || editDraft.title,
         localOnly: undefined,
       };
-      const saved = await saveRoutine(toServerRoutine(payload));
+      const sent = toServerRoutine(payload);
+      const saved = await saveRoutine(sent);
+      assertBreakFieldsPersisted(sent, saved);
       setCatalog(cloneCatalog(saved));
       closeEdit();
       setStatus({ kind: "ok", text: "Saved" });
