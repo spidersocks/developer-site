@@ -535,6 +535,19 @@ export default function Remote({
     if (refreshing || pendingDelta.current != null) return;
     const t = e.touches?.[0];
     if (!t) return;
+    // Volume slider / mute must never start a channel swipe or pull-refresh.
+    const target = e.target;
+    if (
+      target instanceof Element &&
+      target.closest(".clozzz-remote__volume")
+    ) {
+      gesture.current = "ignore";
+      pullingRef.current = false;
+      setPulling(false);
+      setPullY(0);
+      setSwipeHint("");
+      return;
+    }
     const now = performance.now();
     touchStart.current = { x: t.clientX, y: t.clientY, t: now };
     samples.current = [{ x: t.clientX, t: now }];
@@ -880,7 +893,15 @@ export default function Remote({
       )}
 
       <p className="clozzz-remote__section">Timer cue</p>
-      <div className="clozzz-remote__volume" role="group" aria-label="Timer cue volume">
+      <div
+        className="clozzz-remote__volume"
+        role="group"
+        aria-label="Timer cue volume"
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        onTouchCancel={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
           className="clozzz-remote__btn clozzz-remote__btn--mute"

@@ -1130,6 +1130,8 @@ html.clozzz-stage-remote #root {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.55rem;
   align-items: center;
+  /* Keep slider drags from competing with channel swipe / pull-refresh. */
+  touch-action: none;
 }
 
 .clozzz-remote__btn--mute {
