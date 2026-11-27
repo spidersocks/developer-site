@@ -656,7 +656,7 @@ function StreamEndedStage({ elapsedSec, title, message }) {
 const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922orig";
 /**
  * Original Mixkit 922 (stereo 44.1kHz, ~6.5s): measured RMS peaks
- * ~0.01 / 1.008 / 2.015 / 3.013s (~1s spacing). Do NOT pitch/warp/speed-rebuild.
+ * ~0.01 / 1.008 / 2.01 / 3.008s (~1s spacing). Do NOT pitch/warp/speed-rebuild.
  * Play at playbackRate=1; align with lead/offset only. Tones 1–3 in the last ~3s,
  * 4th when remainingSec hits 0. Arm once near rem≈3, then carry for the 4th tone.
  */
@@ -669,13 +669,15 @@ const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
  * Lead (wall seconds) for HTMLAudio/CEF start latency so the heard 4th peak
  * lands on the painted 0:00 (bump only lead, never rate).
  */
-const CUE_LEAD_SEC = 0.22;
+const CUE_LEAD_SEC = 0.28;
 /** Cover 4th peak + short tail (audio time) before allowing the next arm. */
 const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
 /** Re-seek only if audio-time drift vs display target exceeds this. */
 const CUE_DRIFT_RESYNC_SEC = 0.35;
 /** Near the top of the window → seek 0 so tone 1 isn't clipped (wall sec). */
 const CUE_CLEAN_ARM_EPS_SEC = 0.2;
+/** Start ensuring the cue buffer is hot this many seconds before the arm window. */
+const CUE_PREWARM_SEC = SEGMENT_END_CUE_SEC + 5;
 
 /** Audio currentTime that matches painted remainingSec (+ lead). */
 function cueAudioTarget(remainingSec) {
@@ -692,6 +694,9 @@ function cueAudioTarget(remainingSec) {
  * Hard-sync segment-end cue to the painted remainingSec, without seek-thrash.
  * Backend/remote lag must not delay the start; display clock owns the cue.
  * Carry lets the 4th tone finish after rem hits 0 / the next segment starts.
+ *
+ * Prefetch: HTML preload + fetch→blob URL so the full WAV is buffered before
+ * arm (avoids first-beep network/decode lag in OBS CEF).
  */
 function useSegmentEndCue(live, remainingSec) {
   const audioRef = useRef(null);
@@ -700,9 +705,14 @@ function useSegmentEndCue(live, remainingSec) {
   /** True after arm until the WAV passes the 4th tone (survives segment switch). */
   const carryingRef = useRef(false);
   const unlockTriedRef = useRef(false);
+  /** True once canplaythrough on the buffered blob (or URL fallback). */
+  const readyRef = useRef(false);
+  const prewarmedRef = useRef(false);
 
   useEffect(() => {
-    const audio = new Audio(SEGMENT_END_CUE_SRC);
+    let cancelled = false;
+    let objectUrl = null;
+    const audio = new Audio();
     audio.preload = "auto";
     audio.playsInline = true;
     audio.playbackRate = CUE_PLAYBACK_RATE;
@@ -710,16 +720,32 @@ function useSegmentEndCue(live, remainingSec) {
     audio.muted = false;
     audio.volume = 0.75;
     audioRef.current = audio;
+    readyRef.current = false;
+
+    // Runtime preload hint (covers SPA navigations that skip the static <link>).
+    if (
+      typeof document !== "undefined" &&
+      !document.querySelector('link[data-clozzz-cue-preload]')
+    ) {
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "audio";
+      link.href = SEGMENT_END_CUE_SRC;
+      link.type = "audio/wav";
+      link.setAttribute("data-clozzz-cue-preload", "1");
+      document.head.appendChild(link);
+    }
 
     // Warm decode + unlock autoplay policies where CEF allows muted gesture-free play.
     const unlock = () => {
-      if (unlockTriedRef.current) return;
+      if (unlockTriedRef.current || cancelled) return;
       unlockTriedRef.current = true;
       const prevVol = audio.volume;
       audio.muted = true;
       audio.volume = 0;
       const p = audio.play();
       const finish = () => {
+        if (cancelled) return;
         audio.pause();
         try {
           audio.currentTime = 0;
@@ -735,12 +761,55 @@ function useSegmentEndCue(live, remainingSec) {
         finish();
       }
     };
-    if (audio.readyState >= 2) unlock();
-    else audio.addEventListener("canplaythrough", unlock, { once: true });
+
+    const markReady = () => {
+      if (cancelled) return;
+      readyRef.current = true;
+      unlock();
+    };
+
+    const bindSrc = (src) => {
+      audio.src = src;
+      try {
+        audio.load();
+      } catch {
+        /* ignore */
+      }
+      if (audio.readyState >= 4) markReady();
+      else audio.addEventListener("canplaythrough", markReady, { once: true });
+    };
+
+    // Fetch the whole WAV into a blob so arm never waits on the network.
+    (async () => {
+      try {
+        const res = await fetch(SEGMENT_END_CUE_SRC, {
+          cache: "force-cache",
+          credentials: "same-origin",
+        });
+        if (!res.ok) throw new Error(`cue fetch ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        bindSrc(objectUrl);
+      } catch {
+        if (cancelled) return;
+        // Fallback: let the element stream the static URL.
+        bindSrc(SEGMENT_END_CUE_SRC);
+      }
+    })();
 
     return () => {
+      cancelled = true;
       audio.pause();
       audioRef.current = null;
+      readyRef.current = false;
+      if (objectUrl) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+          /* ignore */
+        }
+      }
     };
   }, []);
 
@@ -768,6 +837,33 @@ function useSegmentEndCue(live, remainingSec) {
     const displayTarget = valid ? cueAudioTarget(rem) : 0;
     if (audio.playbackRate !== CUE_PLAYBACK_RATE) {
       audio.playbackRate = CUE_PLAYBACK_RATE;
+    }
+
+    // Approaching the cue window: re-assert buffer / decode while we still have time.
+    if (
+      valid &&
+      rem <= CUE_PREWARM_SEC &&
+      rem > SEGMENT_END_CUE_SEC &&
+      !prewarmedRef.current &&
+      !carryingRef.current
+    ) {
+      prewarmedRef.current = true;
+      if (audio.readyState < 4) {
+        try {
+          audio.load();
+        } catch {
+          /* ignore */
+        }
+      } else {
+        try {
+          audio.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    if (valid && rem > CUE_PREWARM_SEC) {
+      prewarmedRef.current = false;
     }
 
     const seekTo = (t) => {

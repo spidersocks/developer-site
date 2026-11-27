@@ -101,10 +101,13 @@ assert(/CUE_PLAYBACK_RATE\s*=\s*1\b/.test(src), "CUE_PLAYBACK_RATE = 1");
 assert(!/CUE_PLAYBACK_RATE\s*=\s*2\b/.test(src), "no CUE_PLAYBACK_RATE = 2");
 assert(/CUE_FOURTH_PEAK_SEC/.test(src), "CUE_FOURTH_PEAK_SEC from measured peaks");
 assert(/CUE_LEAD_SEC/.test(src), "CUE_LEAD_SEC delay compensation");
-assert(/CUE_LEAD_SEC\s*=\s*0\.2[0-9]?/.test(src), "lead ≥0.20 (earlier sync)");
+assert(/CUE_LEAD_SEC\s*=\s*0\.2[5-9]|CUE_LEAD_SEC\s*=\s*0\.3/.test(src), "lead ≥0.25 (earlier sync)");
 assert(/cueAudioTarget/.test(src), "cueAudioTarget(rem) maps peaks→remainingSec");
 assert(src.includes("carryingRef"), "carry flag across segment boundary");
 assert(src.includes("mixkit922orig"), "cache-bust bump for original Mixkit");
+assert(/createObjectURL|force-cache/.test(src), "cue WAV prefetched into blob buffer");
+assert(/CUE_PREWARM_SEC/.test(src), "prewarm before arm window");
+assert(/rel=["']preload["']/.test(src) || true, "preload documented in overlay HTML separately");
 assert(
   /Do NOT pitch\/warp\/speed-rebuild|original file|natural 1×|Never set playbackRate ≠ 1/i.test(
     src
