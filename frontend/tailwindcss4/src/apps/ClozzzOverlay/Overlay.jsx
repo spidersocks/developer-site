@@ -438,10 +438,10 @@ function CountdownBackdrop() {
   );
 }
 
-/** Thin SVG ring — starts 12 o'clock, sweeps with remaining fraction. */
+/** Thin SVG ring — 12 o'clock origin, elapsed gold fill grows clockwise. */
 function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
   const p = Math.min(1, Math.max(0, Number(progress) || 0));
-  const r = 18;
+  const r = 17.25;
   const c = 2 * Math.PI * r;
   return (
     <svg
@@ -456,9 +456,10 @@ function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
         cx="20"
         cy="20"
         r={r}
+        pathLength={1}
         style={{
-          strokeDasharray: c,
-          strokeDashoffset: c * (1 - p),
+          strokeDasharray: 1,
+          strokeDashoffset: 1 - p,
         }}
       />
     </svg>
@@ -467,18 +468,11 @@ function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
 
 function CountdownStage({
   remainingSec,
-  remainingMs,
-  durationMs,
   title,
   held = false,
 }) {
   const critical = !held && remainingSec <= 10;
   const beginsLabel = title ? `${title} begins in` : "Begins in";
-  const ringProgress = held
-    ? 1
-    : durationMs > 0
-      ? Math.min(1, Math.max(0, remainingMs / durationMs))
-      : 1;
 
   return (
     <div
@@ -492,14 +486,7 @@ function CountdownStage({
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
         <p className="clozzz-countdown__label">{beginsLabel}</p>
-        <div
-          className="clozzz-countdown__timer-block"
-          style={{ "--clozzz-timer-p": ringProgress }}
-        >
-          <TimerProgressRing
-            progress={ringProgress}
-            className="clozzz-timer-ring clozzz-countdown__ring"
-          />
+        <div className="clozzz-countdown__timer-block">
           <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
         </div>
       </div>
@@ -586,12 +573,15 @@ function RunningOverlay({ session, sessionKey }) {
   const current = segments[index] || session.segments[0];
   const next = done ? null : segments[index + 1] ?? null;
   const durationMs = (current?.durationSec || live?.segmentDurationSec || 0) * 1000;
-  const progress =
+  const remainingFrac =
     current && !done && durationMs > 0
       ? Math.min(1, Math.max(0, derived.remainingMs / durationMs))
       : 0;
+  /** Elapsed fraction — gold arc grows from 12:00 clockwise as time passes. */
+  const elapsedFrac =
+    current && !done && durationMs > 0 ? 1 - remainingFrac : done ? 1 : 0;
   const remainingSec = derived.remainingMs / 1000;
-  const band = timerBand(progress, remainingSec, done);
+  const band = timerBand(remainingFrac, remainingSec, done);
   const armed = derived.armed && !done;
   const chromeVisible = live?.chromeVisible !== false;
   const inCountdown = Boolean(derived.countdown);
@@ -601,8 +591,6 @@ function RunningOverlay({ session, sessionKey }) {
     return (
       <CountdownStage
         remainingSec={remainingSec}
-        remainingMs={derived.remainingMs}
-        durationMs={derived.durationMs || 1800000}
         title={live?.title || session.title || session.name}
         held={Boolean(derived.countdownHeld)}
       />
@@ -643,9 +631,9 @@ function RunningOverlay({ session, sessionKey }) {
                 <h1 className="clozzz-current">Routine complete</h1>
                 <span
                   className={`clozzz-card-timer clozzz-card-timer--${band}`}
-                  style={{ "--clozzz-timer-p": 0 }}
+                  style={{ "--clozzz-timer-p": 1 }}
                 >
-                  <TimerProgressRing progress={0} />
+                  <TimerProgressRing progress={1} />
                   <span className="clozzz-card-timer__digits">{timerText}</span>
                 </span>
               </div>
@@ -660,9 +648,9 @@ function RunningOverlay({ session, sessionKey }) {
                 <CrossfadeTitle text={moveLabel} />
                 <span
                   className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
-                  style={{ "--clozzz-timer-p": progress }}
+                  style={{ "--clozzz-timer-p": elapsedFrac }}
                 >
-                  <TimerProgressRing progress={progress} />
+                  <TimerProgressRing progress={elapsedFrac} />
                   <span className="clozzz-card-timer__digits">{timerText}</span>
                 </span>
               </div>

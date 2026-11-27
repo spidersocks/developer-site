@@ -398,27 +398,30 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-card-timer {
-  --clozzz-timer-p: 1;
+  --clozzz-timer-p: 0;
   --clozzz-ring-fill: var(--clozzz-gold);
-  --clozzz-ring-track: rgba(243, 234, 215, 0.2);
+  --clozzz-ring-track: rgba(243, 234, 215, 0.28);
   position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: calc(var(--clozzz-timer-size) * 2.55);
-  height: calc(var(--clozzz-timer-size) * 2.55);
-  margin: -0.15rem 0 0;
-  padding: 0;
+  /* Digits-only footprint — ring overlays via absolute inset, no card growth. */
+  width: auto;
+  height: auto;
+  min-width: 4.6ch;
+  margin: 0;
+  padding: 0.12em 0 0;
   color: #f3ead7;
   -webkit-font-smoothing: antialiased;
   transition: color 0.3s ease;
+  overflow: visible;
 }
 
 .clozzz-card-timer__digits {
   position: relative;
   z-index: 1;
   font-family: var(--clozzz-font-display);
-  font-size: calc(var(--clozzz-timer-size) * 0.72);
+  font-size: var(--clozzz-timer-size);
   font-weight: 600;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums lining-nums;
@@ -429,32 +432,33 @@ html.clozzz-stage-preview #root {
   min-width: 4.2ch;
 }
 
-/* Thin premium ring — 12 o'clock origin, remaining arc. */
+/* Thin premium ring — overlays digits; 12 o'clock origin, elapsed gold fill. */
 .clozzz-timer-ring {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  /* Tight wrap around digits; negative inset does not affect layout metrics. */
+  inset: -0.38em;
+  width: auto;
+  height: auto;
   transform: rotate(-90deg);
   pointer-events: none;
   overflow: visible;
+  z-index: 0;
 }
 
 .clozzz-timer-ring__track,
 .clozzz-timer-ring__sweep {
   fill: none;
-  stroke-width: 1.15;
-  vector-effect: non-scaling-stroke;
+  stroke-width: 2.15;
 }
 
 .clozzz-timer-ring__track {
-  stroke: var(--clozzz-ring-track, rgba(243, 234, 215, 0.2));
+  stroke: var(--clozzz-ring-track, rgba(243, 234, 215, 0.28));
 }
 
 .clozzz-timer-ring__sweep {
   stroke: var(--clozzz-ring-fill, var(--clozzz-gold));
   stroke-linecap: round;
-  transition: stroke 0.3s ease;
+  transition: stroke 0.25s ease;
 }
 
 .clozzz-card-timer--late {
@@ -617,8 +621,11 @@ html.clozzz-stage-preview #root {
   }
 
   .clozzz-card-timer {
-    width: calc(var(--clozzz-timer-size) * 2.45);
-    height: calc(var(--clozzz-timer-size) * 2.45);
+    min-width: 4.4ch;
+  }
+
+  .clozzz-timer-ring {
+    inset: -0.34em;
   }
 }
 
@@ -1386,33 +1393,19 @@ html.clozzz-stage-remote #root {
   animation: clozzz-cd-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Clock + thin remaining ring (no linear progress rail on intro) */
+/* Clock only on intro — no progress ring (ring is exercise-timer exclusive). */
 .clozzz-countdown__timer-block {
-  --clozzz-timer-p: 1;
-  --clozzz-ring-fill: rgba(228, 201, 137, 0.92);
-  --clozzz-ring-track: rgba(243, 234, 215, 0.16);
   position: relative;
   display: grid;
   place-items: center;
   width: fit-content;
   max-width: 100%;
-  padding: clamp(0.85rem, 2.2vw, 1.6rem);
+  padding: 0;
   animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
 .clozzz-countdown--soon .clozzz-countdown__timer-block {
   margin-top: 0.15rem;
-}
-
-.clozzz-countdown__ring {
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.clozzz-countdown__ring .clozzz-timer-ring__track,
-.clozzz-countdown__ring .clozzz-timer-ring__sweep {
-  stroke-width: 0.9;
 }
 
 .clozzz-countdown__clock {
@@ -1434,11 +1427,6 @@ html.clozzz-stage-remote #root {
 .clozzz-countdown--soon .clozzz-countdown__clock {
   /* Warmer ivory — distinct from cool #D5DCE5 label */
   color: #f3ead7;
-}
-
-.clozzz-countdown.is-critical {
-  --clozzz-ring-fill: var(--clozzz-critical);
-  --clozzz-ring-track: rgba(240, 138, 106, 0.22);
 }
 
 .clozzz-countdown__rail {
