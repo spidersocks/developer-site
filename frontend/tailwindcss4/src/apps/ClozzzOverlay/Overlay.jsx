@@ -573,9 +573,9 @@ const CUE_PLAYBACK_RATE = 1;
 const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
 /**
  * Lead (wall seconds) for HTMLAudio/CEF start latency so the heard 4th peak
- * lands on the painted 0:00 (was tiny-late at 0.06 — bump only lead, never rate).
+ * lands on the painted 0:00 (bump only lead, never rate).
  */
-const CUE_LEAD_SEC = 0.16;
+const CUE_LEAD_SEC = 0.22;
 /** Cover 4th peak + short tail (audio time) before allowing the next arm. */
 const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
 /** Re-seek only if audio-time drift vs display target exceeds this. */
