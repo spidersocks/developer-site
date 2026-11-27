@@ -362,6 +362,33 @@ export function remainingFromLive(
     };
   }
 
+  if (status === "break") {
+    const durationMs = (live.breakDurationSec || live.breakSec || 10) * 1000;
+    if (live.breakStartedAtMs != null) {
+      const elapsed = serverNow - live.breakStartedAtMs;
+      return {
+        remainingMs: Math.max(0, durationMs - elapsed),
+        done: false,
+        armed: false,
+        onBreak: true,
+        paused: false,
+        durationMs,
+      };
+    }
+    const rem =
+      typeof live.breakPausedRemainingMs === "number"
+        ? live.breakPausedRemainingMs
+        : durationMs;
+    return {
+      remainingMs: Math.max(0, rem),
+      done: false,
+      armed: false,
+      onBreak: true,
+      paused: true,
+      durationMs,
+    };
+  }
+
   const durationMs = (live.segmentDurationSec || 0) * 1000;
 
   if (status === "done") {
@@ -530,25 +557,25 @@ function StreamEndedStage({ elapsedSec, title, message }) {
   );
 }
 
-// Mixkit “Simple countdown” (922, Mixkit License). Cache-bust for OBS CEF.
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922e";
+// Mixkit “Simple countdown” (922, Mixkit License) — original file, natural 1×.
+// Cache-bust for OBS CEF after asset swaps.
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922orig";
 /**
- * Source Mixkit 922 peaks were ~2s apart; WAV rebuilt so measured mono 44.1kHz
- * RMS peaks sit at ~0.02 / 1.018 / 2.015 / 3.028s. Play at natural rate (1×) —
- * tones 1–3 in the last ~3s, 4th exactly when remainingSec hits 0. Arm once
- * near rem≈3, seek from peaks→rem, then carry past the boundary for the 4th
- * tone tail. Never set playbackRate ≠ 1.
+ * Original Mixkit 922 (stereo 44.1kHz, ~6.5s): measured RMS peaks
+ * ~0.01 / 1.008 / 2.015 / 3.013s (~1s spacing). Do NOT pitch/warp/speed-rebuild.
+ * Play at playbackRate=1; align with lead/offset only. Tones 1–3 in the last ~3s,
+ * 4th when remainingSec hits 0. Arm once near rem≈3, then carry for the 4th tone.
  */
-const CUE_PEAKS_AUDIO_SEC = [0.02, 1.018, 2.015, 3.028];
+const CUE_PEAKS_AUDIO_SEC = [0.01, 1.008, 2.01, 3.008];
 const CUE_FOURTH_PEAK_SEC = CUE_PEAKS_AUDIO_SEC[3];
 const CUE_PLAYBACK_RATE = 1;
 /** Wall-seconds from first→fourth peak (= fourth at rate 1). */
 const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
 /**
  * Lead (wall seconds) for HTMLAudio/CEF start latency so the heard 4th peak
- * still lands on the painted 0:00, not a hair after.
+ * lands on the painted 0:00 (was tiny-late at 0.06 — bump only lead, never rate).
  */
-const CUE_LEAD_SEC = 0.06;
+const CUE_LEAD_SEC = 0.16;
 /** Cover 4th peak + short tail (audio time) before allowing the next arm. */
 const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
 /** Re-seek only if audio-time drift vs display target exceeds this. */
@@ -643,7 +670,7 @@ function useSegmentEndCue(live, remainingSec) {
     const muted = Boolean(live?.cueMuted);
     const rem = Number(remainingSec);
     const valid = Number.isFinite(rem);
-    const segKey = `${live?.segmentStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}`;
+    const segKey = `${live?.segmentStartedAtMs ?? live?.breakStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}:${live?.status ?? ""}`;
     const displayTarget = valid ? cueAudioTarget(rem) : 0;
     if (audio.playbackRate !== CUE_PLAYBACK_RATE) {
       audio.playbackRate = CUE_PLAYBACK_RATE;
@@ -685,11 +712,11 @@ function useSegmentEndCue(live, remainingSec) {
         stopAndReset();
         return;
       }
-      if (status === "paused") {
+      if (status === "paused" || (status === "break" && live?.breakStartedAtMs == null)) {
         if (!audio.paused) audio.pause();
         return;
       }
-      // running | done | stream_ended — finish the 4th tone.
+      // running | break (ticking) | done | stream_ended — finish the 4th tone.
       if (audio.paused) {
         const play = audio.play();
         if (play && typeof play.catch === "function") play.catch(() => {});
@@ -697,21 +724,28 @@ function useSegmentEndCue(live, remainingSec) {
       return;
     }
 
-    // Not carrying: only running/paused may arm or freeze.
-    if (status !== "running" && status !== "paused") {
+    // Not carrying: running / break (ticking) / paused may arm or freeze.
+    const breakTicking = status === "break" && live?.breakStartedAtMs != null;
+    const breakHeld = status === "break" && live?.breakStartedAtMs == null;
+    if (status !== "running" && status !== "paused" && !breakTicking && !breakHeld) {
       stopAndReset();
       return;
     }
 
-    // Paused inside the cue window: freeze on the frozen display clock.
-    if (status === "paused" && valid && rem <= SEGMENT_END_CUE_SEC && rem > 0) {
+    // Paused / held break inside the cue window: freeze on the frozen display clock.
+    if (
+      (status === "paused" || breakHeld) &&
+      valid &&
+      rem <= SEGMENT_END_CUE_SEC &&
+      rem > 0
+    ) {
       if (!audio.paused) audio.pause();
       if (armedKeyRef.current === segKey) seekTo(displayTarget);
       return;
     }
 
     const inWindow =
-      status === "running" &&
+      (status === "running" || breakTicking) &&
       valid &&
       rem <= SEGMENT_END_CUE_SEC &&
       rem > 0;
@@ -719,7 +753,12 @@ function useSegmentEndCue(live, remainingSec) {
     if (!inWindow) {
       // Outside window and not carrying — stay quiet (do not thrash seek every frame).
       if (!audio.paused) audio.pause();
-      if (armedKeyRef.current && (status !== "running" || !valid || rem > SEGMENT_END_CUE_SEC)) {
+      if (
+        armedKeyRef.current &&
+        ((status !== "running" && !breakTicking) ||
+          !valid ||
+          rem > SEGMENT_END_CUE_SEC)
+      ) {
         armedKeyRef.current = null;
         seekTo(0);
       }
@@ -773,6 +812,7 @@ function useSegmentEndCue(live, remainingSec) {
     live?.status,
     live?.segmentIndex,
     live?.segmentStartedAtMs,
+    live?.breakStartedAtMs,
     live?.cueMuted,
     live?.cueVolume,
   ]);
@@ -818,16 +858,19 @@ function RunningOverlay({ session, sessionKey }) {
     ? live.segments
     : session.segments;
   const done = derived.done || live?.status === "done";
+  const onBreak = Boolean(derived.onBreak);
   const current = segments[index] || session.segments[0];
   const next = done ? null : segments[index + 1] ?? null;
-  const durationMs = (current?.durationSec || live?.segmentDurationSec || 0) * 1000;
+  const durationMs = onBreak
+    ? derived.durationMs || (live?.breakDurationSec || 10) * 1000
+    : (current?.durationSec || live?.segmentDurationSec || 0) * 1000;
   const remainingFrac =
-    current && !done && durationMs > 0
+    !done && durationMs > 0
       ? Math.min(1, Math.max(0, derived.remainingMs / durationMs))
       : 0;
   /** Elapsed fraction — gold arc grows from 12:00 clockwise as time passes. */
   const elapsedFrac =
-    current && !done && durationMs > 0 ? 1 - remainingFrac : done ? 1 : 0;
+    !done && durationMs > 0 ? 1 - remainingFrac : done ? 1 : 0;
   const remainingSec = derived.remainingMs / 1000;
   const band = timerBand(remainingFrac, remainingSec, done);
   const armed = derived.armed && !done;
@@ -863,8 +906,12 @@ function RunningOverlay({ session, sessionKey }) {
     );
   }
 
-  const moveLabel = current?.label || live?.currentLabel || "…";
-  const nextCue = next?.label || "Rest";
+  const moveLabel = onBreak
+    ? "Break"
+    : current?.label || live?.currentLabel || "…";
+  const nextCue = onBreak
+    ? current?.label || live?.currentLabel || "…"
+    : next?.label || "Rest";
   const timerText = done ? "0:00" : formatClock(remainingSec);
 
   return (
@@ -896,14 +943,16 @@ function RunningOverlay({ session, sessionKey }) {
             <>
               <div className="clozzz-move-copy">
                 <p className="clozzz-exercise-count">
-                  Exercise {index + 1} of {segments.length}
+                  {onBreak
+                    ? `Break · up next ${index + 1} of ${segments.length}`
+                    : `Exercise ${index + 1} of ${segments.length}`}
                   {derived.paused ? " · Paused" : ""}
                 </p>
                 <CrossfadeTitle text={moveLabel} />
                 <p className="clozzz-up-next">Next: {nextCue}</p>
               </div>
               <span
-                className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
+                className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}${onBreak ? " is-break" : ""}`}
                 style={{ "--clozzz-timer-p": elapsedFrac }}
               >
                 <TimerProgressRing progress={elapsedFrac} />

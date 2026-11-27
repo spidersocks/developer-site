@@ -12,7 +12,7 @@ const root = path.resolve(__dirname, "..");
 const wavPath = path.join(root, "public/clozzz/segment-end-cue.wav");
 const overlayPath = path.join(root, "src/apps/ClozzzOverlay/Overlay.jsx");
 
-const PROD = "https://www.seanfontaine.dev/clozzz/segment-end-cue.wav?v=mixkit922e";
+const PROD = "https://www.seanfontaine.dev/clozzz/segment-end-cue.wav?v=mixkit922orig";
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -31,7 +31,8 @@ function measurePeaks(buf) {
     const id = buf.toString("ascii", off, off + 4);
     const size = dv.getUint32(off + 4, true);
     if (id === "fmt ") {
-      channels = dv.getUint16(off + 8, true);
+      // PCM fmt: audioFormat@+8, channels@+10, sampleRate@+12, bits@+22
+      channels = dv.getUint16(off + 10, true);
       rate = dv.getUint32(off + 12, true);
       bits = dv.getUint16(off + 22, true);
     }
@@ -75,9 +76,9 @@ function measurePeaks(buf) {
   return peaks;
 }
 
-// 1) Local asset + 1s-spaced Mixkit rebuild (3 tones + 4th at rem=0)
+// 1) Local ORIGINAL Mixkit 922 asset (3 tones + 4th at rem=0, natural 1×)
 const st = fs.statSync(wavPath);
-assert(st.size > 100_000, `local WAV size ${st.size} (>100KB)`);
+assert(st.size > 1_000_000, `local original WAV size ${st.size} (~1.1MB)`);
 const buf = fs.readFileSync(wavPath);
 assert(buf.slice(0, 4).toString() === "RIFF", "local WAV starts with RIFF");
 const peaks = measurePeaks(buf);
@@ -100,14 +101,15 @@ assert(/CUE_PLAYBACK_RATE\s*=\s*1\b/.test(src), "CUE_PLAYBACK_RATE = 1");
 assert(!/CUE_PLAYBACK_RATE\s*=\s*2\b/.test(src), "no CUE_PLAYBACK_RATE = 2");
 assert(/CUE_FOURTH_PEAK_SEC/.test(src), "CUE_FOURTH_PEAK_SEC from measured peaks");
 assert(/CUE_LEAD_SEC/.test(src), "CUE_LEAD_SEC delay compensation");
+assert(/CUE_LEAD_SEC\s*=\s*0\.1[5-9]|CUE_LEAD_SEC\s*=\s*0\.2/.test(src), "lead ≥0.15 (tiny-late fix)");
 assert(/cueAudioTarget/.test(src), "cueAudioTarget(rem) maps peaks→remainingSec");
 assert(src.includes("carryingRef"), "carry flag across segment boundary");
-assert(src.includes("mixkit922e"), "cache-bust bump for OBS refresh");
+assert(src.includes("mixkit922orig"), "cache-bust bump for original Mixkit");
 assert(
-  /playbackRate\s*must remain 1|Never set playbackRate ≠ 1|natural rate/i.test(
+  /Do NOT pitch\/warp\/speed-rebuild|original file|natural 1×|Never set playbackRate ≠ 1/i.test(
     src
   ) || /CUE_PLAYBACK_RATE = 1/.test(src),
-  "natural-rate intent documented"
+  "original-file / natural-rate intent documented"
 );
 
 // 2) Source no longer seek-thrashes every frame
@@ -121,7 +123,8 @@ assert(
 const FOURTH = peaks[3];
 const RATE = 1;
 const CUE_SEC = FOURTH / RATE;
-const LEAD = 0.06;
+const leadMatch = src.match(/CUE_LEAD_SEC\s*=\s*([0-9.]+)/);
+const LEAD = leadMatch ? Number(leadMatch[1]) : 0.16;
 const CARRY_UNTIL = FOURTH + 0.35;
 
 function audioTarget(rem) {

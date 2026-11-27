@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   blankRoutine,
+  clampBreakSec,
   clampCountdownSec,
+  DEFAULT_BREAK_SEC,
   DEFAULT_EXERCISE_DURATION_SEC,
   DEFAULT_INTRO_COUNTDOWN_SEC,
   formatDuration,
@@ -622,6 +624,45 @@ function EditRoutineModal({
                       placeholder="Thanks for watching"
                       onChange={(e) =>
                         patchDraft({ streamEndedMessage: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="ce-toggle-block">
+              <label className="ce-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.breaksEnabled)}
+                  onChange={(e) =>
+                    patchDraft({
+                      breaksEnabled: e.target.checked,
+                      breakSec:
+                        draft.breakSec >= 1
+                          ? draft.breakSec
+                          : DEFAULT_BREAK_SEC,
+                    })
+                  }
+                />
+                <span className="ce-toggle__ui" aria-hidden="true" />
+                <span className="ce-toggle__copy">
+                  <span className="ce-toggle__title">Breaks between exercises</span>
+                  <span className="ce-toggle__hint">
+                    Insert a rest countdown between each exercise
+                  </span>
+                </span>
+              </label>
+              {draft.breaksEnabled ? (
+                <div className="ce-toggle-block__expand">
+                  <div className="ce-toggle-block__field">
+                    <span className="ce-toggle-block__label">Duration</span>
+                    <DurationField
+                      value={draft.breakSec || DEFAULT_BREAK_SEC}
+                      ariaLabel="Break duration between exercises"
+                      onChange={(breakSec) =>
+                        patchDraft({ breakSec: clampBreakSec(breakSec) })
                       }
                     />
                   </div>

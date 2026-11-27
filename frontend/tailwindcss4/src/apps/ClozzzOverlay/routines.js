@@ -22,6 +22,8 @@ export const SPACE_OPTIONS = ["Floor mat", "Bed", "Others"];
  *   streamEndedEnabled?: boolean,
  *   streamEndedSec?: number,
  *   streamEndedMessage?: string,
+ *   breaksEnabled?: boolean,
+ *   breakSec?: number,
  *   segments: Segment[]
  * }} Session
  */
@@ -34,6 +36,8 @@ export const STREAM_ENDED_SOFT_CAP_SEC = 3600;
 /** @deprecated use STREAM_ENDED_SOFT_CAP_SEC — kept for older imports */
 export const DEFAULT_STREAM_ENDED_SEC = STREAM_ENDED_SOFT_CAP_SEC;
 export const DEFAULT_EXERCISE_DURATION_SEC = 60;
+/** Customary rest between exercises. */
+export const DEFAULT_BREAK_SEC = 10;
 
 /** Floor 1s (exercises); countdown fields use clampCountdownSec. */
 function clampDurationSec(value, fallback) {
@@ -47,6 +51,13 @@ export function clampCountdownSec(value, fallback = DEFAULT_INTRO_COUNTDOWN_SEC)
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(60, Math.min(60 * 60, Math.round(n)));
+}
+
+/** Between-exercise break: 1s–5 min. */
+export function clampBreakSec(value, fallback = DEFAULT_BREAK_SEC) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(5 * 60, Math.round(n)));
 }
 
 /**
@@ -95,6 +106,8 @@ export function normalizeRoutine(routine) {
     // Soft cap only — editor no longer edits duration.
     streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
     streamEndedMessage: String(routine.streamEndedMessage || "").trim(),
+    breaksEnabled: Boolean(routine.breaksEnabled),
+    breakSec: clampBreakSec(routine.breakSec, DEFAULT_BREAK_SEC),
   };
 }
 
@@ -324,6 +337,11 @@ export function blankRoutine(existing = [], overrides = {}) {
         : true,
     streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
     streamEndedMessage: String(overrides.streamEndedMessage || "").trim(),
+    breaksEnabled:
+      overrides.breaksEnabled !== undefined
+        ? Boolean(overrides.breaksEnabled)
+        : true,
+    breakSec: clampBreakSec(overrides.breakSec, DEFAULT_BREAK_SEC),
     segments: overrides.segments || [
       {
         id: newId("seg"),
@@ -343,5 +361,7 @@ export function toServerRoutine(routine) {
     space: normalizeSpace(rest.space),
     introCountdownMessage: String(rest.introCountdownMessage || "").trim(),
     streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
+    breaksEnabled: Boolean(rest.breaksEnabled),
+    breakSec: clampBreakSec(rest.breakSec, DEFAULT_BREAK_SEC),
   };
 }
