@@ -973,18 +973,15 @@ export default function Remote({
         </label>
       </div>
 
-      {logoArmed ? null : (
+      {/* Hide/Show only while exercise chrome is meaningful — not countdown / logo-only / ended. */}
+      {logoArmed || inCountdown || introHeld || inStreamEnded ? null : (
         <>
           <p className="clozzz-remote__section">Overlay</p>
           <button
             type="button"
             className="clozzz-remote__btn"
             disabled={
-              noLive ||
-              inCountdown ||
-              introHeld ||
-              inStreamEnded ||
-              isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
+              noLive || isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
             }
             onClick={() => send(chromeVisible ? "hide_chrome" : "show_chrome")}
           >
@@ -993,11 +990,8 @@ export default function Remote({
         </>
       )}
 
-      {status === "done" ||
-      inCountdown ||
-      introHeld ||
-      logoArmed ||
-      inStreamEnded ? null : (
+      {/* Reset during countdown + logo-only idle, as well as live/paused. */}
+      {status === "done" || introHeld || inStreamEnded ? null : (
         <button
           type="button"
           className="clozzz-remote__btn clozzz-remote__btn--ghost"
@@ -1059,7 +1053,7 @@ export default function Remote({
               className="clozzz-remote__channel clozzz-remote__channel--mobile"
               aria-live={isActive ? "polite" : undefined}
             >
-              {`${idx + 1} of ${channelIds.length} · swipe to switch`}
+              {`${idx + 1} of ${channelIds.length}`}
             </p>
           ) : null}
         </header>

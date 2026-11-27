@@ -1009,19 +1009,27 @@ html.clozzz-stage-remote #root {
   font-weight: 650;
 }
 
+.clozzz-remote__head {
+  text-align: center;
+  margin: 0.15rem 0 0.35rem;
+}
+
 .clozzz-remote__title {
-  margin: 0.3rem 0 0.25rem;
+  margin: 0;
   font-family: var(--clozzz-font-display);
-  font-size: clamp(2rem, 8vw, 2.55rem);
-  font-weight: 600;
+  font-size: clamp(2.45rem, 9.5vw, 3.15rem);
+  font-weight: 650;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .clozzz-remote__channel {
-  margin: 0.15rem 0 0.35rem;
-  color: var(--clozzz-gold);
-  font-size: 0.95rem;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  margin: 0.4rem 0 0;
+  color: rgba(228, 201, 137, 0.72);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .clozzz-remote__meta {
@@ -1254,15 +1262,19 @@ html.clozzz-stage-remote #root {
     letter-spacing: 0.08em;
   }
 
+  .clozzz-remote__head {
+    margin: 0.05rem 0 0.2rem;
+  }
+
   .clozzz-remote__title {
-    margin: 0.1rem 0 0.05rem;
-    font-size: clamp(1.05rem, 7.5vw, 1.35rem);
+    margin: 0;
+    font-size: clamp(1.35rem, 8.5vw, 1.7rem);
     line-height: 1.1;
   }
 
   .clozzz-remote__channel {
-    margin: 0.05rem 0;
-    font-size: 0.7rem;
+    margin: 0.2rem 0 0;
+    font-size: 0.65rem;
   }
 
   .clozzz-remote__meta {
@@ -1511,8 +1523,12 @@ html.clozzz-stage-remote #root {
     display: none;
   }
 
+  .clozzz-remote__head {
+    text-align: center;
+  }
+
   .clozzz-remote__title {
-    font-size: clamp(2.1rem, 3.2vw, 2.75rem);
+    font-size: clamp(2.6rem, 4vw, 3.35rem);
   }
 
   .clozzz-remote__pad {

@@ -531,21 +531,40 @@ function StreamEndedStage({ elapsedSec, title, message }) {
 }
 
 // Mixkit “Simple countdown” (922, Mixkit License). Cache-bust for OBS CEF.
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922c";
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922d";
 /**
- * Amplitude peaks in the WAV (stereo 44.1kHz RMS): ~0.01, 1.01, 2.01, 3.01s.
- * Tones 1–3 land in the last ~3s of the exercise; tone 4 (switch) lands in
- * the first ~1s of the NEXT exercise. Arm once at rem≈3 (seek≈0), then let
- * the file play through the segment boundary — never pause/seek-to-0 until
- * the 4th tone has finished (carry). Drift resync only while still in-window.
+ * Measured mono 44.1kHz RMS peaks: ~0.02, 2.02, 4.02, 6.016s (2s spacing).
+ * Play at 2× so wall peaks land ~0.01 / 1.01 / 2.01 / 3.008s — tones 1–3 in
+ * the last ~3s, 4th exactly when remainingSec hits 0. Arm once near rem≈3,
+ * seek from peaks→rem, then carry past the boundary for the 4th tone tail.
  */
-const SEGMENT_END_CUE_SEC = 3;
-/** Cover 4th peak (~3.01s) + short tail before allowing the next arm. */
-const CUE_CARRY_UNTIL_SEC = 3.45;
-/** Only re-seek if display vs audio drift exceeds this (seconds). */
-const CUE_DRIFT_RESYNC_SEC = 0.28;
-/** If rem is still this close to CUE_SEC, seek 0 so the first tone isn't clipped. */
+const CUE_PEAKS_AUDIO_SEC = [0.02, 2.02, 4.02, 6.016];
+const CUE_FOURTH_PEAK_SEC = CUE_PEAKS_AUDIO_SEC[3];
+const CUE_PLAYBACK_RATE = 2;
+/** Wall-seconds from first→fourth peak after rate (= fourth / rate). */
+const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
+/**
+ * Lead (wall seconds) for HTMLAudio/CEF start latency so the heard 4th peak
+ * still lands on the painted 0:00, not a hair after.
+ */
+const CUE_LEAD_SEC = 0.06;
+/** Cover 4th peak + short tail (audio time) before allowing the next arm. */
+const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
+/** Re-seek only if audio-time drift vs display target exceeds this. */
+const CUE_DRIFT_RESYNC_SEC = 0.35;
+/** Near the top of the window → seek 0 so tone 1 isn't clipped (wall sec). */
 const CUE_CLEAN_ARM_EPS_SEC = 0.2;
+
+/** Audio currentTime that matches painted remainingSec (+ lead). */
+function cueAudioTarget(remainingSec) {
+  const rem = Number(remainingSec);
+  if (!Number.isFinite(rem)) return 0;
+  const wallElapsed = SEGMENT_END_CUE_SEC - rem + CUE_LEAD_SEC;
+  return Math.max(
+    0,
+    Math.min(CUE_FOURTH_PEAK_SEC, wallElapsed * CUE_PLAYBACK_RATE)
+  );
+}
 
 /**
  * Hard-sync segment-end cue to the painted remainingSec, without seek-thrash.
@@ -564,6 +583,7 @@ function useSegmentEndCue(live, remainingSec) {
     const audio = new Audio(SEGMENT_END_CUE_SRC);
     audio.preload = "auto";
     audio.playsInline = true;
+    audio.playbackRate = CUE_PLAYBACK_RATE;
     // OBS CEF: keep element unmuted for Control-audio-via-OBS; volume is set live.
     audio.muted = false;
     audio.volume = 0.75;
@@ -623,9 +643,10 @@ function useSegmentEndCue(live, remainingSec) {
     const rem = Number(remainingSec);
     const valid = Number.isFinite(rem);
     const segKey = `${live?.segmentStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}`;
-    const displayTarget = valid
-      ? Math.max(0, SEGMENT_END_CUE_SEC - rem)
-      : 0;
+    const displayTarget = valid ? cueAudioTarget(rem) : 0;
+    if (audio.playbackRate !== CUE_PLAYBACK_RATE) {
+      audio.playbackRate = CUE_PLAYBACK_RATE;
+    }
 
     const seekTo = (t) => {
       try {
@@ -725,6 +746,7 @@ function useSegmentEndCue(live, remainingSec) {
           window.setTimeout(() => {
             if (armedKeyRef.current !== segKey || !carryingRef.current) return;
             seekTo(armAt);
+            audio.playbackRate = CUE_PLAYBACK_RATE;
             audio.play().catch(() => {});
           }, 50);
         });
