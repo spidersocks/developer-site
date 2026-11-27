@@ -544,8 +544,7 @@ function EditRoutineModal({
                 <span className="ce-toggle__copy">
                   <span className="ce-toggle__title">Pre-stream countdown</span>
                   <span className="ce-toggle__hint">
-                    OBS opens on a frozen full-duration countdown; remote Start
-                    ticks it, or Skip goes straight to the routine
+                    Display a frozen countdown on OBS before the routine starts
                   </span>
                 </span>
               </label>
@@ -603,8 +602,7 @@ function EditRoutineModal({
                 <span className="ce-toggle__copy">
                   <span className="ce-toggle__title">Stream ended graphic</span>
                   <span className="ce-toggle__hint">
-                    After the last exercise, show an ended screen until you
-                    dismiss it from the remote
+                    Display an ended screen after the last exercise
                   </span>
                 </span>
               </label>

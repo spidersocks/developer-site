@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FALLBACK_CATALOG,
   findSessionIn,
@@ -530,6 +530,75 @@ function StreamEndedStage({ elapsedSec, title, message }) {
   );
 }
 
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav";
+
+/**
+ * Play a 3-beep cue in the last ~3s of each running exercise (OBS Browser Source).
+ * Volume/mute follow the live run so the phone remote can drive them.
+ */
+function useSegmentEndCue(live, remainingSec) {
+  const audioRef = useRef(null);
+  const firedKeyRef = useRef(null);
+
+  useEffect(() => {
+    const audio = new Audio(SEGMENT_END_CUE_SRC);
+    audio.preload = "auto";
+    audioRef.current = audio;
+    return () => {
+      audio.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const vol =
+      typeof live?.cueVolume === "number" ? live.cueVolume : 0.75;
+    audio.volume = Math.max(0, Math.min(1, vol));
+    audio.muted = Boolean(live?.cueMuted);
+  }, [live?.cueVolume, live?.cueMuted]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    const status = live?.status;
+    if (status !== "running") {
+      if (audio && !audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      if (status !== "paused") firedKeyRef.current = null;
+      return;
+    }
+    if (live?.cueMuted) {
+      if (audio && !audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      return;
+    }
+    const cueKey = `${live.segmentStartedAtMs ?? "x"}:${live.segmentIndex ?? 0}`;
+    if (remainingSec <= 3.05 && remainingSec > 0.05) {
+      if (firedKeyRef.current === cueKey) return;
+      firedKeyRef.current = cueKey;
+      if (!audio) return;
+      try {
+        audio.currentTime = 0;
+        const play = audio.play();
+        if (play && typeof play.catch === "function") play.catch(() => {});
+      } catch {
+        /* OBS autoplay edge cases */
+      }
+    }
+  }, [
+    remainingSec,
+    live?.status,
+    live?.segmentIndex,
+    live?.segmentStartedAtMs,
+    live?.cueMuted,
+  ]);
+}
+
 function RunningOverlay({ session, sessionKey }) {
   useStageClass(wantsPreview() ? "preview" : null);
   const [live, setLive] = useState(null);
@@ -586,6 +655,11 @@ function RunningOverlay({ session, sessionKey }) {
   const chromeVisible = live?.chromeVisible !== false;
   const inCountdown = Boolean(derived.countdown);
   const inStreamEnded = Boolean(derived.streamEnded);
+
+  useSegmentEndCue(
+    live,
+    inCountdown || inStreamEnded || done ? Infinity : remainingSec
+  );
 
   if (inCountdown) {
     return (

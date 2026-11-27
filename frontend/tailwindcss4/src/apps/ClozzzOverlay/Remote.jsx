@@ -22,10 +22,46 @@ function snapRevision(snap) {
   if (typeof snap.revision === "number" && Number.isFinite(snap.revision)) {
     return snap.revision;
   }
+  return 0;
+}
+
+function snapUpdatedAt(snap) {
+  if (!snap || typeof snap !== "object") return 0;
   if (typeof snap.updatedAt === "number" && Number.isFinite(snap.updatedAt)) {
     return snap.updatedAt;
   }
   return 0;
+}
+
+const CUE_VOLUME_KEY = "clozzz_cue_volume";
+const CUE_MUTED_KEY = "clozzz_cue_muted";
+
+function readStoredCueVolume() {
+  try {
+    const raw = localStorage.getItem(CUE_VOLUME_KEY);
+    if (raw == null) return 0.75;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.75;
+  } catch {
+    return 0.75;
+  }
+}
+
+function readStoredCueMuted() {
+  try {
+    return localStorage.getItem(CUE_MUTED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberCueAudio(volume, muted) {
+  try {
+    localStorage.setItem(CUE_VOLUME_KEY, String(volume));
+    localStorage.setItem(CUE_MUTED_KEY, muted ? "1" : "0");
+  } catch {
+    /* private mode */
+  }
 }
 
 function sameRoutineId(a, b) {
@@ -161,7 +197,10 @@ export default function Remote({
   const viewportRef = useRef(null);
   const settleTimer = useRef(null);
   const liveRevRef = useRef(0);
+  const liveUpdatedRef = useRef(0);
   const sessionKeyRef = useRef(sessionKey);
+  const cuePrefsPushedRef = useRef(false);
+  const cueVolTimerRef = useRef(null);
   const channelIntentRef = useRef({ id: null, at: 0 });
   /** True when this remote should claim studio (mount / local swipe); false after peer follow. */
   const claimStudioRef = useRef(true);
@@ -202,8 +241,15 @@ export default function Remote({
       return false;
     }
     const rev = snapRevision(snap);
-    if (rev && rev < liveRevRef.current) return false;
-    if (rev) liveRevRef.current = rev;
+    const updated = snapUpdatedAt(snap);
+    // Restart rebuilds the run at revision 1 — accept when updatedAt advances.
+    if (rev && rev < liveRevRef.current) {
+      if (!updated || updated <= liveUpdatedRef.current) return false;
+      liveRevRef.current = rev;
+    } else if (rev) {
+      liveRevRef.current = rev;
+    }
+    if (updated) liveUpdatedRef.current = updated;
     setLive(snap);
     return true;
   }, []);
@@ -247,6 +293,7 @@ export default function Remote({
           studioPutGenRef.current += 1;
           channelIntentRef.current = { id: null, at: 0 };
           liveRevRef.current = 0;
+          liveUpdatedRef.current = 0;
           if (typeof onChannelChange === "function") {
             onChannelChange(active);
           }
@@ -286,7 +333,39 @@ export default function Remote({
     rememberLastRoutineId(sessionKey);
     canonicalizeRemoteUrl();
     liveRevRef.current = 0;
+    liveUpdatedRef.current = 0;
+    cuePrefsPushedRef.current = false;
   }, [sessionKey]);
+
+  /** Push remembered cue volume/mute once per channel so OBS matches the remote. */
+  useEffect(() => {
+    if (!live || cuePrefsPushedRef.current) return;
+    cuePrefsPushedRef.current = true;
+    const volume = readStoredCueVolume();
+    const muted = readStoredCueMuted();
+    const serverVol =
+      typeof live.cueVolume === "number" ? live.cueVolume : null;
+    const serverMuted = Boolean(live.cueMuted);
+    if (
+      serverVol != null &&
+      Math.abs(serverVol - volume) < 0.001 &&
+      serverMuted === muted
+    ) {
+      return;
+    }
+    (async () => {
+      try {
+        const token = (await ensureLiveToken()) || readLiveToken();
+        const snap = await postLiveCommand(sessionKey, "set_cue_audio", token, {
+          cueVolume: volume,
+          cueMuted: muted,
+        });
+        applyLiveSnap(snap, sessionKey);
+      } catch {
+        /* keep polling; volume UI still local until next success */
+      }
+    })();
+  }, [live, sessionKey, applyLiveSnap]);
 
   useEffect(() => {
     let cancelled = false;
@@ -375,6 +454,7 @@ export default function Remote({
       desiredStudioRef.current = id;
       channelIntentRef.current = { id, at: Date.now() };
       liveRevRef.current = 0;
+      liveUpdatedRef.current = 0;
       rememberLastRoutineId(id);
       canonicalizeRemoteUrl();
       if (typeof onChannelChange === "function") {
@@ -636,6 +716,42 @@ export default function Remote({
 
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
+  const cueVolume =
+    typeof live?.cueVolume === "number"
+      ? live.cueVolume
+      : readStoredCueVolume();
+  const cueMuted = live ? Boolean(live.cueMuted) : readStoredCueMuted();
+
+  const setCueAudio = (patch, { debounceMs = 0 } = {}) => {
+    const nextVol =
+      patch.cueVolume != null ? patch.cueVolume : cueVolume;
+    const nextMuted =
+      patch.cueMuted != null ? patch.cueMuted : cueMuted;
+    rememberCueAudio(nextVol, nextMuted);
+    // Optimistic local update so the slider feels instant
+    setLive((prev) =>
+      prev
+        ? { ...prev, cueVolume: nextVol, cueMuted: nextMuted }
+        : prev
+    );
+    const push = () =>
+      send("set_cue_audio", {
+        cueVolume: nextVol,
+        cueMuted: nextMuted,
+        _busyKey: "set_cue_audio",
+      });
+    if (debounceMs > 0) {
+      if (cueVolTimerRef.current) window.clearTimeout(cueVolTimerRef.current);
+      cueVolTimerRef.current = window.setTimeout(push, debounceMs);
+      return;
+    }
+    if (cueVolTimerRef.current) {
+      window.clearTimeout(cueVolTimerRef.current);
+      cueVolTimerRef.current = null;
+    }
+    push();
+  };
+
   const pullHint =
     refreshing || pullY >= PULL_THRESHOLD_PX
       ? "Release to refresh"
@@ -762,6 +878,39 @@ export default function Remote({
           )}
         </>
       )}
+
+      <p className="clozzz-remote__section">Timer cue</p>
+      <div className="clozzz-remote__volume" role="group" aria-label="Timer cue volume">
+        <button
+          type="button"
+          className="clozzz-remote__btn clozzz-remote__btn--mute"
+          disabled={noLive || isBusy("set_cue_audio")}
+          aria-pressed={cueMuted}
+          onClick={() => setCueAudio({ cueMuted: !cueMuted })}
+        >
+          {cueMuted ? "Unmute" : "Mute"}
+        </button>
+        <label className="clozzz-remote__volume-slider">
+          <span className="clozzz-remote__volume-pct">
+            {cueMuted ? "Muted" : `${Math.round(cueVolume * 100)}%`}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round(cueVolume * 100)}
+            disabled={noLive || cueMuted || isBusy("set_cue_audio")}
+            aria-label="Cue volume"
+            onChange={(e) =>
+              setCueAudio(
+                { cueVolume: Number(e.target.value) / 100 },
+                { debounceMs: 180 }
+              )
+            }
+          />
+        </label>
+      </div>
 
       {logoArmed ? null : (
         <>

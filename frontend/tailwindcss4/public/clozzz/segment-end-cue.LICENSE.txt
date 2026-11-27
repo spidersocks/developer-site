@@ -1,0 +1,8 @@
+segment-end-cue.wav
+===================
+
+Original Clozzz timer cue generated for this project (three short beeps over
+~2.4s for the last three seconds of an exercise).
+
+License: CC0 1.0 Universal (public domain dedication).
+You may copy, modify, and redistribute freely with or without attribution.
