@@ -340,9 +340,11 @@ export function remainingFromLive(
     const durationMs =
       (live.streamEndedDurationSec || live.streamEndedSec || 45) * 1000;
     if (live.streamEndedStartedAtMs != null) {
-      const elapsed = serverNow - live.streamEndedStartedAtMs;
+      const elapsed = Math.max(0, serverNow - live.streamEndedStartedAtMs);
       return {
         remainingMs: Math.max(0, durationMs - elapsed),
+        /* Count-up display: elapsed since stream ended (not remaining). */
+        elapsedMs: elapsed,
         done: false,
         armed: false,
         streamEnded: true,
@@ -351,6 +353,7 @@ export function remainingFromLive(
     }
     return {
       remainingMs: durationMs,
+      elapsedMs: 0,
       done: false,
       armed: false,
       streamEnded: true,
@@ -494,10 +497,13 @@ function CountdownStage({
   );
 }
 
-function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, message }) {
-  const progress =
-    durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
-  const elapsed = 1 - progress;
+function StreamEndedStage({ elapsedSec, title, message }) {
+  /* Same typography language as stream-starting: message/routine line + ivory timer. */
+  const trimmed = message && String(message).trim();
+  const label =
+    trimmed ||
+    (title ? `${title} has ended` : "Stream ended");
+
   return (
     <div
       className="clozzz-countdown clozzz-countdown--ended"
@@ -509,22 +515,12 @@ function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, messag
         <BrandLockup />
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
-        <p className="clozzz-countdown__label">Stream ended</p>
+        <p className="clozzz-countdown__label">{label}</p>
         <div className="clozzz-countdown__timer-block">
-          <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
-          <div
-            className="clozzz-countdown__rail"
-            style={{ "--clozzz-cd-elapsed": elapsed }}
-            aria-hidden="true"
-          >
-            <span className="clozzz-countdown__rail-track" />
-            <span className="clozzz-countdown__rail-fill" />
-            <span className="clozzz-countdown__rail-head" />
-          </div>
+          <p className="clozzz-countdown__clock">
+            {formatClockPad(elapsedSec)}
+          </p>
         </div>
-        <p className="clozzz-countdown__sub">
-          {message || title || "Thanks for watching"}
-        </p>
       </div>
     </div>
   );
@@ -600,9 +596,7 @@ function RunningOverlay({ session, sessionKey }) {
   if (inStreamEnded) {
     return (
       <StreamEndedStage
-        remainingSec={remainingSec}
-        remainingMs={derived.remainingMs}
-        durationMs={derived.durationMs || 1800000}
+        elapsedSec={(derived.elapsedMs || 0) / 1000}
         title={live?.title || session.title || session.name}
         message={live?.streamEndedMessage}
       />
@@ -628,7 +622,9 @@ function RunningOverlay({ session, sessionKey }) {
                 {formatDuration(sessionTotalSec({ segments }))}
               </p>
               <div className="clozzz-move-row">
-                <h1 className="clozzz-current">Routine complete</h1>
+                <div className="clozzz-move-copy">
+                  <h1 className="clozzz-current">Routine complete</h1>
+                </div>
                 <span
                   className={`clozzz-card-timer clozzz-card-timer--${band}`}
                   style={{ "--clozzz-timer-p": 1 }}
@@ -645,7 +641,10 @@ function RunningOverlay({ session, sessionKey }) {
                 {derived.paused ? " · Paused" : ""}
               </p>
               <div className="clozzz-move-row">
-                <CrossfadeTitle text={moveLabel} />
+                <div className="clozzz-move-copy">
+                  <CrossfadeTitle text={moveLabel} />
+                  <p className="clozzz-up-next">Next: {nextCue}</p>
+                </div>
                 <span
                   className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
                   style={{ "--clozzz-timer-p": elapsedFrac }}
@@ -654,7 +653,6 @@ function RunningOverlay({ session, sessionKey }) {
                   <span className="clozzz-card-timer__digits">{timerText}</span>
                 </span>
               </div>
-              <p className="clozzz-up-next">Next: {nextCue}</p>
             </>
           )}
         </section>

@@ -307,13 +307,15 @@ html.clozzz-stage-preview #root {
   --clozzz-timer-size: var(--clozzz-move-size);
   --clozzz-next-size: clamp(1.05rem, 1.8vw, 2.15rem);
   --clozzz-count-size: clamp(0.82rem, 1.15vw, 1.35rem);
+  /* Compact stack: count → title → Next (~6–8px visual gaps, pre-scale). */
+  --clozzz-stack-gap: 0.2rem;
   --clozzz-support: #cdd3de;
   --clozzz-next: #e8edf4;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--clozzz-stack-gap);
   width: 100%;
-  padding: 1rem 1.2rem 1.1rem;
+  padding: 1rem 1.2rem 1.05rem;
   border-radius: 0.85rem;
   border: 1px solid rgba(213, 220, 229, 0.22);
   /* Near-opaque navy + stronger blur — readable on bright and dark camera. */
@@ -333,18 +335,42 @@ html.clozzz-stage-preview #root {
   font-size: var(--clozzz-count-size);
   font-weight: 560;
   letter-spacing: 0.01em;
-  line-height: 1.2;
+  line-height: 1.05;
   color: rgba(205, 211, 222, 0.72);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
+/*
+ * Grid: title | timer
+ *        Next  |
+ * Timer on title row only — large ring cannot push Next down.
+ * row-gap is the real title→Next spacing (0.5rem = 8px @16).
+ */
 .clozzz-move-row {
-  display: flex;
-  /* flex-start: title line sets row height; large ring overflows without pushing Next. */
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.85rem 1.15rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 1.15rem;
+  row-gap: 0.5rem;
+  align-items: center;
   min-width: 0;
+}
+
+/* Hoist title + Next into the parent grid. */
+.clozzz-move-copy {
+  display: contents;
+}
+
+.clozzz-move-row > .clozzz-move-copy > .clozzz-crossfade,
+.clozzz-move-row > .clozzz-move-copy > .clozzz-current {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.clozzz-move-row > .clozzz-move-copy > .clozzz-up-next {
+  grid-column: 1;
+  grid-row: 2;
 }
 
 .clozzz-crossfade {
@@ -388,7 +414,7 @@ html.clozzz-stage-preview #root {
   font-size: var(--clozzz-move-size);
   font-weight: 600;
   font-variation-settings: "wght" 600;
-  line-height: 1.15;
+  line-height: 1.08;
   letter-spacing: 0.005em;
   color: #f3ead7;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
@@ -405,15 +431,17 @@ html.clozzz-stage-preview #root {
   /* Soft light track — must read #CDD3DE on navy, not dark stroke. */
   --clozzz-ring-track: rgba(205, 211, 222, 0.78);
   /*
-   * Large visual ring/digits, but layout height stays ≤ title line
-   * so title→Next stays snug (~8–12px). Ring paints absolute.
+   * Large visual ring/digits; sits on title grid-row only.
+   * Layout height = digits; ring paints absolute and cannot stretch Next.
    */
   --clozzz-timer-box: 2.72em;
   --clozzz-timer-digit: 0.92em;
+  grid-column: 2;
+  grid-row: 1;
   position: relative;
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
+  justify-self: end;
   align-self: center;
   /* Horizontal reserve for the ring; vertical footprint = digits only. */
   width: var(--clozzz-timer-box);
@@ -508,12 +536,12 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-up-next {
-  /* Snug under title row — pre-ring ~8–12px; do not grow for the ring. */
-  margin: 0.15rem 0 0;
+  /* Gap comes from .clozzz-move-row row-gap (0.5rem = 8px) — no extra margin. */
+  margin: 0;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: var(--clozzz-next-size);
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.1;
   letter-spacing: 0.01em;
   /* Brighter priority over quiet Exercise N of M */
   color: var(--clozzz-next);
@@ -1417,7 +1445,8 @@ html.clozzz-stage-remote #root {
   animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
-.clozzz-countdown--soon .clozzz-countdown__timer-block {
+.clozzz-countdown--soon .clozzz-countdown__timer-block,
+.clozzz-countdown--ended .clozzz-countdown__timer-block {
   margin-top: 0.15rem;
 }
 
@@ -1437,7 +1466,8 @@ html.clozzz-stage-remote #root {
   text-shadow: 0 2px 28px rgba(0, 0, 0, 0.35);
 }
 
-.clozzz-countdown--soon .clozzz-countdown__clock {
+.clozzz-countdown--soon .clozzz-countdown__clock,
+.clozzz-countdown--ended .clozzz-countdown__clock {
   /* Warmer ivory — distinct from cool #D5DCE5 label */
   color: #f3ead7;
 }
@@ -1515,6 +1545,12 @@ html.clozzz-stage-remote #root {
   color: #d5dce5;
   letter-spacing: normal;
   text-transform: none;
+}
+
+/* Stream-ended: no progress rail (matches begins-in). Hide if present. */
+.clozzz-countdown--ended .clozzz-countdown__rail,
+.clozzz-countdown--ended .clozzz-countdown__sub {
+  display: none;
 }
 
 @keyframes clozzz-cd-enter {
