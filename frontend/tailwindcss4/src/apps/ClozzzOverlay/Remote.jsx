@@ -981,8 +981,8 @@ export default function Remote({
         </label>
       </div>
 
-      {/* Hide/Show only while exercise chrome is meaningful — not countdown / logo-only / ended. */}
-      {logoArmed || inCountdown || introHeld || inStreamEnded ? null : (
+      {/* Hide/Show + Reset only while paused — avoids accidental taps mid-run. */}
+      {status === "paused" || breakPaused ? (
         <>
           <p className="clozzz-remote__section">Overlay</p>
           <button
@@ -995,20 +995,16 @@ export default function Remote({
           >
             {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
           </button>
+          <button
+            type="button"
+            className="clozzz-remote__btn clozzz-remote__btn--ghost"
+            disabled={noLive || isBusy("restart")}
+            onClick={() => send("restart")}
+          >
+            Reset to start
+          </button>
         </>
-      )}
-
-      {/* Reset during countdown + logo-only idle, as well as live/paused. */}
-      {status === "done" || introHeld || inStreamEnded ? null : (
-        <button
-          type="button"
-          className="clozzz-remote__btn clozzz-remote__btn--ghost"
-          disabled={noLive || isBusy("restart")}
-          onClick={() => send("restart")}
-        >
-          Reset to start
-        </button>
-      )}
+      ) : null}
     </div>
   );
 
@@ -1052,17 +1048,6 @@ export default function Remote({
       ? sessionTitle || routine?.title || id
       : routine?.title || id;
     const idx = channelIds.indexOf(id);
-    const breakLabel = (() => {
-      if (!isActive || !inBreak) return null;
-      const nextLabel =
-        live?.currentLabel ||
-        live?.segments?.[live?.segmentIndex ?? 0]?.label ||
-        "";
-      const pausedNote = breakPaused ? " · Paused" : "";
-      return nextLabel
-        ? `Break · next: ${nextLabel}${pausedNote}`
-        : `Break${pausedNote}`;
-    })();
     return (
       <>
         <header className="clozzz-remote__head">
@@ -1073,11 +1058,6 @@ export default function Remote({
               aria-live={isActive ? "polite" : undefined}
             >
               {`${idx + 1} of ${channelIds.length}`}
-            </p>
-          ) : null}
-          {breakLabel ? (
-            <p className="clozzz-remote__meta" aria-live="polite">
-              {breakLabel}
             </p>
           ) : null}
         </header>

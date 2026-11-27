@@ -537,7 +537,8 @@
 
 .ce-toggle-block__field .ce-duration {
   height: 1.85rem;
-  align-self: stretch;
+  justify-self: start;
+  width: max-content;
 }
 
 .ce-toggle-block__label {
