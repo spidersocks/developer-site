@@ -2,15 +2,36 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ensureLiveToken,
   fetchLive,
+  fetchStudioDisplay,
   postLiveCommand,
   readLiveToken,
   setStudioChannel,
 } from "./api.js";
 
-const POLL_MS = 800;
+/** Match OBS overlay cadence — peer remotes should converge within ~0.5–1s. */
+const POLL_MS = 400;
+/** Ignore studio channel yank-back while our own switch PUT is in flight. */
+const CHANNEL_INTENT_MS = 1500;
 const PULL_THRESHOLD_PX = 72;
 const LAST_ROUTINE_KEY = "clozzz_last_routine_id";
 const REMOTE_HOME = "/clozzz-remote";
+
+/** Prefer server revision so an in-flight poll cannot overwrite a fresher command. */
+function snapRevision(snap) {
+  if (!snap || typeof snap !== "object") return 0;
+  if (typeof snap.revision === "number" && Number.isFinite(snap.revision)) {
+    return snap.revision;
+  }
+  if (typeof snap.updatedAt === "number" && Number.isFinite(snap.updatedAt)) {
+    return snap.updatedAt;
+  }
+  return 0;
+}
+
+function sameRoutineId(a, b) {
+  if (a == null || b == null) return false;
+  return String(a).toLowerCase() === String(b).toLowerCase();
+}
 
 /**
  * Settle curve from Motion’s iOS App Store layout demo
@@ -139,6 +160,16 @@ export default function Remote({
   const pendingDelta = useRef(null);
   const viewportRef = useRef(null);
   const settleTimer = useRef(null);
+  const liveRevRef = useRef(0);
+  const sessionKeyRef = useRef(sessionKey);
+  const channelIntentRef = useRef({ id: null, at: 0 });
+  /** True when this remote should claim studio (mount / local swipe); false after peer follow. */
+  const claimStudioRef = useRef(true);
+  const studioPutGenRef = useRef(0);
+  /** Latest channel this remote believes studio should show (local claim or peer follow). */
+  const desiredStudioRef = useRef(sessionKey);
+
+  sessionKeyRef.current = sessionKey;
 
   const channelIds = useMemo(() => routines.map((r) => r.id), [routines]);
   const channelIndex = channelIds.indexOf(sessionKey);
@@ -165,45 +196,108 @@ export default function Remote({
     return Math.max(280, w);
   };
 
+  const applyLiveSnap = useCallback((snap, expectedKey = sessionKeyRef.current) => {
+    if (!snap || sessionKeyRef.current !== expectedKey) return false;
+    if (snap.routineId != null && !sameRoutineId(snap.routineId, expectedKey)) {
+      return false;
+    }
+    const rev = snapRevision(snap);
+    if (rev && rev < liveRevRef.current) return false;
+    if (rev) liveRevRef.current = rev;
+    setLive(snap);
+    return true;
+  }, []);
+
+  const leaveMissingChannel = useCallback(() => {
+    clearLastRoutineId(sessionKey);
+    const fallback =
+      routines.find((r) => r.id !== sessionKey)?.id ||
+      resolveChannelId(
+        null,
+        routines.filter((r) => r.id !== sessionKey)
+      );
+    if (typeof onChannelChange === "function") {
+      onChannelChange(fallback || null);
+    }
+    setError("");
+  }, [sessionKey, routines, onChannelChange]);
+
+  /**
+   * Shared studio + live poll: follow peer channel switches and apply
+   * server-authoritative UI state (phase / pause / chrome / buttons).
+   */
   const refresh = useCallback(async () => {
+    const expectedKey = sessionKey;
     try {
-      const snap = await fetchLive(sessionKey);
-      setLive(snap);
+      const display = await fetchStudioDisplay();
+      if (sessionKeyRef.current !== expectedKey) return null;
+
+      const active = display?.activeRoutineId || null;
+      const now = Date.now();
+      const intent = channelIntentRef.current;
+      const intentFresh =
+        Boolean(intent.id) && now - intent.at < CHANNEL_INTENT_MS;
+
+      if (active && !sameRoutineId(active, expectedKey)) {
+        if (!intentFresh) {
+          // Another remote (or command) moved the studio channel — follow it.
+          // Do not re-claim studio; mark desired so a late PUT can restore.
+          claimStudioRef.current = false;
+          desiredStudioRef.current = active;
+          studioPutGenRef.current += 1;
+          channelIntentRef.current = { id: null, at: 0 };
+          liveRevRef.current = 0;
+          if (typeof onChannelChange === "function") {
+            onChannelChange(active);
+          }
+          setError("");
+          return display;
+        }
+        // Our local switch is still landing — keep polling this channel's live.
+      } else if (active && sameRoutineId(active, expectedKey)) {
+        if (intent.id) channelIntentRef.current = { id: null, at: 0 };
+        if (display.live) {
+          applyLiveSnap(display.live, expectedKey);
+          setError("");
+          return display;
+        }
+      }
+
+      const snap = await fetchLive(expectedKey);
+      if (sessionKeyRef.current !== expectedKey) return null;
+      applyLiveSnap(snap, expectedKey);
       setError("");
       return snap;
     } catch (e) {
+      if (sessionKeyRef.current !== expectedKey) return null;
       const status = e?.status;
       const msg = e.message || "Could not load live state";
       // Deleted / missing routine — leave this channel; never keep a ghost.
       if (status === 404) {
-        clearLastRoutineId(sessionKey);
-        const fallback =
-          routines.find((r) => r.id !== sessionKey)?.id ||
-          resolveChannelId(null, routines.filter((r) => r.id !== sessionKey));
-        if (typeof onChannelChange === "function") {
-          onChannelChange(fallback || null);
-        }
-        setError("");
+        leaveMissingChannel();
         return null;
       }
       setError(msg);
       return null;
     }
-  }, [sessionKey, routines, onChannelChange]);
+  }, [sessionKey, onChannelChange, applyLiveSnap, leaveMissingChannel]);
 
   useEffect(() => {
     rememberLastRoutineId(sessionKey);
     canonicalizeRemoteUrl();
+    liveRevRef.current = 0;
   }, [sessionKey]);
 
   useEffect(() => {
     let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      refresh();
+    };
     ensureLiveToken().finally(() => {
-      if (!cancelled) refresh();
+      if (!cancelled) tick();
     });
-    const id = setInterval(() => {
-      if (!cancelled) refresh();
-    }, POLL_MS);
+    const id = setInterval(tick, POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -211,12 +305,24 @@ export default function Remote({
   }, [refresh]);
 
   useEffect(() => {
+    desiredStudioRef.current = sessionKey;
+    if (!claimStudioRef.current) return;
+    const key = sessionKey;
+    const gen = ++studioPutGenRef.current;
     let cancelled = false;
     (async () => {
       try {
         const token = (await ensureLiveToken()) || readLiveToken();
-        if (cancelled || !sessionKey) return;
-        await setStudioChannel(sessionKey, token);
+        if (cancelled || !key) return;
+        await setStudioChannel(key, token);
+        // Late PUT may have overwritten a peer follow / newer claim — restore.
+        const desired = desiredStudioRef.current;
+        if (
+          (gen !== studioPutGenRef.current || (desired && desired !== key)) &&
+          desired
+        ) {
+          await setStudioChannel(desired, token);
+        }
       } catch {
         /* display still polls */
       }
@@ -241,7 +347,7 @@ export default function Remote({
           durationSec: Math.round(sec),
         });
         if (!cancelled) {
-          setLive(snap);
+          applyLiveSnap(snap, sessionKey);
           const url = new URL(window.location.href);
           url.searchParams.delete("startCountdown");
           window.history.replaceState({}, "", `${url.pathname}${url.search}`);
@@ -265,6 +371,10 @@ export default function Remote({
   const applyChannel = useCallback(
     (id) => {
       if (!id || id === sessionKey) return;
+      claimStudioRef.current = true;
+      desiredStudioRef.current = id;
+      channelIntentRef.current = { id, at: Date.now() };
+      liveRevRef.current = 0;
       rememberLastRoutineId(id);
       canonicalizeRemoteUrl();
       if (typeof onChannelChange === "function") {
@@ -461,13 +571,14 @@ export default function Remote({
 
   const send = async (command, extras = {}) => {
     const busyKey = extras._busyKey || command;
+    const expectedKey = sessionKey;
     setBusyCmd(busyKey);
     setError("");
     try {
       const token = (await ensureLiveToken()) || readLiveToken();
       const { _busyKey, ...payload } = extras;
-      const snap = await postLiveCommand(sessionKey, command, token, payload);
-      setLive(snap);
+      const snap = await postLiveCommand(expectedKey, command, token, payload);
+      applyLiveSnap(snap, expectedKey);
     } catch (e) {
       if (e.status === 401) {
         setError("Live control locked — re-unlock this device, then try again.");
