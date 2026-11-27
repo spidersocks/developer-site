@@ -24,6 +24,9 @@ export const SPACE_OPTIONS = ["Floor mat", "Bed", "Others"];
  *   streamEndedMessage?: string,
  *   breaksEnabled?: boolean,
  *   breakSec?: number,
+ *   timerSoundsEnabled?: boolean,
+ *   musicEnabled?: boolean,
+ *   musicScope?: "routine" | "session",
  *   segments: Segment[]
  * }} Session
  */
@@ -38,6 +41,16 @@ export const DEFAULT_STREAM_ENDED_SEC = STREAM_ENDED_SOFT_CAP_SEC;
 export const DEFAULT_EXERCISE_DURATION_SEC = 60;
 /** Customary rest between exercises. */
 export const DEFAULT_BREAK_SEC = 10;
+/** Ambient music scope when musicEnabled. */
+export const MUSIC_SCOPE_ROUTINE = "routine";
+export const MUSIC_SCOPE_SESSION = "session";
+
+/** @param {unknown} scope */
+export function normalizeMusicScope(scope) {
+  return scope === MUSIC_SCOPE_SESSION
+    ? MUSIC_SCOPE_SESSION
+    : MUSIC_SCOPE_ROUTINE;
+}
 
 /** Floor 1s (exercises); countdown fields use clampCountdownSec. */
 function clampDurationSec(value, fallback) {
@@ -108,6 +121,13 @@ export function normalizeRoutine(routine) {
     streamEndedMessage: String(routine.streamEndedMessage || "").trim(),
     breaksEnabled: Boolean(routine.breaksEnabled),
     breakSec: clampBreakSec(routine.breakSec, DEFAULT_BREAK_SEC),
+    // Missing → timer cues on; music off (existing catalog). New drafts set music on.
+    timerSoundsEnabled:
+      routine.timerSoundsEnabled === undefined
+        ? true
+        : Boolean(routine.timerSoundsEnabled),
+    musicEnabled: Boolean(routine.musicEnabled),
+    musicScope: normalizeMusicScope(routine.musicScope),
   };
 }
 
@@ -342,6 +362,19 @@ export function blankRoutine(existing = [], overrides = {}) {
         ? Boolean(overrides.breaksEnabled)
         : true,
     breakSec: clampBreakSec(overrides.breakSec, DEFAULT_BREAK_SEC),
+    timerSoundsEnabled:
+      overrides.timerSoundsEnabled !== undefined
+        ? Boolean(overrides.timerSoundsEnabled)
+        : true,
+    musicEnabled:
+      overrides.musicEnabled !== undefined
+        ? Boolean(overrides.musicEnabled)
+        : true,
+    musicScope: normalizeMusicScope(
+      overrides.musicScope !== undefined
+        ? overrides.musicScope
+        : MUSIC_SCOPE_ROUTINE
+    ),
     segments: overrides.segments || [
       {
         id: newId("seg"),
@@ -363,6 +396,12 @@ export function toServerRoutine(routine) {
     streamEndedSec: STREAM_ENDED_SOFT_CAP_SEC,
     breaksEnabled: Boolean(rest.breaksEnabled),
     breakSec: clampBreakSec(rest.breakSec, DEFAULT_BREAK_SEC),
+    timerSoundsEnabled:
+      rest.timerSoundsEnabled === undefined
+        ? true
+        : Boolean(rest.timerSoundsEnabled),
+    musicEnabled: Boolean(rest.musicEnabled),
+    musicScope: normalizeMusicScope(rest.musicScope),
   };
 }
 
@@ -395,6 +434,51 @@ export function assertBreakFieldsPersisted(sent, catalog) {
   ) {
     throw new Error(
       "Break duration did not persist on the server. Redeploy unified-backend, then save again."
+    );
+  }
+}
+
+/**
+ * Sound prefs must round-trip; old Fly builds silently drop unknown fields.
+ * @param {Partial<Session>} sent
+ * @param {Catalog} catalog
+ */
+export function assertSoundFieldsPersisted(sent, catalog) {
+  if (!sent || !catalog) return;
+  const id = String(sent.id || "").toLowerCase();
+  const got = (catalog.routines || []).find(
+    (r) => String(r.id || "").toLowerCase() === id
+  );
+  if (!got) return;
+  if (!Object.prototype.hasOwnProperty.call(got, "musicEnabled")) {
+    throw new Error(
+      "Sound options were not saved — backend is outdated. Deploy unified-backend to Fly (fly deploy), then try again."
+    );
+  }
+  const sentTimer =
+    sent.timerSoundsEnabled === undefined
+      ? true
+      : Boolean(sent.timerSoundsEnabled);
+  const gotTimer =
+    got.timerSoundsEnabled === undefined
+      ? true
+      : Boolean(got.timerSoundsEnabled);
+  if (gotTimer !== sentTimer) {
+    throw new Error(
+      "Timer sounds toggle did not persist. Redeploy unified-backend, then save again."
+    );
+  }
+  if (Boolean(got.musicEnabled) !== Boolean(sent.musicEnabled)) {
+    throw new Error(
+      "Music toggle did not persist. Redeploy unified-backend, then save again."
+    );
+  }
+  if (
+    sent.musicEnabled &&
+    normalizeMusicScope(got.musicScope) !== normalizeMusicScope(sent.musicScope)
+  ) {
+    throw new Error(
+      "Music scope did not persist. Redeploy unified-backend, then save again."
     );
   }
 }

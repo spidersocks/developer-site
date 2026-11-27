@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   assertBreakFieldsPersisted,
+  assertSoundFieldsPersisted,
   blankRoutine,
   clampBreakSec,
   clampCountdownSec,
@@ -8,6 +9,9 @@ import {
   DEFAULT_EXERCISE_DURATION_SEC,
   DEFAULT_INTRO_COUNTDOWN_SEC,
   formatDuration,
+  MUSIC_SCOPE_ROUTINE,
+  MUSIC_SCOPE_SESSION,
+  normalizeMusicScope,
   newId,
   sessionTotalSec,
   slugify,
@@ -672,6 +676,100 @@ function EditRoutineModal({
             </div>
           </div>
 
+          <div className="ce-stream-opts" aria-label="Sound options">
+            <div className="ce-toggle-block">
+              <label className="ce-toggle">
+                <input
+                  type="checkbox"
+                  checked={
+                    draft.timerSoundsEnabled === undefined
+                      ? true
+                      : Boolean(draft.timerSoundsEnabled)
+                  }
+                  onChange={(e) =>
+                    patchDraft({ timerSoundsEnabled: e.target.checked })
+                  }
+                />
+                <span className="ce-toggle__ui" aria-hidden="true" />
+                <span className="ce-toggle__copy">
+                  <span className="ce-toggle__title">Timer sounds</span>
+                  <span className="ce-toggle__hint">
+                    Mixkit countdown cue at the end of each exercise and break
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="ce-toggle-block">
+              <label className="ce-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft.musicEnabled)}
+                  onChange={(e) =>
+                    patchDraft({
+                      musicEnabled: e.target.checked,
+                      musicScope: normalizeMusicScope(
+                        draft.musicScope || MUSIC_SCOPE_ROUTINE
+                      ),
+                    })
+                  }
+                />
+                <span className="ce-toggle__ui" aria-hidden="true" />
+                <span className="ce-toggle__copy">
+                  <span className="ce-toggle__title">Ambient music</span>
+                  <span className="ce-toggle__hint">
+                    Shuffled playlist on the OBS overlay (follows remote mute)
+                  </span>
+                </span>
+              </label>
+              {draft.musicEnabled ? (
+                <div className="ce-toggle-block__expand">
+                  <div className="ce-toggle-block__field ce-toggle-block__field--scope">
+                    <span className="ce-toggle-block__label" id="ce-music-scope">
+                      Play during
+                    </span>
+                    <div
+                      className="ce-music-scope"
+                      role="radiogroup"
+                      aria-labelledby="ce-music-scope"
+                    >
+                      <label className="ce-music-scope__option">
+                        <input
+                          type="radio"
+                          name="ce-music-scope"
+                          value={MUSIC_SCOPE_ROUTINE}
+                          checked={
+                            normalizeMusicScope(draft.musicScope) ===
+                            MUSIC_SCOPE_ROUTINE
+                          }
+                          onChange={() =>
+                            patchDraft({ musicScope: MUSIC_SCOPE_ROUTINE })
+                          }
+                        />
+                        <span>During routine only</span>
+                      </label>
+                      <label className="ce-music-scope__option">
+                        <input
+                          type="radio"
+                          name="ce-music-scope"
+                          value={MUSIC_SCOPE_SESSION}
+                          checked={
+                            normalizeMusicScope(draft.musicScope) ===
+                            MUSIC_SCOPE_SESSION
+                          }
+                          onChange={() =>
+                            patchDraft({ musicScope: MUSIC_SCOPE_SESSION })
+                          }
+                        />
+                        <span>Whole session (countdown + routine + ended)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <div className="ce-segments">
             <div className="ce-segments__head">
               <h3>Exercises · {formatDuration(sessionTotalSec(draft))}</h3>
@@ -901,6 +999,7 @@ export default function Editor({ initialCatalog }) {
       const sent = toServerRoutine(payload);
       const saved = await saveRoutine(sent);
       assertBreakFieldsPersisted(sent, saved);
+      assertSoundFieldsPersisted(sent, saved);
       setCatalog(cloneCatalog(saved));
       closeEdit();
       setStatus({ kind: "ok", text: "Saved" });

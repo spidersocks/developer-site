@@ -516,6 +516,27 @@
   border-top: 1px solid var(--ce-line);
 }
 
+.ce-music-scope {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ce-music-scope__option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: start;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--ce-ink);
+  cursor: pointer;
+}
+
+.ce-music-scope__option input {
+  margin-top: 0.15rem;
+  accent-color: var(--ce-accent);
+}
+
 .ce-toggle-block__expand--ended,
 .ce-toggle-block__expand--intro {
   grid-template-columns: auto minmax(0, 1fr);

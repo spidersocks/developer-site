@@ -4,8 +4,15 @@ import {
   findSessionIn,
   formatDuration,
   normalizeCatalog,
+  normalizeMusicScope,
   sessionTotalSec,
 } from "./routines.js";
+import {
+  createAmbientPlaylist,
+  MUSIC_BASE_GAIN,
+  MUSIC_CUE_DUCK,
+  musicWantedForStatus,
+} from "./ambientMusic.js";
 import {
   ensureLiveToken,
   fetchCatalog,
@@ -956,7 +963,12 @@ function useSegmentEndCue(live, remainingSec) {
       };
     };
 
-    if (muted) {
+    // Per-routine timerSoundsEnabled (default on) + remote mute.
+    const timerSounds =
+      live?.timerSoundsEnabled === undefined
+        ? true
+        : Boolean(live.timerSoundsEnabled);
+    if (muted || !timerSounds) {
       stopAll();
       return;
     }
@@ -1046,6 +1058,75 @@ function useSegmentEndCue(live, remainingSec) {
     live?.breakStartedAtMs,
     live?.cueMuted,
     live?.cueVolume,
+    live?.timerSoundsEnabled,
+  ]);
+}
+
+/**
+ * Shuffled ambient playlist for OBS. Respects routine music prefs + remote mute/volume.
+ * Light duck while the Mixkit cue window is active so beeps stay clear.
+ */
+function useAmbientMusic(live, remainingSec, session) {
+  const playerRef = useRef(null);
+
+  useEffect(() => {
+    const player = createAmbientPlaylist();
+    playerRef.current = player;
+    return () => {
+      player.dispose();
+      playerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    const musicOn =
+      live?.musicEnabled !== undefined
+        ? Boolean(live.musicEnabled)
+        : Boolean(session?.musicEnabled);
+    const scope = normalizeMusicScope(
+      live?.musicScope ?? session?.musicScope
+    );
+    const muted = Boolean(live?.cueMuted);
+    const cueVol =
+      typeof live?.cueVolume === "number" ? live.cueVolume : 0.75;
+    const volScale = Math.max(0, Math.min(1, Number.isFinite(cueVol) ? cueVol : 0.75));
+    const status = live?.status;
+    const wanted =
+      musicOn &&
+      !muted &&
+      volScale > 0 &&
+      musicWantedForStatus(status, scope);
+
+    const timerSounds =
+      live?.timerSoundsEnabled === undefined
+        ? true
+        : Boolean(live.timerSoundsEnabled);
+    const rem = Number(remainingSec);
+    const inCueWindow =
+      timerSounds &&
+      !muted &&
+      Number.isFinite(rem) &&
+      rem > 0 &&
+      rem <= SEGMENT_END_CUE_SEC + CUE_SCHEDULE_AHEAD_SEC &&
+      (status === "running" || status === "break");
+
+    player.setVolume(MUSIC_BASE_GAIN * volScale);
+    player.setDuck(inCueWindow ? MUSIC_CUE_DUCK : 1);
+    player.setActive(wanted);
+    if (wanted) player.resume();
+  }, [
+    live?.status,
+    live?.musicEnabled,
+    live?.musicScope,
+    live?.cueMuted,
+    live?.cueVolume,
+    live?.timerSoundsEnabled,
+    session?.musicEnabled,
+    session?.musicScope,
+    remainingSec,
   ]);
 }
 
@@ -1116,6 +1197,11 @@ function RunningOverlay({ session, sessionKey }) {
   useSegmentEndCue(
     live,
     inCountdown || inStreamEnded || done ? Infinity : remainingSec
+  );
+  useAmbientMusic(
+    live,
+    inCountdown || inStreamEnded || done ? Infinity : remainingSec,
+    session
   );
 
   if (inCountdown) {
@@ -1351,6 +1437,16 @@ function OpenDisplayApp() {
     introCountdownEnabled: Boolean(routine.introCountdownEnabled),
     introCountdownSec: routine.introCountdownSec,
     introCountdownMessage: routine.introCountdownMessage || "",
+    streamEndedEnabled: Boolean(routine.streamEndedEnabled),
+    streamEndedMessage: routine.streamEndedMessage || "",
+    breaksEnabled: Boolean(routine.breaksEnabled),
+    breakSec: routine.breakSec,
+    timerSoundsEnabled:
+      routine.timerSoundsEnabled === undefined
+        ? true
+        : Boolean(routine.timerSoundsEnabled),
+    musicEnabled: Boolean(routine.musicEnabled),
+    musicScope: normalizeMusicScope(routine.musicScope),
     segments: routine.segments || [],
   };
 
