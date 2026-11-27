@@ -440,15 +440,11 @@ function CountdownBackdrop() {
 
 function CountdownStage({
   remainingSec,
-  durationMs,
-  remainingMs,
   title,
   held = false,
 }) {
-  const progress =
-    durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0;
-  const elapsed = 1 - progress;
   const critical = !held && remainingSec <= 10;
+  const beginsLabel = title ? `${title} begins in` : "Begins in";
 
   return (
     <div
@@ -461,21 +457,9 @@ function CountdownStage({
         <BrandLockup />
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
-        <p className="clozzz-countdown__label">Starting soon</p>
-        {title ? (
-          <p className="clozzz-countdown__tonight">Tonight: {title}</p>
-        ) : null}
+        <p className="clozzz-countdown__label">{beginsLabel}</p>
         <div className="clozzz-countdown__timer-block">
           <p className="clozzz-countdown__clock">{formatClockPad(remainingSec)}</p>
-          <div
-            className="clozzz-countdown__rail"
-            style={{ "--clozzz-cd-elapsed": elapsed }}
-            aria-hidden="true"
-          >
-            <span className="clozzz-countdown__rail-track" />
-            <span className="clozzz-countdown__rail-fill" />
-            <span className="clozzz-countdown__rail-head" />
-          </div>
         </div>
       </div>
     </div>
@@ -576,8 +560,6 @@ function RunningOverlay({ session, sessionKey }) {
     return (
       <CountdownStage
         remainingSec={remainingSec}
-        remainingMs={derived.remainingMs}
-        durationMs={derived.durationMs || 1800000}
         title={live?.title || session.title || session.name}
         held={Boolean(derived.countdownHeld)}
       />

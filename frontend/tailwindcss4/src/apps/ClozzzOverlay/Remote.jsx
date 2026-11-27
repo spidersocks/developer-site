@@ -19,13 +19,6 @@ const REMOTE_HOME = "/clozzz-remote";
 const EASE_APPLE = "cubic-bezier(0.39, 0.14, 0.26, 1)";
 const SWIPE_SETTLE_MS = 520;
 
-/** Embla scale-on-focus tween factor (distance → t). */
-const TWEEN_FACTOR = 0.72;
-const SCALE_MIN = 0.82;
-const SCALE_RANGE = 0.18;
-const OPACITY_MIN = 0.45;
-const OPACITY_RANGE = 0.55;
-
 const SWIPE_DISTANCE_RATIO = 0.22;
 const SWIPE_DISTANCE_MIN_PX = 64;
 const FLICK_SPEED = 0.45;
@@ -98,22 +91,8 @@ function clamp(n, a, b) {
 }
 
 /**
- * Embla center-scale tween:
- * t = clamp(1 - abs(offset) * factor, 0, 1)
- * scale = 0.82 + 0.18 * t ; opacity = 0.45 + 0.55 * t
- */
-function tweenFromOffset(offset) {
-  const t = clamp(1 - Math.abs(offset) * TWEEN_FACTOR, 0, 1);
-  return {
-    t,
-    scale: SCALE_MIN + SCALE_RANGE * t,
-    opacity: OPACITY_MIN + OPACITY_RANGE * t,
-  };
-}
-
-/**
- * Control remote — mobile Embla/Swiper-style card carousel + desktop sidebar.
- * Finger left → next channel. Product URL stays `/clozzz-remote`.
+ * Control remote — mobile title-plane channel swipe + desktop sidebar.
+ * Live run locks swipe. Product URL stays `/clozzz-remote`.
  */
 export default function Remote({
   sessionKey,
@@ -142,16 +121,16 @@ export default function Remote({
 
   const channelIds = useMemo(() => routines.map((r) => r.id), [routines]);
   const channelIndex = channelIds.indexOf(sessionKey);
-  const canSwipe = channelIds.length > 1;
+  const multiChannel = channelIds.length > 1;
 
   const neighborId = useCallback(
     (delta) => {
-      if (!canSwipe || channelIndex < 0) return null;
+      if (!multiChannel || channelIndex < 0) return null;
       return channelIds[
         (channelIndex + delta + channelIds.length) % channelIds.length
       ];
     },
-    [canSwipe, channelIndex, channelIds]
+    [multiChannel, channelIndex, channelIds]
   );
 
   const routineById = useCallback(
@@ -290,7 +269,7 @@ export default function Remote({
 
   const commitSwipe = useCallback(
     (delta) => {
-      if (!canSwipe || channelIndex < 0 || pendingDelta.current != null) return;
+      if (!multiChannel || channelIndex < 0 || pendingDelta.current != null) return;
       const next = neighborId(delta);
       if (!next) return;
       pendingDelta.current = delta;
@@ -303,7 +282,7 @@ export default function Remote({
         applyChannel(next);
       }, SWIPE_SETTLE_MS);
     },
-    [canSwipe, channelIndex, neighborId, applyChannel]
+    [multiChannel, channelIndex, neighborId, applyChannel]
   );
 
   const snapBack = useCallback(() => {
@@ -313,6 +292,26 @@ export default function Remote({
       setSettling(false);
     }, SWIPE_SETTLE_MS);
   }, []);
+
+  /** Channel switch only when paused / not started (idle). Live run locks swipe. */
+  const liveStatus = live?.status || "idle";
+  const swipeLocked =
+    liveStatus === "running" ||
+    liveStatus === "countdown" ||
+    liveStatus === "stream_ended";
+  const canSwipe = multiChannel && !swipeLocked;
+
+  useEffect(() => {
+    if (!swipeLocked) return;
+    if (settleTimer.current) {
+      window.clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+    pendingDelta.current = null;
+    setSettling(false);
+    setProgress(0);
+    setSwipeHint("");
+  }, [swipeLocked]);
 
   const onTouchStart = (e) => {
     if (refreshing || pendingDelta.current != null) return;
@@ -454,6 +453,7 @@ export default function Remote({
 
   useEffect(() => {
     const onKey = (e) => {
+      if (!canSwipe) return;
       const tag = (e.target?.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea" || e.target?.isContentEditable) {
         return;
@@ -468,9 +468,9 @@ export default function Remote({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [switchChannel]);
+  }, [switchChannel, canSwipe]);
 
-  const status = live?.status || "idle";
+  const status = liveStatus;
   const inCountdown = status === "countdown";
   const inStreamEnded = status === "stream_ended";
   const chromeVisible = live?.chromeVisible !== false;
@@ -531,7 +531,9 @@ export default function Remote({
 
   const nowLabel =
     inCountdown || introHeld
-      ? "Starting soon"
+      ? sessionTitle
+        ? `${sessionTitle} begins in`
+        : "Begins in"
       : logoArmed
         ? "Ready when you are"
         : inStreamEnded
@@ -659,25 +661,24 @@ export default function Remote({
     </div>
   );
 
-  const prevId = neighborId(-1);
-  const nextId = neighborId(1);
-  const slots = canSwipe
-    ? [
-        { id: prevId, slot: -1 },
-        { id: sessionKey, slot: 0 },
-        { id: nextId, slot: 1 },
-      ]
-    : [{ id: sessionKey, slot: 0 }];
+  // Never render neighbor peeks — title-plane swipe only (no framed deck edges).
+  const slots = [{ id: sessionKey }];
 
-  const cardStyle = (slot) => {
-    // Swiper coverflow offsetMultiplier: distance of card from visual center.
-    const offset = slot - progress;
-    const { scale, opacity, t } = tweenFromOffset(offset);
+  const cardStyle = () => {
+    if (swipeLocked || !canSwipe) {
+      return {
+        transform: "none",
+        opacity: 1,
+        zIndex: 1,
+        transition: "none",
+      };
+    }
+    // Single panel follows the finger; commit swaps the channel (no side cards).
     const pitch = pitchPx();
     return {
-      transform: `translate3d(${offset * pitch}px, 0, 0) scale(${scale})`,
-      opacity,
-      zIndex: Math.round(t * 20),
+      transform: `translate3d(${-progress * pitch}px, 0, 0)`,
+      opacity: 1 - Math.min(0.35, Math.abs(progress) * 0.28),
+      zIndex: 1,
       transition: settling
         ? `transform ${SWIPE_SETTLE_MS}ms ${EASE_APPLE}, opacity ${SWIPE_SETTLE_MS}ms ${EASE_APPLE}`
         : "none",
@@ -702,8 +703,12 @@ export default function Remote({
             >
               {isActive
                 ? swipeHint ||
-                  `Channel ${idx + 1} of ${channelIds.length} · swipe to switch`
+                  `Channel ${idx + 1} of ${channelIds.length} · swipe title to switch`
                 : `Channel ${idx + 1} of ${channelIds.length}`}
+            </p>
+          ) : multiChannel && swipeLocked ? (
+            <p className="clozzz-remote__channel clozzz-remote__channel--mobile">
+              Channel locked while live
             </p>
           ) : null}
           {isActive ? (
@@ -714,7 +719,7 @@ export default function Remote({
               </p>
             </>
           ) : (
-            <p className="clozzz-remote__meta">Swipe to control</p>
+            <p className="clozzz-remote__meta">Swipe to switch</p>
           )}
         </header>
         {isActive && error ? (
@@ -727,9 +732,17 @@ export default function Remote({
     );
   };
 
+  const remoteClass = [
+    "clozzz-remote",
+    swipeLocked ? "is-swipe-locked" : "",
+    canSwipe ? "is-channel-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
-      className="clozzz-remote"
+      className={remoteClass}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchCancel={onTouchEnd}
@@ -745,7 +758,11 @@ export default function Remote({
                 className={`clozzz-remote__channel-item${
                   r.id === sessionKey ? " is-active" : ""
                 }`}
-                onClick={() => selectChannel(r.id)}
+                onClick={() => {
+                  if (swipeLocked) return;
+                  selectChannel(r.id);
+                }}
+                disabled={swipeLocked && r.id !== sessionKey}
                 aria-current={r.id === sessionKey ? "true" : undefined}
               >
                 <span className="clozzz-remote__channel-index">{i + 1}</span>
@@ -756,7 +773,9 @@ export default function Remote({
             </li>
           ))}
         </ul>
-        <p className="clozzz-remote__sidebar-hint">← → to switch</p>
+        <p className="clozzz-remote__sidebar-hint">
+          {swipeLocked ? "Channel locked while live" : "← → to switch"}
+        </p>
       </aside>
 
       <div className="clozzz-remote__panel">
@@ -773,15 +792,14 @@ export default function Remote({
 
         <div ref={viewportRef} className="clozzz-remote__viewport">
           <div className="clozzz-remote__stage">
-            {slots.map(({ id, slot }) =>
+            {slots.map(({ id }) =>
               id ? (
                 <div
-                  key={`${id}:${slot}`}
-                  className={`clozzz-remote__card${slot === 0 ? " is-active" : ""}`}
-                  style={cardStyle(slot)}
-                  aria-hidden={slot !== 0}
+                  key={id}
+                  className="clozzz-remote__card is-active"
+                  style={cardStyle()}
                 >
-                  {renderCardBody(id, slot === 0)}
+                  {renderCardBody(id, true)}
                 </div>
               ) : null
             )}

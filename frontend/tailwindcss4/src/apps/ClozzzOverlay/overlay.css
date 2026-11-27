@@ -314,12 +314,16 @@ html.clozzz-stage-preview #root {
   width: 100%;
   padding: 1rem 1.2rem 1.1rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(213, 220, 229, 0.16);
-  /* More opaque midnight-navy for contrast on bright camera */
-  background: rgba(8, 6, 22, 0.92);
-  backdrop-filter: blur(18px) saturate(1.1);
-  -webkit-backdrop-filter: blur(18px) saturate(1.1);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(213, 220, 229, 0.22);
+  /* Near-opaque navy + stronger blur — readable on bright and dark camera. */
+  background:
+    linear-gradient(155deg, rgba(14, 10, 32, 0.97), rgba(6, 4, 18, 0.98)),
+    rgba(6, 4, 18, 0.96);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 .clozzz-exercise-count {
@@ -833,15 +837,14 @@ html.clozzz-stage-remote #root {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  width: 88%;
-  max-width: 28rem;
-  margin: 0 auto;
-  padding: 1.15rem 1.05rem 1.25rem;
-  border-radius: 1.35rem;
-  background:
-    linear-gradient(165deg, rgba(42, 34, 72, 0.92), rgba(18, 14, 34, 0.96));
-  border: 1px solid rgba(243, 234, 215, 0.12);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0.35rem 0.15rem 0.5rem;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   will-change: transform, opacity;
   backface-visibility: hidden;
   transform-origin: center center;
@@ -850,6 +853,36 @@ html.clozzz-stage-remote #root {
 
 .clozzz-remote__card.is-active {
   pointer-events: auto;
+}
+
+/* Live: full-bleed controls, no deck / no neighbor peeks */
+.clozzz-remote.is-swipe-locked .clozzz-remote__viewport {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.clozzz-remote.is-swipe-locked .clozzz-remote__card {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  transform: none !important;
+  opacity: 1 !important;
+  transition: none !important;
+}
+
+.clozzz-remote.is-swipe-locked .clozzz-remote__card:not(.is-active) {
+  display: none;
+}
+
+/* Idle/paused channel switch: soft title cue, still no framed deck */
+.clozzz-remote.is-channel-open .clozzz-remote__title {
+  cursor: grab;
+}
+
+.clozzz-remote.is-channel-open .clozzz-remote__channel {
+  color: rgba(228, 201, 137, 0.85);
 }
 
 .clozzz-remote__pad--ghost {
@@ -1092,6 +1125,11 @@ html.clozzz-stage-remote #root {
     border-color: rgba(228, 201, 137, 0.35);
   }
 
+  .clozzz-remote__channel-item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
   .clozzz-remote__channel-index {
     font-variant-numeric: tabular-nums;
     color: var(--clozzz-gold);
@@ -1292,25 +1330,14 @@ html.clozzz-stage-remote #root {
   font-variation-settings: "wght" 600;
   letter-spacing: normal;
   text-transform: none;
+  text-align: center;
+  line-height: 1.15;
   color: #d5dce5;
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.4);
   animation: clozzz-cd-enter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Same sans as Starting soon · ~⅔ size · soft off-white */
-.clozzz-countdown__tonight {
-  margin: 0;
-  font-family: "Segoe UI Variable", "Segoe UI", "Segoe UI Semibold", system-ui, sans-serif;
-  font-size: clamp(1.2rem, 3.5vw, 2.4rem);
-  font-weight: 600;
-  font-variation-settings: "wght" 600;
-  letter-spacing: normal;
-  line-height: 1.2;
-  color: rgba(243, 234, 215, 0.88);
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
-  animation: clozzz-cd-enter 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.04s both;
-}
-
-/* Clock + rail share one width so bar ends align to timer */
+/* Clock width only — starting countdown has no progress rail */
 .clozzz-countdown__timer-block {
   display: flex;
   flex-direction: column;
@@ -1318,6 +1345,10 @@ html.clozzz-stage-remote #root {
   width: fit-content;
   max-width: 100%;
   animation: clozzz-cd-enter 0.95s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
+.clozzz-countdown--soon .clozzz-countdown__timer-block {
+  margin-top: 0.15rem;
 }
 
 .clozzz-countdown__clock {
