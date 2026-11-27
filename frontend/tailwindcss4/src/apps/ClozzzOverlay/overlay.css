@@ -340,7 +340,7 @@ html.clozzz-stage-preview #root {
 
 .clozzz-move-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.85rem 1.15rem;
   min-width: 0;
@@ -403,16 +403,15 @@ html.clozzz-stage-preview #root {
   --clozzz-ring-fill: var(--clozzz-gold);
   /* Soft light track — must read #CDD3DE on navy, not dark stroke. */
   --clozzz-ring-track: rgba(205, 211, 222, 0.78);
+  /* Shared scale: box = ring; digits sized relative to the same em. */
+  --clozzz-timer-box: 1.72em;
+  --clozzz-timer-digit: 0.55em;
   position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  /*
-   * Layout footprint stays ≤ title line (digits are scaled down).
-   * Ring is absolute and sized to fully enclose “0:MM”.
-   */
-  width: max-content;
-  min-width: 0;
+  width: var(--clozzz-timer-box);
+  height: var(--clozzz-timer-box);
   margin: 0;
   padding: 0;
   font-size: var(--clozzz-timer-size);
@@ -427,29 +426,28 @@ html.clozzz-stage-preview #root {
   position: relative;
   z-index: 1;
   font-family: var(--clozzz-font-display);
-  /* Scaled so “0:MM” sits fully inside the ring inner diameter. */
-  font-size: 0.5em;
+  font-size: var(--clozzz-timer-digit);
   font-weight: 600;
-  letter-spacing: 0.008em;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   line-height: 1;
   text-align: center;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
   width: max-content;
-  min-width: 4.1ch;
-  padding: 0 0.05em;
+  min-width: 4ch;
+  /* Optical center inside the ring (tabular clocks read high otherwise). */
+  transform: translateY(0.045em);
 }
 
-/* Absolute ring — large enough for digits, does not grow card metrics. */
+/* Ring fills the timer box — scales 1:1 with the digit unit. */
 .clozzz-timer-ring {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 1.78em;
-  height: 1.78em;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  transform: translate(-50%, -50%) rotate(-90deg);
+  transform: rotate(-90deg);
   pointer-events: none;
   overflow: visible;
   z-index: 0;
@@ -458,7 +456,7 @@ html.clozzz-stage-preview #root {
 .clozzz-timer-ring__track,
 .clozzz-timer-ring__sweep {
   fill: none;
-  stroke-width: 2.05;
+  stroke-width: 2.1;
 }
 
 .clozzz-timer-ring__track {
@@ -467,7 +465,7 @@ html.clozzz-stage-preview #root {
 
 .clozzz-timer-ring__sweep {
   stroke: var(--clozzz-ring-fill, var(--clozzz-gold));
-  stroke-linecap: round;
+  stroke-linecap: butt;
   transition: stroke 0.25s ease;
 }
 
@@ -631,14 +629,9 @@ html.clozzz-stage-preview #root {
     padding: 0.8rem 0.95rem 0.9rem;
   }
 
-  .clozzz-card-timer__digits {
-    font-size: 0.54em;
-    min-width: 4ch;
-  }
-
-  .clozzz-timer-ring {
-    width: 1.62em;
-    height: 1.62em;
+  .clozzz-card-timer {
+    --clozzz-timer-box: 1.65em;
+    --clozzz-timer-digit: 0.54em;
   }
 }
 
