@@ -669,16 +669,18 @@ const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
  * Digit sync (painted ceil clock):
  *   rem shows 3 → peak 0, shows 2 → peak 1, shows 1 → peak 2, rem=0 / switch → peak 3.
  * Do NOT bake lead into the buffer seek (that skipped peak 0 and felt late).
- * Tiny ARM_EARLY starts playback just before rem crosses 3 so play() latency
- * lands the first beep as "3" appears. playbackRate always 1.
+ *
+ * Schedule on AudioContext.currentTime look-ahead (not reactive rAF start) so
+ * OBS CEF frame jank cannot shift peaks relative to painted digits.
+ * CUE_ARM_EARLY_SEC retained as the minimum schedule window label for proofs.
  */
 const CUE_ARM_EARLY_SEC = 0.06;
+/** How far before rem≈3 we may schedule src.start(future) on the audio clock. */
+const CUE_SCHEDULE_AHEAD_SEC = 1.25;
 /** Cover 4th peak + short tail (audio time) before allowing the next arm. */
 const CUE_CARRY_UNTIL_SEC = CUE_FOURTH_PEAK_SEC + 0.35;
-/** Near rem≈3 → start at buffer offset 0 so tone 1 isn't clipped. */
-const CUE_CLEAN_ARM_EPS_SEC = 0.15;
-/** Resume AudioContext this many seconds before the arm window. */
-const CUE_PREWARM_SEC = SEGMENT_END_CUE_SEC + 5;
+/** Resume AudioContext this many seconds before the schedule window. */
+const CUE_PREWARM_SEC = SEGMENT_END_CUE_SEC + CUE_SCHEDULE_AHEAD_SEC + 5;
 
 /** Buffer offset for painted remainingSec — peaks on 3 / 2 / 1 / 0. */
 function cueBufferOffset(remainingSec) {
@@ -697,13 +699,24 @@ function cueAudioTarget(remainingSec) {
 }
 
 /**
- * Web Audio: decode once, BufferSource per arm (no HTMLAudio seek races).
- * Tone 1 on painted 3, tone 2 on 2, tone 3 on 1, final on switch.
+ * Ideal audio-clock start for offset-0 so peaks land on painted 3→2→1→0.
+ * Positive → schedule ahead; ≤0 → already late (use catch-up offset).
+ */
+function cueUntilIdealStart(remainingSec) {
+  const rem = Number(remainingSec);
+  if (!Number.isFinite(rem)) return 0;
+  return rem - SEGMENT_END_CUE_SEC;
+}
+
+/**
+ * Web Audio: decode once, keep context warm, schedule BufferSource on the
+ * audio clock (look-ahead). Tone 1 on painted 3, …, final on switch.
  */
 function useSegmentEndCue(live, remainingSec) {
   const ctxRef = useRef(null);
   const bufferRef = useRef(null);
   const gainRef = useRef(null);
+  const keepAliveRef = useRef(null);
   const sourceRef = useRef(null);
   const armedKeyRef = useRef(null);
   const carryingRef = useRef(false);
@@ -712,6 +725,8 @@ function useSegmentEndCue(live, remainingSec) {
   const offsetAtStartRef = useRef(0);
   const readyRef = useRef(false);
   const prewarmedKeyRef = useRef(null);
+  const remRef = useRef(remainingSec);
+  remRef.current = remainingSec;
 
   useEffect(() => {
     let cancelled = false;
@@ -738,6 +753,28 @@ function useSegmentEndCue(live, remainingSec) {
     ctxRef.current = ctx;
     gainRef.current = gain;
 
+    // Continuous silent graph so OBS CEF does not suspend between segments.
+    try {
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+      mute.connect(ctx.destination);
+      if (typeof ctx.createConstantSource === "function") {
+        const keep = ctx.createConstantSource();
+        keep.offset.value = 0;
+        keep.connect(mute);
+        keep.start();
+        keepAliveRef.current = keep;
+      } else {
+        const keep = ctx.createOscillator();
+        keep.frequency.value = 1;
+        keep.connect(mute);
+        keep.start();
+        keepAliveRef.current = keep;
+      }
+    } catch {
+      keepAliveRef.current = null;
+    }
+
     (async () => {
       try {
         const res = await fetch(SEGMENT_END_CUE_SRC, {
@@ -752,14 +789,6 @@ function useSegmentEndCue(live, remainingSec) {
         bufferRef.current = buf;
         readyRef.current = true;
         await ctx.resume().catch(() => {});
-        // Silent graph kick so CEF keeps the context hot.
-        const silent = ctx.createBufferSource();
-        silent.buffer = buf;
-        const mute = ctx.createGain();
-        mute.gain.value = 0;
-        silent.connect(mute);
-        mute.connect(ctx.destination);
-        silent.start(0, 0, 0.05);
       } catch {
         readyRef.current = false;
       }
@@ -774,6 +803,12 @@ function useSegmentEndCue(live, remainingSec) {
         /* ignore */
       }
       sourceRef.current = null;
+      try {
+        keepAliveRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      keepAliveRef.current = null;
       try {
         ctx.close();
       } catch {
@@ -806,7 +841,6 @@ function useSegmentEndCue(live, remainingSec) {
     const rem = Number(remainingSec);
     const valid = Number.isFinite(rem);
     const segKey = `${live?.segmentStartedAtMs ?? live?.breakStartedAtMs ?? "x"}:${live?.segmentIndex ?? 0}:${live?.status ?? ""}`;
-    const displayOffset = valid ? cueBufferOffset(rem) : 0;
 
     const stopSource = () => {
       try {
@@ -828,14 +862,61 @@ function useSegmentEndCue(live, remainingSec) {
       offsetAtStartRef.current +
       Math.max(0, ctx.currentTime - startedAtCtxRef.current);
 
+    const notYetAudible = () =>
+      Boolean(sourceRef.current) && ctx.currentTime < startedAtCtxRef.current;
+
+    /** Immediate start at buffer offset (pause-resume / late catch-up). */
     const startFromOffset = (offset) => {
       stopSource();
       const src = ctx.createBufferSource();
       src.buffer = buffer;
       src.connect(gain);
       const when = ctx.currentTime;
-      const off = Math.max(0, Math.min(Math.max(0, buffer.duration - 0.01), offset));
+      const off = Math.max(
+        0,
+        Math.min(Math.max(0, buffer.duration - 0.01), offset)
+      );
       src.start(when, off);
+      sourceRef.current = src;
+      startedAtCtxRef.current = when;
+      offsetAtStartRef.current = off;
+      carryingRef.current = true;
+      pausedOffsetRef.current = null;
+      src.onended = () => {
+        if (sourceRef.current === src) {
+          sourceRef.current = null;
+          carryingRef.current = false;
+          armedKeyRef.current = null;
+        }
+      };
+    };
+
+    /**
+     * Schedule offset-0 at the ideal audio time when still early; otherwise
+     * catch up with cueBufferOffset so late rAF never shifts all four peaks.
+     */
+    const scheduleAligned = (remNow) => {
+      stopSource();
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(gain);
+      const until = cueUntilIdealStart(remNow);
+      let when;
+      let off;
+      if (until > 0) {
+        when = ctx.currentTime + until;
+        off = 0;
+        src.start(when, 0);
+      } else {
+        when = ctx.currentTime;
+        off = cueBufferOffset(remNow);
+        const clamped = Math.max(
+          0,
+          Math.min(Math.max(0, buffer.duration - 0.01), off)
+        );
+        off = clamped;
+        src.start(when, off);
+      }
       sourceRef.current = src;
       startedAtCtxRef.current = when;
       offsetAtStartRef.current = off;
@@ -858,16 +939,16 @@ function useSegmentEndCue(live, remainingSec) {
     if (
       valid &&
       rem <= CUE_PREWARM_SEC &&
-      rem > SEGMENT_END_CUE_SEC &&
+      rem > SEGMENT_END_CUE_SEC + CUE_SCHEDULE_AHEAD_SEC &&
       prewarmedKeyRef.current !== segKey
     ) {
       prewarmedKeyRef.current = segKey;
-      ctx.resume().catch(() => {});
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
     }
     if (valid && rem > CUE_PREWARM_SEC) prewarmedKeyRef.current = null;
 
     if (carryingRef.current) {
-      if (playedSec() >= CUE_CARRY_UNTIL_SEC) {
+      if (!notYetAudible() && playedSec() >= CUE_CARRY_UNTIL_SEC) {
         stopAll();
         return;
       }
@@ -879,12 +960,18 @@ function useSegmentEndCue(live, remainingSec) {
         status === "break" && live?.breakStartedAtMs == null;
       if (status === "paused" || breakHeld) {
         if (sourceRef.current) {
-          pausedOffsetRef.current = playedSec();
-          stopSource();
+          if (notYetAudible()) {
+            // Future start not reached — cancel so rem-based re-arm works.
+            stopAll();
+          } else {
+            pausedOffsetRef.current = playedSec();
+            stopSource();
+          }
         }
         return;
       }
       if (!sourceRef.current && pausedOffsetRef.current != null) {
+        if (ctx.state === "suspended") ctx.resume().catch(() => {});
         startFromOffset(pausedOffsetRef.current);
       }
       return;
@@ -901,24 +988,31 @@ function useSegmentEndCue(live, remainingSec) {
       return;
     }
 
-    // Include ARM_EARLY so we start at offset 0 just before rem hits 3.
+    // Schedule up to CUE_SCHEDULE_AHEAD_SEC before rem hits ~3 (audio clock).
     const inWindow =
       (status === "running" || breakTicking) &&
       valid &&
-      rem <= SEGMENT_END_CUE_SEC + CUE_ARM_EARLY_SEC &&
+      rem <= SEGMENT_END_CUE_SEC + CUE_SCHEDULE_AHEAD_SEC &&
       rem > 0;
 
     if (!inWindow) return;
     if (armedKeyRef.current === segKey) return;
 
     armedKeyRef.current = segKey;
-    ctx.resume().catch(() => {});
-    // Near / before painted "3" → offset 0 (first beep). Else catch up mid-window.
-    const armAt =
-      rem >= SEGMENT_END_CUE_SEC - CUE_CLEAN_ARM_EPS_SEC
-        ? 0
-        : displayOffset;
-    startFromOffset(armAt);
+    const armWithRem = (remNow) => {
+      if (armedKeyRef.current !== segKey) return;
+      if (carryingRef.current) return;
+      scheduleAligned(remNow);
+    };
+
+    if (ctx.state === "suspended") {
+      ctx
+        .resume()
+        .catch(() => {})
+        .finally(() => armWithRem(remRef.current));
+    } else {
+      armWithRem(rem);
+    }
   }, [
     remainingSec,
     live?.status,
