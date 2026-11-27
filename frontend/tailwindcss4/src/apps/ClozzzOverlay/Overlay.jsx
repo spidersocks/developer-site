@@ -441,8 +441,8 @@ function CountdownBackdrop() {
 /** Thin SVG ring — 12 o'clock origin, elapsed gold fill grows clockwise. */
 function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
   const p = Math.min(1, Math.max(0, Number(progress) || 0));
-  const r = 17.25;
-  const c = 2 * Math.PI * r;
+  /* Slightly inset radius so stroke leaves room for “0:MM” glyphs. */
+  const r = 16.75;
   return (
     <svg
       className={className}

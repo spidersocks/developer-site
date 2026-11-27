@@ -401,19 +401,22 @@ html.clozzz-stage-preview #root {
 .clozzz-card-timer {
   --clozzz-timer-p: 0;
   --clozzz-ring-fill: var(--clozzz-gold);
-  /* Light cool track — readable against navy glass + gold fill. */
-  --clozzz-ring-track: rgba(205, 211, 222, 0.55);
+  /* Soft light track — must read #CDD3DE on navy, not dark stroke. */
+  --clozzz-ring-track: rgba(205, 211, 222, 0.78);
   position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  /* Pre-ring tabular slot — layout height = title row, ring paints outside. */
-  width: 5ch;
-  min-width: 5ch;
+  /*
+   * Layout footprint stays ≤ title line (digits are scaled down).
+   * Ring is absolute and sized to fully enclose “0:MM”.
+   */
+  width: max-content;
+  min-width: 0;
   margin: 0;
   padding: 0;
   font-size: var(--clozzz-timer-size);
-  line-height: 1.15;
+  line-height: 1;
   color: #f3ead7;
   -webkit-font-smoothing: antialiased;
   transition: color 0.3s ease;
@@ -424,24 +427,27 @@ html.clozzz-stage-preview #root {
   position: relative;
   z-index: 1;
   font-family: var(--clozzz-font-display);
-  font-size: 1em;
+  /* Scaled so “0:MM” sits fully inside the ring inner diameter. */
+  font-size: 0.55em;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
-  line-height: 1.15;
+  line-height: 1;
   text-align: center;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
-  width: 100%;
+  width: max-content;
+  min-width: 4.1ch;
+  padding: 0 0.05em;
 }
 
-/* Modest square ring — diameter ≈ numeral height so it stays in the title row. */
+/* Absolute ring — large enough for digits, does not grow card metrics. */
 .clozzz-timer-ring {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 1.22em;
-  height: 1.22em;
+  width: 1.68em;
+  height: 1.68em;
   margin: 0;
   transform: translate(-50%, -50%) rotate(-90deg);
   pointer-events: none;
@@ -452,11 +458,11 @@ html.clozzz-stage-preview #root {
 .clozzz-timer-ring__track,
 .clozzz-timer-ring__sweep {
   fill: none;
-  stroke-width: 1.85;
+  stroke-width: 2.05;
 }
 
 .clozzz-timer-ring__track {
-  stroke: var(--clozzz-ring-track, rgba(205, 211, 222, 0.55));
+  stroke: var(--clozzz-ring-track, rgba(205, 211, 222, 0.78));
 }
 
 .clozzz-timer-ring__sweep {
@@ -473,13 +479,13 @@ html.clozzz-stage-preview #root {
 .clozzz-card-timer--warn {
   color: var(--clozzz-warn);
   --clozzz-ring-fill: var(--clozzz-warn);
-  --clozzz-ring-track: rgba(240, 181, 106, 0.22);
+  --clozzz-ring-track: rgba(240, 181, 106, 0.55);
 }
 
 .clozzz-card-timer--critical {
   color: var(--clozzz-critical);
   --clozzz-ring-fill: var(--clozzz-critical);
-  --clozzz-ring-track: rgba(240, 138, 106, 0.25);
+  --clozzz-ring-track: rgba(240, 138, 106, 0.55);
 }
 
 .clozzz-card-timer--done {
@@ -625,14 +631,14 @@ html.clozzz-stage-preview #root {
     padding: 0.8rem 0.95rem 0.9rem;
   }
 
-  .clozzz-card-timer {
-    width: 4.4ch;
-    min-width: 4.4ch;
+  .clozzz-card-timer__digits {
+    font-size: 0.54em;
+    min-width: 4ch;
   }
 
   .clozzz-timer-ring {
-    width: 1.2em;
-    height: 1.2em;
+    width: 1.62em;
+    height: 1.62em;
   }
 }
 
