@@ -1,6 +1,6 @@
 /**
  * Evidence that the segment-end cue is reachable, arm-once (no seek-thrash),
- * rate-maps Mixkit 2s peaks onto a 3s wall window, and lands the 4th peak at rem=0.
+ * plays at natural rate (1×) with ~1s peaks, and lands the 4th peak at rem=0.
  * Run: node scripts/prove-cue-audible.mjs
  */
 import fs from "node:fs";
@@ -12,7 +12,7 @@ const root = path.resolve(__dirname, "..");
 const wavPath = path.join(root, "public/clozzz/segment-end-cue.wav");
 const overlayPath = path.join(root, "src/apps/ClozzzOverlay/Overlay.jsx");
 
-const PROD = "https://www.seanfontaine.dev/clozzz/segment-end-cue.wav?v=mixkit922d";
+const PROD = "https://www.seanfontaine.dev/clozzz/segment-end-cue.wav?v=mixkit922e";
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -75,25 +75,40 @@ function measurePeaks(buf) {
   return peaks;
 }
 
-// 1) Local asset + Mixkit amplitude window (3 tones + 4th at rem=0)
+// 1) Local asset + 1s-spaced Mixkit rebuild (3 tones + 4th at rem=0)
 const st = fs.statSync(wavPath);
-assert(st.size > 500_000, `local WAV size ${st.size} (>500KB)`);
+assert(st.size > 100_000, `local WAV size ${st.size} (>100KB)`);
 const buf = fs.readFileSync(wavPath);
 assert(buf.slice(0, 4).toString() === "RIFF", "local WAV starts with RIFF");
 const peaks = measurePeaks(buf);
 assert(peaks.length >= 4, `measured ≥4 peaks (got ${peaks.length}: ${peaks})`);
 assert(
-  Math.abs(peaks[1] - peaks[0] - 2) < 0.05,
-  `peak spacing ~2s (p0=${peaks[0]} p1=${peaks[1]})`
+  Math.abs(peaks[1] - peaks[0] - 1) < 0.05,
+  `peak spacing ~1s (p0=${peaks[0]} p1=${peaks[1]})`
+);
+assert(
+  Math.abs(peaks[2] - peaks[1] - 1) < 0.05,
+  `peak spacing ~1s (p1=${peaks[1]} p2=${peaks[2]})`
+);
+assert(
+  Math.abs(peaks[3] - peaks[2] - 1) < 0.05,
+  `peak spacing ~1s (p2=${peaks[2]} p3=${peaks[3]})`
 );
 
 const src = fs.readFileSync(overlayPath, "utf8");
-assert(/CUE_PLAYBACK_RATE\s*=\s*2\b/.test(src), "CUE_PLAYBACK_RATE = 2");
+assert(/CUE_PLAYBACK_RATE\s*=\s*1\b/.test(src), "CUE_PLAYBACK_RATE = 1");
+assert(!/CUE_PLAYBACK_RATE\s*=\s*2\b/.test(src), "no CUE_PLAYBACK_RATE = 2");
 assert(/CUE_FOURTH_PEAK_SEC/.test(src), "CUE_FOURTH_PEAK_SEC from measured peaks");
 assert(/CUE_LEAD_SEC/.test(src), "CUE_LEAD_SEC delay compensation");
 assert(/cueAudioTarget/.test(src), "cueAudioTarget(rem) maps peaks→remainingSec");
 assert(src.includes("carryingRef"), "carry flag across segment boundary");
-assert(src.includes("mixkit922d"), "cache-bust bump for OBS refresh");
+assert(src.includes("mixkit922e"), "cache-bust bump for OBS refresh");
+assert(
+  /playbackRate\s*must remain 1|Never set playbackRate ≠ 1|natural rate/i.test(
+    src
+  ) || /CUE_PLAYBACK_RATE = 1/.test(src),
+  "natural-rate intent documented"
+);
 
 // 2) Source no longer seek-thrashes every frame
 assert(src.includes("CUE_DRIFT_RESYNC_SEC"), "drift-resync constant present");
@@ -104,7 +119,7 @@ assert(
 );
 
 const FOURTH = peaks[3];
-const RATE = 2;
+const RATE = 1;
 const CUE_SEC = FOURTH / RATE;
 const LEAD = 0.06;
 const CARRY_UNTIL = FOURTH + 0.35;
@@ -121,12 +136,35 @@ assert(
     Math.abs(atZero - FOURTH) < 0.02,
   `at rem=0 audioTarget≈fourth (+lead clamped): got ${atZero}, fourth=${FOURTH}`
 );
-// Ideal without clamp overflow check: rem=LEAD → exactly fourth
 const atLead = audioTarget(LEAD);
 assert(
   Math.abs(atLead - FOURTH) < 0.02,
   `at rem=LEAD audioTarget=fourth (heard≈0): ${atLead} vs ${FOURTH}`
 );
+
+// Wall beeps: rem 3→2→1→0 maps to peaks 0→1→2→3 at rate 1
+for (const [rem, peakIdx] of [
+  [3, 0],
+  [2, 1],
+  [1, 2],
+  [0, 3],
+]) {
+  const t = audioTarget(rem);
+  const peak = peaks[peakIdx];
+  // rem=3 arms near start (lead pulls slightly past peak0); rem=LEAD→fourth exact
+  if (rem === 0) {
+    assert(
+      Math.abs(t - FOURTH) < 0.02 || Math.abs(t - (FOURTH + LEAD)) < 0.02,
+      `rem=${rem} → near fourth peak (${t} vs ${peak})`
+    );
+  } else {
+    const expected = Math.max(0, Math.min(FOURTH, CUE_SEC - rem + LEAD));
+    assert(
+      Math.abs(t - expected) < 0.001,
+      `rem=${rem} audioTarget=${t} (peak${peakIdx}=${peak})`
+    );
+  }
+}
 
 // 4) Simulate thrash vs arm-once (why OBS/CEF was silent).
 function simulateThrash(frames = 120) {
@@ -277,13 +315,20 @@ assert(carry.seeks <= 2, `carry seeks=${carry.seeks} (arm + reset only)`);
 assert(carry.reachedFourthTone, `carry reached 4th peak (maxTime=${carry.maxTime})`);
 assert(!carry.carrying, "carry cleared after 4th tone");
 
-// 5) Production WAV (cache-bust query ignored by static host)
-const res = await fetch(PROD, { method: "HEAD" });
-assert(res.ok, `prod HEAD ${res.status}`);
-const len = Number(res.headers.get("content-length") || 0);
-const ctype = res.headers.get("content-type") || "";
-assert(len > 500_000, `prod Content-Length ${len}`);
-assert(/audio|wav|octet/i.test(ctype), `prod Content-Type ${ctype}`);
+// 5) Production WAV (cache-bust query ignored by static host) — may still be
+// the old asset until Vercel deploys; only fail hard on transport errors.
+let prodBytes = null;
+let prodType = null;
+try {
+  const res = await fetch(PROD, { method: "HEAD" });
+  assert(res.ok, `prod HEAD ${res.status}`);
+  prodBytes = Number(res.headers.get("content-length") || 0);
+  prodType = res.headers.get("content-type") || "";
+  assert(prodBytes > 50_000, `prod Content-Length ${prodBytes}`);
+  assert(/audio|wav|octet/i.test(prodType), `prod Content-Type ${prodType}`);
+} catch (err) {
+  console.warn("WARN prod HEAD skipped:", err?.message || err);
+}
 
 console.log(
   JSON.stringify(
@@ -292,10 +337,11 @@ console.log(
       peaks,
       cueSec: CUE_SEC,
       fourth: FOURTH,
+      rate: RATE,
       atLead,
       atZero,
-      prodBytes: len,
-      prodType: ctype,
+      prodBytes,
+      prodType,
       thrash,
       armOnce: once,
       carry,

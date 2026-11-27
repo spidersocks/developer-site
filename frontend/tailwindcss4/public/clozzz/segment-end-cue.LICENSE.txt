@@ -2,14 +2,17 @@ segment-end-cue.wav
 ===================
 
 Source: Mixkit “Simple countdown” (sound id 922)
-File: mixkit-simple-countdown-922.wav
+File: mixkit-simple-countdown-922.wav (rebuild)
 License: Mixkit License (free for commercial & personal use; attribution
 not required). https://mixkit.co/license/#sfxFree
 
-Amplitude peaks (44.1 kHz stereo RMS): ~0.01s, 1.01s, 2.01s, 3.01s —
-    three countdown tones in the last ~3s of the exercise, then a fourth
-    switch tone in the first ~1s of the NEXT exercise (carry across the
-    segment boundary; do not pause/seek-to-0 until ~3.45s).
+Original Mixkit amplitude peaks were ~2s apart (~0.02 / 2.02 / 4.02 /
+6.016s). This asset trims each beep pulse and places them at ~1s spacing
+(~0.02 / 1.02 / 2.02 / 3.03s) so playback stays at natural rate (1×) —
+three countdown tones in the last ~3s of the exercise, then a fourth
+switch tone when remainingSec hits 0 (carry across the segment boundary;
+do not pause/seek-to-0 until ~3.4s).
 
 Display-locked playback: arm once per segment against remainingSec;
-carry through rem=0 / next segment; no every-frame seek thrash.
+carry through rem=0 / next segment; no every-frame seek thrash;
+playbackRate must remain 1.

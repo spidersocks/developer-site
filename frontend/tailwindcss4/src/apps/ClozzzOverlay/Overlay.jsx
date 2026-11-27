@@ -531,17 +531,18 @@ function StreamEndedStage({ elapsedSec, title, message }) {
 }
 
 // Mixkit “Simple countdown” (922, Mixkit License). Cache-bust for OBS CEF.
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922d";
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922e";
 /**
- * Measured mono 44.1kHz RMS peaks: ~0.02, 2.02, 4.02, 6.016s (2s spacing).
- * Play at 2× so wall peaks land ~0.01 / 1.01 / 2.01 / 3.008s — tones 1–3 in
- * the last ~3s, 4th exactly when remainingSec hits 0. Arm once near rem≈3,
- * seek from peaks→rem, then carry past the boundary for the 4th tone tail.
+ * Source Mixkit 922 peaks were ~2s apart; WAV rebuilt so measured mono 44.1kHz
+ * RMS peaks sit at ~0.02 / 1.018 / 2.015 / 3.028s. Play at natural rate (1×) —
+ * tones 1–3 in the last ~3s, 4th exactly when remainingSec hits 0. Arm once
+ * near rem≈3, seek from peaks→rem, then carry past the boundary for the 4th
+ * tone tail. Never set playbackRate ≠ 1.
  */
-const CUE_PEAKS_AUDIO_SEC = [0.02, 2.02, 4.02, 6.016];
+const CUE_PEAKS_AUDIO_SEC = [0.02, 1.018, 2.015, 3.028];
 const CUE_FOURTH_PEAK_SEC = CUE_PEAKS_AUDIO_SEC[3];
-const CUE_PLAYBACK_RATE = 2;
-/** Wall-seconds from first→fourth peak after rate (= fourth / rate). */
+const CUE_PLAYBACK_RATE = 1;
+/** Wall-seconds from first→fourth peak (= fourth at rate 1). */
 const SEGMENT_END_CUE_SEC = CUE_FOURTH_PEAK_SEC / CUE_PLAYBACK_RATE;
 /**
  * Lead (wall seconds) for HTMLAudio/CEF start latency so the heard 4th peak
