@@ -81,6 +81,17 @@ function MoreIcon() {
   );
 }
 
+function ChevronDownIcon() {
+  return (
+    <svg className="ce-tools__chevron" viewBox="0 0 12 12" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M2.2 4.1a.75.75 0 0 1 1.06.02L6 6.78l2.74-2.66a.75.75 0 1 1 1.04 1.08l-3.26 3.16a.75.75 0 0 1-1.04 0L2.18 5.2a.75.75 0 0 1 .02-1.1Z"
+      />
+    </svg>
+  );
+}
+
 function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onCancel }) {
   return (
     <div className="ce-modal-backdrop" role="dialog" aria-modal="true">
@@ -236,6 +247,69 @@ function OverflowMenu({ open, onToggle, onClose, items }) {
               {item.label}
             </button>
           ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Microsoft-style Tools split control for library footer actions. */
+function ToolsMenu({ onCopyObs, onOpenRemote }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDoc(e) {
+      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className={`ce-tools${open ? " is-open" : ""}`} ref={rootRef}>
+      <button
+        type="button"
+        className="ce-tools__btn"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>Tools</span>
+        <ChevronDownIcon />
+      </button>
+      {open ? (
+        <div className="ce-tools__menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="ce-tools__item"
+            onClick={() => {
+              setOpen(false);
+              onCopyObs();
+            }}
+          >
+            Copy OBS link
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ce-tools__item"
+            onClick={() => {
+              setOpen(false);
+              onOpenRemote();
+            }}
+          >
+            Open remote
+          </button>
         </div>
       ) : null}
     </div>
@@ -949,10 +1023,8 @@ export default function Editor({ initialCatalog }) {
         </ul>
 
         <div className="ce-library-foot">
-          <button
-            type="button"
-            className="ce-btn ce-btn--open"
-            onClick={async () => {
+          <ToolsMenu
+            onCopyObs={async () => {
               const url = openDisplayUrl();
               try {
                 await navigator.clipboard.writeText(url);
@@ -961,16 +1033,8 @@ export default function Editor({ initialCatalog }) {
                 window.prompt("Copy OBS display URL", url);
               }
             }}
-          >
-            Copy OBS link
-          </button>
-          <button
-            type="button"
-            className="ce-btn ce-btn--primary"
-            onClick={openRemoteHome}
-          >
-            Open remote
-          </button>
+            onOpenRemote={openRemoteHome}
+          />
         </div>
       </div>
 

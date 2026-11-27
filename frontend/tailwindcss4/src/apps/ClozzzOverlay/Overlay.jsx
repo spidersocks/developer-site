@@ -184,9 +184,11 @@ function timerBand(progress, remainingSec, done) {
   return "calm";
 }
 
-function BrandLockup({ backed = false }) {
+function BrandLockup({ backed = false, quiet = false }) {
   return (
-    <div className={`clozzz-brand${backed ? " clozzz-brand--backed" : ""}`}>
+    <div
+      className={`clozzz-brand${backed ? " clozzz-brand--backed" : ""}${quiet ? " clozzz-brand--quiet" : ""}`}
+    >
       <span className="clozzz-brand__mark" aria-hidden="true">
         <img
           className="clozzz-brand__logo"
@@ -204,31 +206,31 @@ function BrandLockup({ backed = false }) {
   );
 }
 
-function TimerIcon() {
+/** Soft opacity crossfade for exercise name (no flash / translate pulse). */
+function CrossfadeTitle({ text }) {
+  const [shown, setShown] = useState(text);
+  const [outgoing, setOutgoing] = useState(null);
+
+  useEffect(() => {
+    if (text === shown) return undefined;
+    setOutgoing(shown);
+    setShown(text);
+    const t = window.setTimeout(() => setOutgoing(null), 420);
+    return () => window.clearTimeout(t);
+  }, [text, shown]);
+
   return (
-    <svg
-      className="clozzz-timer__icon"
-      viewBox="0 0 24 24"
-      width="24"
-      height="24"
-      aria-hidden="true"
-    >
-      <circle
-        cx="12"
-        cy="13"
-        r="7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.15"
-      />
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.15"
-        strokeLinecap="round"
-        d="M12 9.5v3.7l2.2 1.4M9.5 4.2h5"
-      />
-    </svg>
+    <span className="clozzz-crossfade">
+      {outgoing != null ? (
+        <span
+          className="clozzz-current clozzz-crossfade__layer is-out"
+          aria-hidden="true"
+        >
+          {outgoing}
+        </span>
+      ) : null}
+      <h1 className="clozzz-current clozzz-crossfade__layer is-in">{shown}</h1>
+    </span>
   );
 }
 
@@ -400,6 +402,37 @@ export function remainingFromLive(
   return { remainingMs: durationMs, done: false, armed: true };
 }
 
+/** Progressive bg: instant cool gradient → first-frame still → looping video. */
+function CountdownBackdrop() {
+  const [stillReady, setStillReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+
+  return (
+    <>
+      <div className="clozzz-countdown__gradient" aria-hidden="true" />
+      <img
+        className={`clozzz-countdown__still${stillReady ? " is-ready" : ""}`}
+        src="/clozzz/bg1.webp"
+        alt=""
+        decoding="async"
+        fetchPriority="high"
+        onLoad={() => setStillReady(true)}
+      />
+      <video
+        className={`clozzz-countdown__bg${videoReady ? " is-ready" : ""}`}
+        src="/clozzz/bg1.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        onCanPlay={() => setVideoReady(true)}
+        onPlaying={() => setVideoReady(true)}
+      />
+    </>
+  );
+}
+
 function CountdownStage({
   remainingSec,
   durationMs,
@@ -417,18 +450,10 @@ function CountdownStage({
       className={`clozzz-countdown clozzz-countdown--soon${critical ? " is-critical" : ""}${held ? " is-held" : ""}`}
       aria-live="polite"
     >
-      <video
-        className="clozzz-countdown__bg"
-        src="/clozzz/bg1.mp4"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-      />
+      <CountdownBackdrop />
       <div className="clozzz-countdown__veil" aria-hidden="true" />
       <header className="clozzz-countdown__brand">
-        <BrandLockup backed />
+        <BrandLockup />
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
         <p className="clozzz-countdown__label">Starting soon</p>
@@ -442,9 +467,7 @@ function CountdownStage({
           <span className="clozzz-countdown__rail-fill" />
           <span className="clozzz-countdown__rail-head" />
         </div>
-        {held ? (
-          <p className="clozzz-countdown__sub">Waiting for Start</p>
-        ) : title ? (
+        {!held && title ? (
           <p className="clozzz-countdown__sub">{title}</p>
         ) : null}
       </div>
@@ -461,18 +484,10 @@ function StreamEndedStage({ remainingSec, durationMs, remainingMs, title, messag
       className="clozzz-countdown clozzz-countdown--ended"
       aria-live="polite"
     >
-      <video
-        className="clozzz-countdown__bg"
-        src="/clozzz/bg1.mp4"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-      />
+      <CountdownBackdrop />
       <div className="clozzz-countdown__veil" aria-hidden="true" />
       <header className="clozzz-countdown__brand">
-        <BrandLockup backed />
+        <BrandLockup />
       </header>
       <div className="clozzz-countdown__center clozzz-countdown__center--minimal">
         <p className="clozzz-countdown__label">Stream ended</p>
@@ -572,64 +587,51 @@ function RunningOverlay({ session, sessionKey }) {
     );
   }
 
+  const moveLabel = current?.label || live?.currentLabel || "…";
+  const nextCue = next?.label || "Rest";
+  const timerText = done ? "0:00" : formatClock(remainingSec);
+
   return (
     <div className="clozzz-overlay clozzz-overlay--live" aria-live="polite">
       <header className="clozzz-corner clozzz-corner--tl">
-        <BrandLockup backed />
+        <BrandLockup quiet />
       </header>
 
       {chromeVisible ? (
-        <>
-          <div className="clozzz-corner clozzz-corner--tr">
-            <div
-              className={`clozzz-timer clozzz-timer--${band}${armed ? " clozzz-timer--armed" : ""}${derived.paused ? " clozzz-timer--paused" : ""}`}
-              style={{
-                "--clozzz-elapsed": done
-                  ? 1
-                  : Math.min(1, Math.max(0, 1 - progress)),
-              }}
-            >
-              <TimerIcon />
-              <span className="clozzz-timer__value">
-                {done ? "0:00" : formatClock(remainingSec)}
-              </span>
-            </div>
-          </div>
-
-          <section className="clozzz-corner clozzz-corner--bl clozzz-current-panel">
-            {done ? (
-              <>
-                <h1 className="clozzz-current clozzz-anim" key="done-title">
-                  Routine complete
-                </h1>
-                <p className="clozzz-exercise-count">
-                  {segments.length} exercises ·{" "}
-                  {formatDuration(sessionTotalSec({ segments }))}
-                </p>
-              </>
-            ) : (
-              <>
-                <h1
-                  className="clozzz-current clozzz-anim"
-                  key={current?.id || index}
+        <section className="clozzz-corner clozzz-corner--bl clozzz-current-panel">
+          {done ? (
+            <>
+              <p className="clozzz-exercise-count">
+                {segments.length} exercises ·{" "}
+                {formatDuration(sessionTotalSec({ segments }))}
+              </p>
+              <div className="clozzz-move-row">
+                <h1 className="clozzz-current">Routine complete</h1>
+                <span
+                  className={`clozzz-card-timer clozzz-card-timer--${band}`}
                 >
-                  {current?.label || live?.currentLabel || "…"}
-                </h1>
-                <p className="clozzz-exercise-count">
-                  Exercise {index + 1} of {segments.length}
-                  {armed
-                    ? " · Waiting for Start"
-                    : derived.paused
-                      ? " · Paused"
-                      : ""}
-                </p>
-                <p className="clozzz-up-next">
-                  {next ? `Up next: ${next.label}` : "Up next: Rest"}
-                </p>
-              </>
-            )}
-          </section>
-        </>
+                  {timerText}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="clozzz-exercise-count">
+                Exercise {index + 1} of {segments.length}
+                {derived.paused ? " · Paused" : ""}
+              </p>
+              <div className="clozzz-move-row">
+                <CrossfadeTitle text={moveLabel} />
+                <span
+                  className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
+                >
+                  {timerText}
+                </span>
+              </div>
+              <p className="clozzz-up-next">Next: {nextCue}</p>
+            </>
+          )}
+        </section>
       ) : null}
     </div>
   );
