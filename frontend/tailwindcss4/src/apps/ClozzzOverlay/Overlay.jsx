@@ -531,9 +531,11 @@ function StreamEndedStage({ elapsedSec, title, message }) {
 }
 
 const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav";
+/** Soft ASMR countdown window — last N seconds of each exercise. */
+const SEGMENT_END_CUE_SEC = 10;
 
 /**
- * Play a 3-beep cue in the last ~3s of each running exercise (OBS Browser Source).
+ * Play a soft 10s ASMR countdown (gentle ticks + final chime) near segment end.
  * Volume/mute follow the live run so the phone remote can drive them.
  */
 function useSegmentEndCue(live, remainingSec) {
@@ -578,12 +580,17 @@ function useSegmentEndCue(live, remainingSec) {
       return;
     }
     const cueKey = `${live.segmentStartedAtMs ?? "x"}:${live.segmentIndex ?? 0}`;
-    if (remainingSec <= 3.05 && remainingSec > 0.05) {
+    if (remainingSec <= SEGMENT_END_CUE_SEC + 0.05 && remainingSec > 0.05) {
       if (firedKeyRef.current === cueKey) return;
       firedKeyRef.current = cueKey;
       if (!audio) return;
       try {
-        audio.currentTime = 0;
+        // If segment is shorter than the cue window, start mid-file so the
+        // final chime still lands near 0:00.
+        const overdue = Math.max(0, SEGMENT_END_CUE_SEC - remainingSec);
+        const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
+        audio.currentTime =
+          dur > 0 ? Math.min(overdue, Math.max(0, dur - 0.5)) : overdue;
         const play = audio.play();
         if (play && typeof play.catch === "function") play.catch(() => {});
       } catch {

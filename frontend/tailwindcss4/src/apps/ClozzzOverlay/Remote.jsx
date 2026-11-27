@@ -154,6 +154,28 @@ function clamp(n, a, b) {
   return Math.min(Math.max(n, a), b);
 }
 
+function VolumeIcon() {
+  return (
+    <svg className="clozzz-remote__vol-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4.5 9.5v5h3.2L12 18.2V5.8L7.7 9.5H4.5Zm9.2 1.1a2.4 2.4 0 0 1 0 2.8l1.2 1.1a4.2 4.2 0 0 0 0-5l-1.2 1.1Zm1.9-3.3a5.8 5.8 0 0 1 0 9.4l1.3 1.15a7.6 7.6 0 0 0 0-11.7L15.6 7.3Z"
+      />
+    </svg>
+  );
+}
+
+function VolumeMutedIcon() {
+  return (
+    <svg className="clozzz-remote__vol-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4.5 9.5v5h3.2L12 18.2V5.8L7.7 9.5H4.5Zm10.9-.55 1.15-1.15 1.25 1.25 1.25-1.25 1.15 1.15-1.25 1.25 1.25 1.25-1.15 1.15-1.25-1.25-1.25 1.25-1.15-1.15 1.25-1.25-1.25-1.25Z"
+      />
+    </svg>
+  );
+}
+
 /**
  * Embla center-scale tween:
  * t = clamp(1 - abs(offset) * factor, 0, 1)
@@ -907,9 +929,11 @@ export default function Remote({
           className="clozzz-remote__btn clozzz-remote__btn--mute"
           disabled={noLive || isBusy("set_cue_audio")}
           aria-pressed={cueMuted}
+          aria-label={cueMuted ? "Unmute timer cue" : "Mute timer cue"}
+          title={cueMuted ? "Unmute" : "Mute"}
           onClick={() => setCueAudio({ cueMuted: !cueMuted })}
         >
-          {cueMuted ? "Unmute" : "Mute"}
+          {cueMuted ? <VolumeMutedIcon /> : <VolumeIcon />}
         </button>
         <label className="clozzz-remote__volume-slider">
           <span className="clozzz-remote__volume-pct">
