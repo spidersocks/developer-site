@@ -7,7 +7,9 @@ License: Mixkit License (free for commercial & personal use; attribution
 not required). https://mixkit.co/license/#sfxFree
 
 Amplitude peaks (44.1 kHz stereo RMS): ~0.01s, 1.01s, 2.01s, 3.01s —
-three countdown tones, then a fourth for exercise switch.
+    three countdown tones in the last ~3s of the exercise, then a fourth
+    switch tone in the first ~1s of the NEXT exercise (carry across the
+    segment boundary; do not pause/seek-to-0 until ~3.45s).
 
 Display-locked playback: arm once per segment against remainingSec;
-no every-frame seek thrash.
+carry through rem=0 / next segment; no every-frame seek thrash.

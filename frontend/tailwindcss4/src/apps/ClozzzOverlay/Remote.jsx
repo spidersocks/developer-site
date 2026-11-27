@@ -207,10 +207,12 @@ export default function Remote({
   const [pullY, setPullY] = useState(0);
   const [pulling, setPulling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [swipeHint, setSwipeHint] = useState("");
   /** Finger / settle progress in “slides” (0 = current, +1 = next committed). */
   const [progress, setProgress] = useState(0);
   const [settling, setSettling] = useState(false);
+  /** Local cue audio UI — wins over poll while dragging or a set_cue_audio is in flight. */
+  const [uiCueVolume, setUiCueVolume] = useState(readStoredCueVolume);
+  const [uiCueMuted, setUiCueMuted] = useState(readStoredCueMuted);
   const touchStart = useRef({ x: 0, y: 0, t: 0 });
   const samples = useRef([]);
   const gesture = useRef(null); // null | "pull" | "swipe" | "ignore"
@@ -220,9 +222,13 @@ export default function Remote({
   const settleTimer = useRef(null);
   const liveRevRef = useRef(0);
   const liveUpdatedRef = useRef(0);
+  const liveRef = useRef(null);
   const sessionKeyRef = useRef(sessionKey);
   const cuePrefsPushedRef = useRef(false);
   const cueVolTimerRef = useRef(null);
+  const cueDraggingRef = useRef(false);
+  /** Bumps on each local cue edit; 0 when idle / synced. */
+  const cueAudioGenRef = useRef(0);
   const channelIntentRef = useRef({ id: null, at: 0 });
   /** True when this remote should claim studio (mount / local swipe); false after peer follow. */
   const claimStudioRef = useRef(true);
@@ -231,6 +237,7 @@ export default function Remote({
   const desiredStudioRef = useRef(sessionKey);
 
   sessionKeyRef.current = sessionKey;
+  liveRef.current = live;
 
   const channelIds = useMemo(() => routines.map((r) => r.id), [routines]);
   const channelIndex = channelIds.indexOf(sessionKey);
@@ -357,7 +364,32 @@ export default function Remote({
     liveRevRef.current = 0;
     liveUpdatedRef.current = 0;
     cuePrefsPushedRef.current = false;
+    cueAudioGenRef.current = 0;
+    cueDraggingRef.current = false;
+    if (cueVolTimerRef.current) {
+      window.clearTimeout(cueVolTimerRef.current);
+      cueVolTimerRef.current = null;
+    }
+    setUiCueVolume(readStoredCueVolume());
+    setUiCueMuted(readStoredCueMuted());
   }, [sessionKey]);
+
+  /** Adopt server cue audio only when local slider is idle (not dragging / not in-flight). */
+  useEffect(() => {
+    if (!live) return;
+    if (cueDraggingRef.current) return;
+    if (cueAudioGenRef.current > 0) {
+      // Keep local UI until the server echoes our values (stale polls must not snap back).
+      const volMatch =
+        typeof live.cueVolume === "number" &&
+        Math.abs(live.cueVolume - uiCueVolume) < 0.001;
+      const muteMatch = Boolean(live.cueMuted) === uiCueMuted;
+      if (volMatch && muteMatch) cueAudioGenRef.current = 0;
+      return;
+    }
+    if (typeof live.cueVolume === "number") setUiCueVolume(live.cueVolume);
+    setUiCueMuted(Boolean(live.cueMuted));
+  }, [live, uiCueVolume, uiCueMuted]);
 
   /** Push remembered cue volume/mute once per channel so OBS matches the remote. */
   useEffect(() => {
@@ -552,7 +584,6 @@ export default function Remote({
     pullingRef.current = false;
     setSettling(false);
     setProgress(0);
-    setSwipeHint("");
     setPulling(false);
     setPullY(0);
   }, [swipeLocked]);
@@ -571,7 +602,6 @@ export default function Remote({
       pullingRef.current = false;
       setPulling(false);
       setPullY(0);
-      setSwipeHint("");
       return;
     }
     const now = performance.now();
@@ -579,7 +609,6 @@ export default function Remote({
     samples.current = [{ x: t.clientX, t: now }];
     gesture.current = null;
     pullingRef.current = false;
-    setSwipeHint("");
     setSettling(false);
   };
 
@@ -615,9 +644,6 @@ export default function Remote({
       const pitch = pitchPx();
       // Finger left (dx < 0) → progress toward next (+1).
       setProgress(clamp((-dx) / pitch, -1.15, 1.15));
-      if (Math.abs(dx) > 20) {
-        setSwipeHint(dx < 0 ? "Next channel →" : "← Previous channel");
-      }
       return;
     }
 
@@ -647,7 +673,6 @@ export default function Remote({
   const onTouchEnd = async (e) => {
     const mode = gesture.current;
     gesture.current = null;
-    setSwipeHint("");
 
     if (mode === "swipe") {
       const t = e.changedTouches?.[0];
@@ -699,12 +724,14 @@ export default function Remote({
       const { _busyKey, _skipBusy, ...payload } = extras;
       const snap = await postLiveCommand(expectedKey, command, token, payload);
       applyLiveSnap(snap, expectedKey);
+      return true;
     } catch (e) {
       if (e.status === 401) {
         setError("Live control locked — re-unlock this device, then try again.");
       } else {
         setError(e.message || "Command failed");
       }
+      return false;
     } finally {
       if (!skipBusy) setBusyCmd(null);
     }
@@ -742,9 +769,6 @@ export default function Remote({
   const introHeld = status === "idle" && introPending;
   const logoArmed =
     status === "idle" && Boolean(live?.introConsumed) && !chromeVisible;
-  const index = typeof live?.segmentIndex === "number" ? live.segmentIndex : 0;
-  const count = live?.segmentCount || 0;
-
   let primary = { cmd: "start", text: "Start routine" };
   // Pause/Resume share the same primary slot — fixed min-height prevents reflow.
   if (status === "running") primary = { cmd: "pause", text: "Pause" };
@@ -756,11 +780,8 @@ export default function Remote({
 
   const isBusy = (key) => busyCmd === key;
   const noLive = !live;
-  const cueVolume =
-    typeof live?.cueVolume === "number"
-      ? live.cueVolume
-      : readStoredCueVolume();
-  const cueMuted = live ? Boolean(live.cueMuted) : readStoredCueMuted();
+  const cueVolume = uiCueVolume;
+  const cueMuted = uiCueMuted;
 
   const setCueAudio = (patch, { debounceMs = 0 } = {}) => {
     const nextVol =
@@ -768,19 +789,36 @@ export default function Remote({
     const nextMuted =
       patch.cueMuted != null ? patch.cueMuted : cueMuted;
     rememberCueAudio(nextVol, nextMuted);
-    // Optimistic local update so the slider feels instant
-    setLive((prev) =>
-      prev
-        ? { ...prev, cueVolume: nextVol, cueMuted: nextMuted }
-        : prev
-    );
+    // Local state wins while sliding / until the command lands — polls must not snap back.
+    setUiCueVolume(nextVol);
+    setUiCueMuted(nextMuted);
+    const gen = ++cueAudioGenRef.current;
     // Volume/mute: never set busyCmd — slider must not blink/disable on each tick.
-    const push = () =>
-      send("set_cue_audio", {
+    const push = async () => {
+      const ok = await send("set_cue_audio", {
         cueVolume: nextVol,
         cueMuted: nextMuted,
         _skipBusy: true,
       });
+      if (cueAudioGenRef.current !== gen) return;
+      if (ok) {
+        // Leave gen set — sync effect clears once live echoes these values.
+        return;
+      }
+      // Command failed — snap UI back to last server (or stored) values.
+      cueAudioGenRef.current = 0;
+      const snap = liveRef.current;
+      const revertVol =
+        typeof snap?.cueVolume === "number"
+          ? snap.cueVolume
+          : readStoredCueVolume();
+      const revertMuted = snap
+        ? Boolean(snap.cueMuted)
+        : readStoredCueMuted();
+      setUiCueVolume(revertVol);
+      setUiCueMuted(revertMuted);
+      rememberCueAudio(revertVol, revertMuted);
+    };
     if (debounceMs > 0) {
       if (cueVolTimerRef.current) window.clearTimeout(cueVolTimerRef.current);
       cueVolTimerRef.current = window.setTimeout(push, debounceMs);
@@ -793,44 +831,15 @@ export default function Remote({
     push();
   };
 
+  const endCueDrag = () => {
+    cueDraggingRef.current = false;
+  };
+
   const pullHint =
     refreshing || pullY >= PULL_THRESHOLD_PX
       ? "Release to refresh"
       : pulling
         ? "Pull to refresh"
-        : "";
-
-  // Lean OBS-dock strip: status + segment count only — no exercise / ended copy.
-  const statusLine = (() => {
-    if (inStreamEnded || status === "done") return "";
-    let line = inCountdown
-      ? "Pre-stream countdown"
-      : introHeld
-        ? "Countdown held — waiting for Start"
-        : logoArmed
-          ? "Logo only — waiting for Start"
-          : status === "idle"
-            ? "Armed — waiting for Start"
-            : status === "paused"
-              ? "Paused"
-              : "Live";
-    if (!inCountdown && !introHeld && !logoArmed && count > 0) {
-      line += ` · ${index + 1} / ${count}`;
-    }
-    if (!inCountdown && !introHeld && !logoArmed) {
-      line += chromeVisible ? " · Chrome on" : " · Logo only";
-    }
-    return line;
-  })();
-
-  const introMessage = String(live?.introCountdownMessage || "").trim();
-  // No current-exercise / thanks-for-watching / stream-ended labels on the strip.
-  const nowLabel =
-    inCountdown || introHeld
-      ? introMessage ||
-        (sessionTitle ? `${sessionTitle} begins in` : "Begins in")
-      : logoArmed
-        ? "Ready when you are"
         : "";
 
   const controls = (
@@ -915,11 +924,11 @@ export default function Remote({
         </>
       )}
 
-      <p className="clozzz-remote__section">Timer cue</p>
+      <p className="clozzz-remote__section">Volume</p>
       <div
         className="clozzz-remote__volume"
         role="group"
-        aria-label="Timer cue volume"
+        aria-label="Volume"
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
@@ -930,7 +939,7 @@ export default function Remote({
           className="clozzz-remote__btn clozzz-remote__btn--mute"
           disabled={noLive}
           aria-pressed={cueMuted}
-          aria-label={cueMuted ? "Unmute timer cue" : "Mute timer cue"}
+          aria-label={cueMuted ? "Unmute" : "Mute"}
           title={cueMuted ? "Unmute" : "Mute"}
           onClick={() => setCueAudio({ cueMuted: !cueMuted })}
         >
@@ -947,7 +956,13 @@ export default function Remote({
             step={1}
             value={Math.round(cueVolume * 100)}
             disabled={noLive || cueMuted}
-            aria-label="Cue volume"
+            aria-label="Volume"
+            onPointerDown={() => {
+              cueDraggingRef.current = true;
+            }}
+            onPointerUp={endCueDrag}
+            onPointerCancel={endCueDrag}
+            onBlur={endCueDrag}
             onChange={(e) =>
               setCueAudio(
                 { cueVolume: Number(e.target.value) / 100 },
@@ -1038,37 +1053,15 @@ export default function Remote({
     return (
       <>
         <header className="clozzz-remote__head">
-          <p className="clozzz-remote__eyebrow">Clozzz remote</p>
           <h1 className="clozzz-remote__title">{title}</h1>
           {canSwipe ? (
             <p
               className="clozzz-remote__channel clozzz-remote__channel--mobile"
               aria-live={isActive ? "polite" : undefined}
             >
-              {isActive
-                ? swipeHint ||
-                  `Channel ${idx + 1} of ${channelIds.length} · swipe title to switch`
-                : `Channel ${idx + 1} of ${channelIds.length}`}
-            </p>
-          ) : multiChannel ? (
-            <p className="clozzz-remote__channel clozzz-remote__channel--mobile">
-              {`Channel ${idx + 1} of ${channelIds.length}`}
+              {`${idx + 1} of ${channelIds.length} · swipe to switch`}
             </p>
           ) : null}
-          {isActive ? (
-            <>
-              {statusLine ? (
-                <p className="clozzz-remote__meta">{statusLine}</p>
-              ) : null}
-              {nowLabel ? (
-                <p className="clozzz-remote__label" aria-live="polite">
-                  {nowLabel}
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="clozzz-remote__meta">Swipe to switch</p>
-          )}
         </header>
         {isActive && error ? (
           <p className="clozzz-remote__error" role="alert">

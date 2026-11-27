@@ -531,25 +531,33 @@ function StreamEndedStage({ elapsedSec, title, message }) {
 }
 
 // Mixkit “Simple countdown” (922, Mixkit License). Cache-bust for OBS CEF.
-const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922";
+const SEGMENT_END_CUE_SRC = "/clozzz/segment-end-cue.wav?v=mixkit922c";
 /**
  * Amplitude peaks in the WAV (stereo 44.1kHz RMS): ~0.01, 1.01, 2.01, 3.01s.
- * Three countdown tones, then a fourth for exercise switch. Cue window =
- * time from first peak to fourth; seek = (CUE_SEC - remainingSec).
- * Arm-once + drift resync only — never every-frame seek (silences OBS/CEF).
+ * Tones 1–3 land in the last ~3s of the exercise; tone 4 (switch) lands in
+ * the first ~1s of the NEXT exercise. Arm once at rem≈3 (seek≈0), then let
+ * the file play through the segment boundary — never pause/seek-to-0 until
+ * the 4th tone has finished (carry). Drift resync only while still in-window.
  */
 const SEGMENT_END_CUE_SEC = 3;
+/** Cover 4th peak (~3.01s) + short tail before allowing the next arm. */
+const CUE_CARRY_UNTIL_SEC = 3.45;
 /** Only re-seek if display vs audio drift exceeds this (seconds). */
 const CUE_DRIFT_RESYNC_SEC = 0.28;
+/** If rem is still this close to CUE_SEC, seek 0 so the first tone isn't clipped. */
+const CUE_CLEAN_ARM_EPS_SEC = 0.2;
 
 /**
  * Hard-sync segment-end cue to the painted remainingSec, without seek-thrash.
  * Backend/remote lag must not delay the start; display clock owns the cue.
+ * Carry lets the 4th tone finish after rem hits 0 / the next segment starts.
  */
 function useSegmentEndCue(live, remainingSec) {
   const audioRef = useRef(null);
   /** Segment key we already armed play() for (avoid restart loops). */
   const armedKeyRef = useRef(null);
+  /** True after arm until the WAV passes the 4th tone (survives segment switch). */
+  const carryingRef = useRef(false);
   const unlockTriedRef = useRef(false);
 
   useEffect(() => {
@@ -627,33 +635,83 @@ function useSegmentEndCue(live, remainingSec) {
       }
     };
 
+    const stopAndReset = () => {
+      carryingRef.current = false;
+      armedKeyRef.current = null;
+      if (!audio.paused) audio.pause();
+      seekTo(0);
+    };
+
+    const cueFinished = () =>
+      audio.ended || (audio.currentTime || 0) >= CUE_CARRY_UNTIL_SEC;
+
+    // Mute always wins.
+    if (muted) {
+      stopAndReset();
+      return;
+    }
+
+    // Carry across segment boundary (and last-segment → done/ended): keep playing
+    // through the 4th tone. Never seek against the next rem / Infinity.
+    if (carryingRef.current) {
+      if (cueFinished()) {
+        stopAndReset();
+        return;
+      }
+      // Fresh idle/countdown (restart / new intro) — drop the cue.
+      if (status === "idle" || status === "countdown") {
+        stopAndReset();
+        return;
+      }
+      if (status === "paused") {
+        if (!audio.paused) audio.pause();
+        return;
+      }
+      // running | done | stream_ended — finish the 4th tone.
+      if (audio.paused) {
+        const play = audio.play();
+        if (play && typeof play.catch === "function") play.catch(() => {});
+      }
+      return;
+    }
+
+    // Not carrying: only running/paused may arm or freeze.
+    if (status !== "running" && status !== "paused") {
+      stopAndReset();
+      return;
+    }
+
     // Paused inside the cue window: freeze on the frozen display clock.
     if (status === "paused" && valid && rem <= SEGMENT_END_CUE_SEC && rem > 0) {
       if (!audio.paused) audio.pause();
-      seekTo(displayTarget);
+      if (armedKeyRef.current === segKey) seekTo(displayTarget);
       return;
     }
 
     const inWindow =
       status === "running" &&
-      !muted &&
       valid &&
       rem <= SEGMENT_END_CUE_SEC &&
       rem > 0;
 
     if (!inWindow) {
+      // Outside window and not carrying — stay quiet (do not thrash seek every frame).
       if (!audio.paused) audio.pause();
-      if (status !== "running" || !valid || rem > SEGMENT_END_CUE_SEC) {
+      if (armedKeyRef.current && (status !== "running" || !valid || rem > SEGMENT_END_CUE_SEC)) {
         armedKeyRef.current = null;
         seekTo(0);
       }
       return;
     }
 
-    // Entering / re-entering the window for this segment: seek once, then play.
+    // Entering the window for this segment: seek once, then play through carry.
     if (armedKeyRef.current !== segKey) {
       armedKeyRef.current = segKey;
-      seekTo(displayTarget);
+      carryingRef.current = true;
+      // Near the top of the window → start at 0 so tone 1 isn't truncated.
+      const armAt =
+        rem >= SEGMENT_END_CUE_SEC - CUE_CLEAN_ARM_EPS_SEC ? 0 : displayTarget;
+      seekTo(armAt);
       audio.muted = false;
       if (typeof live?.cueVolume === "number" && live.cueVolume > 0) {
         audio.volume = live.cueVolume;
@@ -663,9 +721,10 @@ function useSegmentEndCue(live, remainingSec) {
       const play = audio.play();
       if (play && typeof play.catch === "function") {
         play.catch(() => {
-          // One retry after a microtask (CEF sometimes needs a second kick).
+          // One retry (CEF sometimes needs a second kick) — same armAt, no rem recompute thrash.
           window.setTimeout(() => {
-            seekTo(Math.max(0, SEGMENT_END_CUE_SEC - Number(remainingSec) || 0));
+            if (armedKeyRef.current !== segKey || !carryingRef.current) return;
+            seekTo(armAt);
             audio.play().catch(() => {});
           }, 50);
         });
@@ -673,7 +732,8 @@ function useSegmentEndCue(live, remainingSec) {
       return;
     }
 
-    // Already armed: let the file play. Only correct large drift vs display.
+    // Already armed in-window: let the file play. Drift-resync only vs display
+    // while rem is still in the cue window (never after boundary / carry).
     if (!audio.paused) {
       const drift = Math.abs((audio.currentTime || 0) - displayTarget);
       if (drift > CUE_DRIFT_RESYNC_SEC) {
@@ -682,8 +742,7 @@ function useSegmentEndCue(live, remainingSec) {
       return;
     }
 
-    // Armed but paused (autoplay blocked / tab freeze): kick play without
-    // seeking every frame.
+    // Armed but paused (autoplay blocked / tab freeze): kick play without seeking.
     const play = audio.play();
     if (play && typeof play.catch === "function") play.catch(() => {});
   }, [
