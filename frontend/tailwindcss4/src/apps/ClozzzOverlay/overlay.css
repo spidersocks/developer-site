@@ -340,7 +340,8 @@ html.clozzz-stage-preview #root {
 
 .clozzz-move-row {
   display: flex;
-  align-items: center;
+  /* flex-start: title line sets row height; large ring overflows without pushing Next. */
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.85rem 1.15rem;
   min-width: 0;
@@ -404,8 +405,8 @@ html.clozzz-stage-preview #root {
   /* Soft light track — must read #CDD3DE on navy, not dark stroke. */
   --clozzz-ring-track: rgba(205, 211, 222, 0.78);
   /*
-   * Clear scale-up: digits ≈ title glyph height (1em of move-size),
-   * ring ~1.35× prior box so “0:MM” sits inside with pad.
+   * Large visual ring/digits, but layout height stays ≤ title line
+   * so title→Next stays snug (~8–12px). Ring paints absolute.
    */
   --clozzz-timer-box: 2.72em;
   --clozzz-timer-digit: 0.92em;
@@ -413,8 +414,10 @@ html.clozzz-stage-preview #root {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
+  align-self: center;
+  /* Horizontal reserve for the ring; vertical footprint = digits only. */
   width: var(--clozzz-timer-box);
-  height: var(--clozzz-timer-box);
+  height: auto;
   margin: 0;
   padding: 0;
   font-size: var(--clozzz-timer-size);
@@ -443,14 +446,15 @@ html.clozzz-stage-preview #root {
   transform: translateY(0.05em);
 }
 
-/* Ring fills the timer box — scales 1:1 with the digit unit. */
+/* Absolute large ring — does not inflate move-row / Next spacing. */
 .clozzz-timer-ring {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 50%;
+  left: 50%;
+  width: var(--clozzz-timer-box);
+  height: var(--clozzz-timer-box);
   margin: 0;
-  transform: rotate(-90deg);
+  transform: translate(-50%, -50%) rotate(-90deg);
   pointer-events: none;
   overflow: visible;
   z-index: 0;
@@ -504,7 +508,7 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-up-next {
-  /* Snug under title row — same as pre-ring card metrics. */
+  /* Snug under title row — pre-ring ~8–12px; do not grow for the ring. */
   margin: 0.15rem 0 0;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: var(--clozzz-next-size);
