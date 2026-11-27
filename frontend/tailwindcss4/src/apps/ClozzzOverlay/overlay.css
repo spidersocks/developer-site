@@ -404,8 +404,8 @@ html.clozzz-stage-preview #root {
   /* Soft light track — must read #CDD3DE on navy, not dark stroke. */
   --clozzz-ring-track: rgba(205, 211, 222, 0.78);
   /* Shared scale: box = ring; digits sized relative to the same em. */
-  --clozzz-timer-box: 1.72em;
-  --clozzz-timer-digit: 0.55em;
+  --clozzz-timer-box: 1.88em;
+  --clozzz-timer-digit: 0.58em;
   position: relative;
   display: grid;
   place-items: center;
@@ -437,7 +437,7 @@ html.clozzz-stage-preview #root {
   width: max-content;
   min-width: 4ch;
   /* Optical center inside the ring (tabular clocks read high otherwise). */
-  transform: translateY(0.045em);
+  transform: translateY(0.06em);
 }
 
 /* Ring fills the timer box — scales 1:1 with the digit unit. */
@@ -630,8 +630,8 @@ html.clozzz-stage-preview #root {
   }
 
   .clozzz-card-timer {
-    --clozzz-timer-box: 1.65em;
-    --clozzz-timer-digit: 0.54em;
+    --clozzz-timer-box: 1.78em;
+    --clozzz-timer-digit: 0.56em;
   }
 }
 
