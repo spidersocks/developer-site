@@ -273,6 +273,127 @@ function WaitingChannel() {
 }
 
 /**
+ * Client-side advance past a finished exercise/break so the painted clock
+ * never flashes 0:00 while waiting on the next live poll (~400ms).
+ * Mirrors unified_backend live._advance_if_needed / break insert rules.
+ */
+function projectLiveClock(live, serverNow) {
+  const segments = Array.isArray(live.segments) ? live.segments : [];
+  const breaksOn = Boolean(live.breaksEnabled);
+  let breakMs = Number(live.breakSec ?? live.breakDurationSec ?? 10) * 1000;
+  if (!Number.isFinite(breakMs) || breakMs < 1000) breakMs = 10_000;
+
+  let idx = Number(live.segmentIndex) || 0;
+  let phase = "exercise"; // exercise | break
+  let started =
+    live.status === "break" && live.breakStartedAtMs != null
+      ? Number(live.breakStartedAtMs)
+      : Number(live.segmentStartedAtMs);
+
+  if (live.status === "break") {
+    phase = "break";
+    if (live.breakStartedAtMs == null) {
+      const durationMs =
+        Number(live.breakDurationSec || live.breakSec || 10) * 1000;
+      const rem =
+        typeof live.breakPausedRemainingMs === "number"
+          ? live.breakPausedRemainingMs
+          : durationMs;
+      return {
+        remainingMs: Math.max(0, rem),
+        durationMs,
+        segmentIndex: idx,
+        onBreak: true,
+        paused: true,
+        done: false,
+        armed: false,
+      };
+    }
+  }
+
+  // Safety bound — multi-segment overflow catch-up.
+  for (let step = 0; step < segments.length * 2 + 4; step += 1) {
+    if (idx < 0 || idx >= segments.length) {
+      return {
+        remainingMs: 0,
+        durationMs: 0,
+        segmentIndex: Math.max(0, segments.length - 1),
+        onBreak: false,
+        done: true,
+        armed: false,
+      };
+    }
+
+    const durationMs =
+      phase === "break"
+        ? breakMs
+        : Math.max(1000, Number(segments[idx]?.durationSec || 0) * 1000);
+    const endAt = started + durationMs;
+    if (serverNow < endAt) {
+      return {
+        remainingMs: endAt - serverNow,
+        durationMs,
+        segmentIndex: idx,
+        onBreak: phase === "break",
+        paused: false,
+        done: false,
+        armed: false,
+        currentLabel: segments[idx]?.label || "",
+      };
+    }
+
+    const overflow = serverNow - endAt;
+
+    if (phase === "break") {
+      // Break finished → start the exercise already pointed at by idx.
+      phase = "exercise";
+      started = endAt;
+      continue;
+    }
+
+    // Exercise finished.
+    if (idx + 1 >= segments.length) {
+      return {
+        remainingMs: 0,
+        durationMs,
+        segmentIndex: idx,
+        onBreak: false,
+        done: true,
+        armed: false,
+      };
+    }
+
+    const nextIdx = idx + 1;
+    if (breaksOn) {
+      idx = nextIdx;
+      if (overflow < breakMs) {
+        phase = "break";
+        started = endAt;
+      } else {
+        // Entire break already elapsed — open the next exercise with leftover.
+        phase = "exercise";
+        started = endAt + breakMs;
+      }
+      continue;
+    }
+
+    idx = nextIdx;
+    phase = "exercise";
+    started = endAt;
+    continue;
+  }
+
+  return {
+    remainingMs: 0,
+    durationMs: 0,
+    segmentIndex: idx,
+    onBreak: false,
+    done: true,
+    armed: false,
+  };
+}
+
+/**
  * Derive remaining ms from a server LiveRun snapshot + local clock.
  * Skew is fixed at poll receive time (`_receivedAtMs`); wall clock then
  * advances smoothly via rAF without waiting on the next poll.
@@ -362,31 +483,12 @@ export function remainingFromLive(
     };
   }
 
-  if (status === "break") {
-    const durationMs = (live.breakDurationSec || live.breakSec || 10) * 1000;
-    if (live.breakStartedAtMs != null) {
-      const elapsed = serverNow - live.breakStartedAtMs;
-      return {
-        remainingMs: Math.max(0, durationMs - elapsed),
-        done: false,
-        armed: false,
-        onBreak: true,
-        paused: false,
-        durationMs,
-      };
-    }
-    const rem =
-      typeof live.breakPausedRemainingMs === "number"
-        ? live.breakPausedRemainingMs
-        : durationMs;
-    return {
-      remainingMs: Math.max(0, rem),
-      done: false,
-      armed: false,
-      onBreak: true,
-      paused: true,
-      durationMs,
-    };
+  // Running / break: project past expiry so we never paint 0:00 mid-routine.
+  if (
+    (status === "running" && live.segmentStartedAtMs != null) ||
+    status === "break"
+  ) {
+    return projectLiveClock(live, serverNow);
   }
 
   const durationMs = (live.segmentDurationSec || 0) * 1000;
@@ -424,15 +526,7 @@ export function remainingFromLive(
       done: false,
       armed: status === "idle",
       paused: status === "paused",
-    };
-  }
-  if (status === "running" && live.segmentStartedAtMs != null) {
-    const elapsed = serverNow - live.segmentStartedAtMs;
-    return {
-      remainingMs: Math.max(0, durationMs - elapsed),
-      done: false,
-      armed: false,
-      paused: false,
+      segmentIndex: live.segmentIndex,
     };
   }
   return { remainingMs: durationMs, done: false, armed: true };
@@ -853,17 +947,21 @@ function RunningOverlay({ session, sessionKey }) {
   }, []);
 
   const derived = remainingFromLive(live, now, session);
-  const index = live?.segmentIndex ?? 0;
   const segments = live?.segments?.length
     ? live.segments
     : session.segments;
   const done = derived.done || live?.status === "done";
   const onBreak = Boolean(derived.onBreak);
+  const index =
+    typeof derived.segmentIndex === "number"
+      ? derived.segmentIndex
+      : live?.segmentIndex ?? 0;
   const current = segments[index] || session.segments[0];
-  const next = done ? null : segments[index + 1] ?? null;
+  const next = done || onBreak ? null : segments[index + 1] ?? null;
   const durationMs = onBreak
     ? derived.durationMs || (live?.breakDurationSec || 10) * 1000
-    : (current?.durationSec || live?.segmentDurationSec || 0) * 1000;
+    : derived.durationMs ||
+      (current?.durationSec || live?.segmentDurationSec || 0) * 1000;
   const remainingFrac =
     !done && durationMs > 0
       ? Math.min(1, Math.max(0, derived.remainingMs / durationMs))
@@ -908,9 +1006,9 @@ function RunningOverlay({ session, sessionKey }) {
 
   const moveLabel = onBreak
     ? "Break"
-    : current?.label || live?.currentLabel || "…";
+    : derived.currentLabel || current?.label || live?.currentLabel || "…";
   const nextCue = onBreak
-    ? current?.label || live?.currentLabel || "…"
+    ? derived.currentLabel || current?.label || live?.currentLabel || "…"
     : next?.label || "Rest";
   const timerText = done ? "0:00" : formatClock(remainingSec);
 
