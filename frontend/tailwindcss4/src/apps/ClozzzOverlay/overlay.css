@@ -303,14 +303,15 @@ html.clozzz-stage-preview #root {
 .clozzz-current-panel {
   /* ~54–58 / 62–67 / 33–36 px at 1920×1080 */
   --clozzz-move-size: clamp(1.85rem, 2.9vw, 3.5rem);
-  --clozzz-timer-size: clamp(2.05rem, 3.35vw, 4rem);
+  /* Timer numerals match title size so the ring never tallens the move row. */
+  --clozzz-timer-size: var(--clozzz-move-size);
   --clozzz-next-size: clamp(1.05rem, 1.8vw, 2.15rem);
   --clozzz-count-size: clamp(0.82rem, 1.15vw, 1.35rem);
   --clozzz-support: #cdd3de;
   --clozzz-next: #e8edf4;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
   width: 100%;
   padding: 1rem 1.2rem 1.1rem;
   border-radius: 0.85rem;
@@ -400,17 +401,19 @@ html.clozzz-stage-preview #root {
 .clozzz-card-timer {
   --clozzz-timer-p: 0;
   --clozzz-ring-fill: var(--clozzz-gold);
-  --clozzz-ring-track: rgba(243, 234, 215, 0.28);
+  /* Light cool track — readable against navy glass + gold fill. */
+  --clozzz-ring-track: rgba(205, 211, 222, 0.55);
   position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  /* Digits-only footprint — ring overlays via absolute inset, no card growth. */
-  width: auto;
-  height: auto;
-  min-width: 4.6ch;
+  /* Pre-ring tabular slot — layout height = title row, ring paints outside. */
+  width: 5ch;
+  min-width: 5ch;
   margin: 0;
-  padding: 0.12em 0 0;
+  padding: 0;
+  font-size: var(--clozzz-timer-size);
+  line-height: 1.15;
   color: #f3ead7;
   -webkit-font-smoothing: antialiased;
   transition: color 0.3s ease;
@@ -421,25 +424,26 @@ html.clozzz-stage-preview #root {
   position: relative;
   z-index: 1;
   font-family: var(--clozzz-font-display);
-  font-size: var(--clozzz-timer-size);
+  font-size: 1em;
   font-weight: 600;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
-  line-height: 1;
+  line-height: 1.15;
   text-align: center;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
-  min-width: 4.2ch;
+  width: 100%;
 }
 
-/* Thin premium ring — overlays digits; 12 o'clock origin, elapsed gold fill. */
+/* Modest square ring — diameter ≈ numeral height so it stays in the title row. */
 .clozzz-timer-ring {
   position: absolute;
-  /* Tight wrap around digits; negative inset does not affect layout metrics. */
-  inset: -0.38em;
-  width: auto;
-  height: auto;
-  transform: rotate(-90deg);
+  top: 50%;
+  left: 50%;
+  width: 1.22em;
+  height: 1.22em;
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(-90deg);
   pointer-events: none;
   overflow: visible;
   z-index: 0;
@@ -448,11 +452,11 @@ html.clozzz-stage-preview #root {
 .clozzz-timer-ring__track,
 .clozzz-timer-ring__sweep {
   fill: none;
-  stroke-width: 2.15;
+  stroke-width: 1.85;
 }
 
 .clozzz-timer-ring__track {
-  stroke: var(--clozzz-ring-track, rgba(243, 234, 215, 0.28));
+  stroke: var(--clozzz-ring-track, rgba(205, 211, 222, 0.55));
 }
 
 .clozzz-timer-ring__sweep {
@@ -493,7 +497,8 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-up-next {
-  margin: 0.2rem 0 0;
+  /* Snug under title row — same as pre-ring card metrics. */
+  margin: 0.15rem 0 0;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: var(--clozzz-next-size);
   font-weight: 600;
@@ -614,18 +619,20 @@ html.clozzz-stage-preview #root {
 
   .clozzz-current-panel {
     --clozzz-move-size: clamp(1.35rem, 5.6vw, 1.85rem);
-    --clozzz-timer-size: clamp(1.5rem, 6.2vw, 2.05rem);
+    --clozzz-timer-size: var(--clozzz-move-size);
     --clozzz-next-size: clamp(0.95rem, 3.8vw, 1.2rem);
     --clozzz-count-size: clamp(0.78rem, 3vw, 0.95rem);
     padding: 0.8rem 0.95rem 0.9rem;
   }
 
   .clozzz-card-timer {
+    width: 4.4ch;
     min-width: 4.4ch;
   }
 
   .clozzz-timer-ring {
-    inset: -0.34em;
+    width: 1.2em;
+    height: 1.2em;
   }
 }
 
