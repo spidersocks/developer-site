@@ -61,7 +61,7 @@ export default async function handler(request) {
 
   let submitted = "";
   let remember = false;
-  let nextPath = "/clozzz-remote/mode";
+  let nextPath = "/clozzz-remote";
 
   const contentType = request.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {

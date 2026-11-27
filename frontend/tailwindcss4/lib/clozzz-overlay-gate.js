@@ -67,26 +67,23 @@ export function safeNextPath(raw, fallback = "/clozzz-remote") {
 }
 
 /**
- * After unlock, send new devices to the remote-first mode chooser.
- * Deep links that already imply a remote session or routines page are unchanged.
+ * After unlock, land on the single remote surface (restores last channel,
+ * else mode chooser). Deep links `/clozzz-remote/<id>` stay so the client can
+ * fold them into bare `/clozzz-remote` with that channel set. Routines unchanged.
  */
-export function postUnlockPath(raw, fallback = "/clozzz-remote/mode") {
+export function postUnlockPath(raw, fallback = "/clozzz-remote") {
   const next = safeNextPath(raw, fallback);
   const pathOnly = next.split("?")[0].replace(/\/+$/, "") || "/clozzz-remote";
-  if (
-    pathOnly === "/clozzz-remote" ||
-    pathOnly === "/clozzz-overlay" ||
-    pathOnly === "/clozzz-overlay/mode"
-  ) {
+  if (pathOnly === "/clozzz-overlay" || pathOnly === "/clozzz-overlay/mode") {
     const qs = next.includes("?") ? next.slice(next.indexOf("?")) : "";
-    return `/clozzz-remote/mode${qs}`;
+    return `/clozzz-remote${qs}`;
   }
   return next;
 }
 
 /** Minimal gate page HTML (inline styles; no client password). */
 export function gatePageHtml({ nextPath, error = "", action = AUTH_PATH }) {
-  const next = safeNextPath(nextPath, "/clozzz-remote/mode");
+  const next = safeNextPath(nextPath, "/clozzz-remote");
   const errBlock = error
     ? `<p class="err" role="alert">${escapeHtml(error)}</p>`
     : "";

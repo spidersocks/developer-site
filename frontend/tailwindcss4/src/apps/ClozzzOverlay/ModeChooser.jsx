@@ -1,8 +1,11 @@
 import React from "react";
 import { rememberLastRoutineId } from "./Remote.jsx";
 
+const REMOTE_HOME = "/clozzz-remote";
+
 /**
- * Remote-only channel picker (post-unlock fallback).
+ * Remote-only channel picker (post-unlock fallback when no last channel).
+ * Opens the single `/clozzz-remote` surface with that channel remembered.
  * OBS copy lives on the routines library footer — not here.
  */
 export default function ModeChooser({ catalog }) {
@@ -25,7 +28,7 @@ export default function ModeChooser({ catalog }) {
               <span className="clozzz-chooser__actions">
                 <a
                   className="clozzz-chooser__link clozzz-chooser__link--remote"
-                  href={`/clozzz-remote/${encodeURIComponent(r.id)}`}
+                  href={REMOTE_HOME}
                   onClick={() => rememberLastRoutineId(r.id)}
                 >
                   Open

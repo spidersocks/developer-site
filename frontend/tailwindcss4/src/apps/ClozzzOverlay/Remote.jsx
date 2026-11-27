@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ensureLiveToken,
   fetchLive,
@@ -10,15 +10,25 @@ import {
 const POLL_MS = 800;
 const PULL_THRESHOLD_PX = 72;
 const LAST_ROUTINE_KEY = "clozzz_last_routine_id";
-/** Premium carousel settle — slow enough to read as weight, not a hard cut. */
+const REMOTE_HOME = "/clozzz-remote";
+
+/**
+ * Settle curve from Motion’s iOS App Store layout demo
+ * (https://motion.dev/examples/js-app-store-layout) — weighted, not snappy.
+ */
+const EASE_APPLE = "cubic-bezier(0.39, 0.14, 0.26, 1)";
 const SWIPE_SETTLE_MS = 520;
-const SWIPE_ENTER_MS = 560;
-/** Distance threshold as fraction of stage width (or absolute floor). */
+
+/** Embla scale-on-focus tween factor (distance → t). */
+const TWEEN_FACTOR = 0.72;
+const SCALE_MIN = 0.82;
+const SCALE_RANGE = 0.18;
+const OPACITY_MIN = 0.45;
+const OPACITY_RANGE = 0.55;
+
 const SWIPE_DISTANCE_RATIO = 0.22;
 const SWIPE_DISTANCE_MIN_PX = 64;
-/** Flick speed (px/ms) that commits even on a short drag. */
 const FLICK_SPEED = 0.45;
-const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export function readLastRoutineId() {
   try {
@@ -37,25 +47,42 @@ export function rememberLastRoutineId(id) {
   }
 }
 
-function navigateRemote(routineId, { replace = false } = {}) {
-  const path = `/clozzz-remote/${encodeURIComponent(routineId)}`;
-  if (replace) {
-    window.history.replaceState({}, "", path);
-  } else {
-    window.history.pushState({}, "", path);
-  }
-  window.dispatchEvent(new PopStateEvent("popstate"));
+/** Keep the product URL on the single remote surface. */
+export function canonicalizeRemoteUrl() {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (path === REMOTE_HOME) return;
+  const qs = window.location.search || "";
+  window.history.replaceState({}, "", `${REMOTE_HOME}${qs}`);
+}
+
+function clamp(n, a, b) {
+  return Math.min(Math.max(n, a), b);
 }
 
 /**
- * Control remote — mobile loop swipe + desktop sidebar.
- * Finger left → next channel (content exits left, next enters from right).
+ * Embla center-scale tween:
+ * t = clamp(1 - abs(offset) * factor, 0, 1)
+ * scale = 0.82 + 0.18 * t ; opacity = 0.45 + 0.55 * t
+ */
+function tweenFromOffset(offset) {
+  const t = clamp(1 - Math.abs(offset) * TWEEN_FACTOR, 0, 1);
+  return {
+    t,
+    scale: SCALE_MIN + SCALE_RANGE * t,
+    opacity: OPACITY_MIN + OPACITY_RANGE * t,
+  };
+}
+
+/**
+ * Control remote — mobile Embla/Swiper-style card carousel + desktop sidebar.
+ * Finger left → next channel. Product URL stays `/clozzz-remote`.
  */
 export default function Remote({
   sessionKey,
   sessionTitle,
   introCountdownEnabled: catalogIntroEnabled = false,
   routines = [],
+  onChannelChange,
 }) {
   const [live, setLive] = useState(null);
   const [error, setError] = useState("");
@@ -64,20 +91,40 @@ export default function Remote({
   const [pulling, setPulling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [swipeHint, setSwipeHint] = useState("");
-  const [slideX, setSlideX] = useState(0);
-  const [slideOpacity, setSlideOpacity] = useState(1);
-  const [slideTransition, setSlideTransition] = useState(false);
+  /** Finger / settle progress in “slides” (0 = current, +1 = next committed). */
+  const [progress, setProgress] = useState(0);
+  const [settling, setSettling] = useState(false);
   const touchStart = useRef({ x: 0, y: 0, t: 0 });
   const samples = useRef([]);
   const gesture = useRef(null); // null | "pull" | "swipe" | "ignore"
   const pullingRef = useRef(false);
   const pendingDelta = useRef(null);
-  const enterAfterKey = useRef(null);
-  const stageRef = useRef(null);
+  const viewportRef = useRef(null);
+  const settleTimer = useRef(null);
 
-  const channelIds = routines.map((r) => r.id);
+  const channelIds = useMemo(() => routines.map((r) => r.id), [routines]);
   const channelIndex = channelIds.indexOf(sessionKey);
   const canSwipe = channelIds.length > 1;
+
+  const neighborId = useCallback(
+    (delta) => {
+      if (!canSwipe || channelIndex < 0) return null;
+      return channelIds[
+        (channelIndex + delta + channelIds.length) % channelIds.length
+      ];
+    },
+    [canSwipe, channelIndex, channelIds]
+  );
+
+  const routineById = useCallback(
+    (id) => routines.find((r) => r.id === id) || null,
+    [routines]
+  );
+
+  const pitchPx = () => {
+    const w = viewportRef.current?.offsetWidth || window.innerWidth || 360;
+    return Math.max(240, w * 0.88);
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -93,6 +140,7 @@ export default function Remote({
 
   useEffect(() => {
     rememberLastRoutineId(sessionKey);
+    canonicalizeRemoteUrl();
   }, [sessionKey]);
 
   useEffect(() => {
@@ -125,28 +173,6 @@ export default function Remote({
     };
   }, [sessionKey]);
 
-  // Enter from the opposite edge after a committed swipe (looping carousel).
-  useEffect(() => {
-    if (!enterAfterKey.current || enterAfterKey.current !== sessionKey) return;
-    enterAfterKey.current = null;
-    const from = pendingDelta.current;
-    pendingDelta.current = null;
-    const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
-    // next (from > 0): enter from right; prev: enter from left
-    const startX = from > 0 ? width * 0.38 : -width * 0.38;
-    setSlideTransition(false);
-    setSlideX(startX);
-    setSlideOpacity(0.5);
-    let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => {
-        setSlideTransition(true);
-        setSlideX(0);
-        setSlideOpacity(1);
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [sessionKey]);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("startCountdown");
@@ -176,52 +202,64 @@ export default function Remote({
     };
   }, [sessionKey]);
 
+  useEffect(
+    () => () => {
+      if (settleTimer.current) window.clearTimeout(settleTimer.current);
+    },
+    []
+  );
+
+  const applyChannel = useCallback(
+    (id) => {
+      if (!id || id === sessionKey) return;
+      rememberLastRoutineId(id);
+      canonicalizeRemoteUrl();
+      if (typeof onChannelChange === "function") {
+        onChannelChange(id);
+      }
+    },
+    [sessionKey, onChannelChange]
+  );
+
   const switchChannel = useCallback(
     (delta) => {
-      if (!canSwipe || channelIndex < 0) return;
-      const next =
-        channelIds[(channelIndex + delta + channelIds.length) % channelIds.length];
-      if (!next || next === sessionKey) return;
-      rememberLastRoutineId(next);
-      navigateRemote(next);
+      const next = neighborId(delta);
+      if (next) applyChannel(next);
     },
-    [canSwipe, channelIndex, channelIds, sessionKey]
+    [neighborId, applyChannel]
   );
 
   const selectChannel = useCallback(
     (id) => {
-      if (!id || id === sessionKey) return;
-      rememberLastRoutineId(id);
-      navigateRemote(id);
+      applyChannel(id);
     },
-    [sessionKey]
+    [applyChannel]
   );
 
   const commitSwipe = useCallback(
     (delta) => {
       if (!canSwipe || channelIndex < 0 || pendingDelta.current != null) return;
-      const next =
-        channelIds[(channelIndex + delta + channelIds.length) % channelIds.length];
-      if (!next || next === sessionKey) return;
-      const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
+      const next = neighborId(delta);
+      if (!next) return;
       pendingDelta.current = delta;
-      enterAfterKey.current = next;
-      setSlideTransition(true);
-      // Finger left (next, delta>0): content exits left. Finger right: exits right.
-      setSlideX(delta > 0 ? -width : width);
-      setSlideOpacity(0);
-      window.setTimeout(() => {
-        rememberLastRoutineId(next);
-        navigateRemote(next);
+      setSettling(true);
+      setProgress(delta > 0 ? 1 : -1);
+      settleTimer.current = window.setTimeout(() => {
+        pendingDelta.current = null;
+        setSettling(false);
+        setProgress(0);
+        applyChannel(next);
       }, SWIPE_SETTLE_MS);
     },
-    [canSwipe, channelIndex, channelIds, sessionKey]
+    [canSwipe, channelIndex, neighborId, applyChannel]
   );
 
   const snapBack = useCallback(() => {
-    setSlideTransition(true);
-    setSlideX(0);
-    setSlideOpacity(1);
+    setSettling(true);
+    setProgress(0);
+    settleTimer.current = window.setTimeout(() => {
+      setSettling(false);
+    }, SWIPE_SETTLE_MS);
   }, []);
 
   const onTouchStart = (e) => {
@@ -234,7 +272,7 @@ export default function Remote({
     gesture.current = null;
     pullingRef.current = false;
     setSwipeHint("");
-    setSlideTransition(false);
+    setSettling(false);
   };
 
   const onTouchMove = (e) => {
@@ -265,11 +303,10 @@ export default function Remote({
 
     if (gesture.current === "swipe") {
       if (e.cancelable) e.preventDefault();
-      // 1:1 with finger — premium carousels follow the hand, no lag/smoothing.
-      setSlideX(dx);
-      const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
-      const fade = Math.max(0.55, 1 - Math.abs(dx) / (width * 1.35));
-      setSlideOpacity(fade);
+      // 1:1 with finger — Embla/premium carousels follow the hand.
+      const pitch = pitchPx();
+      // Finger left (dx < 0) → progress toward next (+1).
+      setProgress(clamp((-dx) / pitch, -1.15, 1.15));
       if (Math.abs(dx) > 20) {
         setSwipeHint(dx < 0 ? "Next channel →" : "← Previous channel");
       }
@@ -295,9 +332,8 @@ export default function Remote({
     const first = recent[0];
     const last = recent[recent.length - 1];
     const dt = Math.max(1, last.t - first.t);
-    // If the finger rested before lift, treat as no throw.
     if (now - last.t > 60) return 0;
-    return (last.x - first.x) / dt; // px/ms
+    return (last.x - first.x) / dt;
   };
 
   const onTouchEnd = async (e) => {
@@ -312,9 +348,9 @@ export default function Remote({
         return;
       }
       const dx = t.clientX - touchStart.current.x;
-      const width = stageRef.current?.offsetWidth || window.innerWidth || 360;
+      const width = viewportRef.current?.offsetWidth || window.innerWidth || 360;
       const threshold = Math.max(SWIPE_DISTANCE_MIN_PX, width * SWIPE_DISTANCE_RATIO);
-      const velocity = releaseVelocity(); // positive = finger right
+      const velocity = releaseVelocity();
       const flickNext = velocity < -FLICK_SPEED;
       const flickPrev = velocity > FLICK_SPEED;
       const distanceNext = dx <= -threshold;
@@ -452,18 +488,6 @@ export default function Remote({
             ? "Done"
             : label;
 
-  const stageStyle = {
-    transform: `translate3d(${slideX}px, 0, 0)`,
-    opacity: slideOpacity,
-    transition: slideTransition
-      ? `transform ${
-          slideX === 0 ? SWIPE_ENTER_MS : SWIPE_SETTLE_MS
-        }ms ${EASE_OUT}, opacity ${
-          slideX === 0 ? SWIPE_ENTER_MS : SWIPE_SETTLE_MS
-        }ms ${EASE_OUT}`
-      : "none",
-  };
-
   const controls = (
     <div className="clozzz-remote__pad">
       {inCountdown ? (
@@ -583,13 +607,81 @@ export default function Remote({
     </div>
   );
 
+  const prevId = neighborId(-1);
+  const nextId = neighborId(1);
+  const slots = canSwipe
+    ? [
+        { id: prevId, slot: -1 },
+        { id: sessionKey, slot: 0 },
+        { id: nextId, slot: 1 },
+      ]
+    : [{ id: sessionKey, slot: 0 }];
+
+  const cardStyle = (slot) => {
+    // Swiper coverflow offsetMultiplier: distance of card from visual center.
+    const offset = slot - progress;
+    const { scale, opacity, t } = tweenFromOffset(offset);
+    const pitch = pitchPx();
+    return {
+      transform: `translate3d(${offset * pitch}px, 0, 0) scale(${scale})`,
+      opacity,
+      zIndex: Math.round(t * 20),
+      transition: settling
+        ? `transform ${SWIPE_SETTLE_MS}ms ${EASE_APPLE}, opacity ${SWIPE_SETTLE_MS}ms ${EASE_APPLE}`
+        : "none",
+    };
+  };
+
+  const renderCardBody = (id, isActive) => {
+    const routine = routineById(id);
+    const title = isActive
+      ? sessionTitle || routine?.title || id
+      : routine?.title || id;
+    const idx = channelIds.indexOf(id);
+    return (
+      <>
+        <header className="clozzz-remote__head">
+          <p className="clozzz-remote__eyebrow">Clozzz remote</p>
+          <h1 className="clozzz-remote__title">{title}</h1>
+          {canSwipe ? (
+            <p
+              className="clozzz-remote__channel clozzz-remote__channel--mobile"
+              aria-live={isActive ? "polite" : undefined}
+            >
+              {isActive
+                ? swipeHint ||
+                  `Channel ${idx + 1} of ${channelIds.length} · swipe to switch`
+                : `Channel ${idx + 1} of ${channelIds.length}`}
+            </p>
+          ) : null}
+          {isActive ? (
+            <>
+              <p className="clozzz-remote__meta">{statusLine}</p>
+              <p className="clozzz-remote__label" aria-live="polite">
+                {nowLabel}
+              </p>
+            </>
+          ) : (
+            <p className="clozzz-remote__meta">Swipe to control</p>
+          )}
+        </header>
+        {isActive && error ? (
+          <p className="clozzz-remote__error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {isActive ? controls : <div className="clozzz-remote__pad clozzz-remote__pad--ghost" />}
+      </>
+    );
+  };
+
   return (
     <div
       className="clozzz-remote"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
+      onTouchEnd={onTouchEnd}
     >
       <aside className="clozzz-remote__sidebar" aria-label="Channels">
         <p className="clozzz-remote__sidebar-eyebrow">Channels</p>
@@ -627,32 +719,21 @@ export default function Remote({
           <span>{refreshing ? "Refreshing…" : pullHint}</span>
         </div>
 
-        <div ref={stageRef} className="clozzz-remote__stage" style={stageStyle}>
-          <header className="clozzz-remote__head">
-            <p className="clozzz-remote__eyebrow">Clozzz remote</p>
-            <h1 className="clozzz-remote__title">{sessionTitle || sessionKey}</h1>
-            {canSwipe ? (
-              <p
-                className="clozzz-remote__channel clozzz-remote__channel--mobile"
-                aria-live="polite"
-              >
-                {swipeHint ||
-                  `Channel ${channelIndex + 1} of ${channelIds.length} · swipe to switch`}
-              </p>
-            ) : null}
-            <p className="clozzz-remote__meta">{statusLine}</p>
-            <p className="clozzz-remote__label" aria-live="polite">
-              {nowLabel}
-            </p>
-          </header>
-
-          {error ? (
-            <p className="clozzz-remote__error" role="alert">
-              {error}
-            </p>
-          ) : null}
-
-          {controls}
+        <div ref={viewportRef} className="clozzz-remote__viewport">
+          <div className="clozzz-remote__stage">
+            {slots.map(({ id, slot }) =>
+              id ? (
+                <div
+                  key={`${id}:${slot}`}
+                  className={`clozzz-remote__card${slot === 0 ? " is-active" : ""}`}
+                  style={cardStyle(slot)}
+                  aria-hidden={slot !== 0}
+                >
+                  {renderCardBody(id, slot === 0)}
+                </div>
+              ) : null
+            )}
+          </div>
         </div>
       </div>
     </div>

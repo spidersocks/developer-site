@@ -92,7 +92,7 @@ function clozzzOverlayGate(env) {
         const contentType = req.headers['content-type'] || ''
         let submitted = ''
         let remember = false
-        let nextPath = '/clozzz-remote/mode'
+        let nextPath = '/clozzz-remote'
 
         if (contentType.includes('application/json')) {
           try {

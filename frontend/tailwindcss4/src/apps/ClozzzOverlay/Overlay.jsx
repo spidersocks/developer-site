@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FALLBACK_CATALOG,
   findSessionIn,
@@ -15,6 +15,7 @@ import {
 } from "./api.js";
 import Editor from "./Editor.jsx";
 import Remote, {
+  canonicalizeRemoteUrl,
   readLastRoutineId,
   rememberLastRoutineId,
 } from "./Remote.jsx";
@@ -101,19 +102,9 @@ export function isModePath(location = window.location) {
   );
 }
 
-/** Bare `/clozzz-remote` — restore last channel (not the library). */
+/** Bare `/clozzz-remote` — single control surface (channel from memory/state). */
 export function isBareRemotePath(location = window.location) {
   return normalizePath(location) === REMOTE_HOME;
-}
-
-export function isRemotePath(location = window.location) {
-  const path = normalizePath(location);
-  if (/\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path)) return true;
-  // /clozzz-remote/<id> or /clozzz-remote/<id>/remote
-  const m = path.match(/^\/clozzz-remote\/([^/]+)(?:\/remote)?$/i);
-  if (!m?.[1]) return false;
-  const key = m[1].toLowerCase();
-  return key !== "mode" && key !== "edit";
 }
 
 /** Decode a single path segment. */
@@ -126,7 +117,7 @@ function decodeSeg(raw) {
 }
 
 /**
- * Routine key for remote control.
+ * Deep-link / legacy routine id only — product URL is bare `/clozzz-remote`.
  * From `?session=`, `/clozzz-remote/<id>`, or legacy `/clozzz-overlay/<id>/remote`.
  */
 export function readSessionKey(location = window.location) {
@@ -149,6 +140,11 @@ export function readSessionKey(location = window.location) {
   }
 
   return null;
+}
+
+/** True when path is a per-id remote deep link that should fold into bare remote. */
+export function isRemoteDeepLink(location = window.location) {
+  return Boolean(readSessionKey(location)) && !isBareRemotePath(location);
 }
 
 function useStageClass(mode) {
@@ -681,7 +677,7 @@ function LibraryLoading() {
   );
 }
 
-function RemoteApp({ sessionKey, catalog }) {
+function RemoteApp({ sessionKey, catalog, onChannelChange }) {
   useStageClass("remote");
   useEffect(() => {
     ensureLiveToken();
@@ -693,6 +689,7 @@ function RemoteApp({ sessionKey, catalog }) {
       sessionTitle={session?.title}
       introCountdownEnabled={Boolean(session?.introCountdownEnabled)}
       routines={catalog.routines || []}
+      onChannelChange={onChannelChange}
     />
   );
 }
@@ -759,13 +756,26 @@ function OpenDisplayApp() {
 }
 
 export default function Overlay() {
-  const [sessionKey, setSessionKey] = useState(() => readSessionKey());
-  const [remote, setRemote] = useState(() => isRemotePath());
+  const deepLinkKey = readSessionKey();
+  const [sessionKey, setSessionKey] = useState(() => deepLinkKey || null);
+  const [remoteSurface, setRemoteSurface] = useState(() => isRemoteSurface());
   const [bareRemote, setBareRemote] = useState(() => isBareRemotePath());
   const [routinesPage, setRoutinesPage] = useState(() => isRoutinesSurface());
   const [modePage, setModePage] = useState(() => isModePath());
   const [openDisplay, setOpenDisplay] = useState(() => isOpenDisplayPath());
+  /** True once a channel is chosen for the single remote surface. */
+  const [remoteReady, setRemoteReady] = useState(() => Boolean(deepLinkKey));
   const { catalog, ready } = useCatalog();
+
+  const onChannelChange = useCallback((id) => {
+    if (!id) return;
+    rememberLastRoutineId(id);
+    canonicalizeRemoteUrl();
+    setSessionKey(id);
+    setRemoteReady(true);
+    setBareRemote(true);
+    setModePage(false);
+  }, []);
 
   useEffect(() => {
     ensureLiveToken().then((token) => {
@@ -775,34 +785,36 @@ export default function Overlay() {
 
   useEffect(() => {
     applyClozzzPwa(detectClozzzPwaSurface());
-  }, [remote, bareRemote, routinesPage, modePage, openDisplay, sessionKey]);
+  }, [remoteSurface, bareRemote, routinesPage, modePage, openDisplay, sessionKey]);
 
   useEffect(() => {
-    // Canonicalize legacy / per-id overlay URLs onto the single open display.
+    // Canonicalize legacy / deep-link URLs onto single surfaces.
     const path = normalizePath();
     if (isEditorPath()) {
       window.history.replaceState({}, "", ROUTINES_HOME);
       setSessionKey(null);
-      setRemote(false);
+      setRemoteSurface(false);
       setBareRemote(false);
       setRoutinesPage(true);
       setModePage(false);
       setOpenDisplay(false);
-    } else if (/\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path)) {
+      setRemoteReady(false);
+    } else if (
+      /\/clozzz-overlay(?:\.html)?\/[^/]+\/remote$/i.test(path) ||
+      isRemoteDeepLink()
+    ) {
       const key = readSessionKey();
       if (key) {
-        window.history.replaceState(
-          {},
-          "",
-          `${REMOTE_HOME}/${encodeURIComponent(key)}`
-        );
+        rememberLastRoutineId(key);
+        setSessionKey(key);
+        setRemoteReady(true);
       }
-      setRemote(Boolean(key));
-      setBareRemote(!key);
+      canonicalizeRemoteUrl();
+      setRemoteSurface(true);
+      setBareRemote(true);
       setRoutinesPage(false);
       setOpenDisplay(false);
       setModePage(false);
-      setSessionKey(key);
     } else if (
       isOpenDisplayPath() &&
       path !== OPEN_DISPLAY &&
@@ -811,24 +823,41 @@ export default function Overlay() {
       // /clozzz-overlay/<id> → fixed open display (channel comes from remote).
       window.history.replaceState({}, "", OPEN_DISPLAY);
       setOpenDisplay(true);
-      setRemote(false);
+      setRemoteSurface(false);
       setBareRemote(false);
       setRoutinesPage(false);
       setModePage(false);
       setSessionKey(null);
+      setRemoteReady(false);
     } else if (path === "/clozzz-overlay/mode") {
       window.history.replaceState({}, "", `${REMOTE_HOME}/mode`);
       setModePage(true);
       setOpenDisplay(false);
       setRoutinesPage(false);
+      setRemoteSurface(true);
     }
 
     const sync = () => {
-      setSessionKey(readSessionKey());
-      setRemote(isRemotePath());
-      setBareRemote(isBareRemotePath());
+      const key = readSessionKey();
+      const bare = isBareRemotePath();
+      const deep = isRemoteDeepLink();
+      if (deep && key) {
+        rememberLastRoutineId(key);
+        canonicalizeRemoteUrl();
+        setSessionKey(key);
+        setRemoteReady(true);
+        setBareRemote(true);
+        setModePage(false);
+      } else {
+        setBareRemote(bare);
+        if (key) {
+          setSessionKey(key);
+          setRemoteReady(true);
+        }
+        setModePage(isModePath());
+      }
+      setRemoteSurface(isRemoteSurface());
       setRoutinesPage(isRoutinesSurface());
-      setModePage(isModePath());
       setOpenDisplay(isOpenDisplayPath());
       applyClozzzPwa(detectClozzzPwaSurface());
     };
@@ -837,8 +866,15 @@ export default function Overlay() {
   }, []);
 
   // Bare /clozzz-remote → last channel (localStorage), else studio, else mode.
+  // Stay on `/clozzz-remote` — never rewrite to per-id subpaths.
   useEffect(() => {
-    if (!ready || !bareRemote || remote || modePage || routinesPage) return;
+    if (!ready || !bareRemote || modePage || routinesPage || !remoteSurface) {
+      return;
+    }
+    if (sessionKey && findSessionIn(catalog.routines || [], sessionKey)) {
+      setRemoteReady(true);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const routines = catalog.routines || [];
@@ -857,24 +893,27 @@ export default function Overlay() {
       if (cancelled) return;
       if (pick) {
         rememberLastRoutineId(pick);
-        window.history.replaceState(
-          {},
-          "",
-          `${REMOTE_HOME}/${encodeURIComponent(pick)}`
-        );
+        canonicalizeRemoteUrl();
         setSessionKey(pick);
-        setRemote(true);
-        setBareRemote(false);
+        setRemoteReady(true);
         return;
       }
       window.history.replaceState({}, "", `${REMOTE_HOME}/mode`);
       setModePage(true);
-      setBareRemote(false);
+      setRemoteReady(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [ready, bareRemote, remote, modePage, routinesPage, catalog]);
+  }, [
+    ready,
+    bareRemote,
+    modePage,
+    routinesPage,
+    remoteSurface,
+    catalog,
+    sessionKey,
+  ]);
 
   const resolvedSession = useMemo(() => {
     if (!sessionKey) return null;
@@ -882,7 +921,7 @@ export default function Overlay() {
   }, [catalog, sessionKey]);
 
   // Open OBS display — never shows library/remote.
-  if (openDisplay && !remote && !modePage && !routinesPage) {
+  if (openDisplay && !remoteSurface && !modePage && !routinesPage) {
     return <OpenDisplayApp />;
   }
 
@@ -898,17 +937,22 @@ export default function Overlay() {
     return <ChooserApp catalog={catalog} />;
   }
 
-  if (remote) {
-    if (!resolvedSession) {
-      return <SessionNotFound keyTried={sessionKey || "?"} />;
-    }
+  if (remoteSurface && remoteReady && resolvedSession) {
     return (
-      <RemoteApp sessionKey={resolvedSession.id} catalog={catalog} />
+      <RemoteApp
+        sessionKey={resolvedSession.id}
+        catalog={catalog}
+        onChannelChange={onChannelChange}
+      />
     );
   }
 
+  if (remoteSurface && remoteReady && sessionKey && !resolvedSession) {
+    return <SessionNotFound keyTried={sessionKey || "?"} />;
+  }
+
   // Bare remote restoring channel…
-  if (bareRemote) {
+  if (remoteSurface && bareRemote) {
     return <LibraryLoading />;
   }
 
