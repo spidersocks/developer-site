@@ -532,10 +532,33 @@ export function remainingFromLive(
   return { remainingMs: durationMs, done: false, armed: true };
 }
 
-/** Progressive bg: instant cool gradient → first-frame still → looping video. */
-function CountdownBackdrop() {
+/**
+ * Progressive bg: gradient → frozen still (idle / held) → looping video once
+ * countdown ticks. Idle keeps still only and preloads the first video chunk
+ * so Start can crossfade without looping bg1 while waiting.
+ */
+function CountdownBackdrop({ playVideo = true }) {
+  const videoRef = useRef(null);
   const [stillReady, setStillReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (playVideo) {
+      const p = v.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } else {
+      v.pause();
+      try {
+        if (v.currentTime > 0.05) v.currentTime = 0;
+      } catch {
+        /* seek before metadata */
+      }
+    }
+  }, [playVideo]);
+
+  const showVideo = playVideo && videoReady;
 
   return (
     <>
@@ -549,13 +572,15 @@ function CountdownBackdrop() {
         onLoad={() => setStillReady(true)}
       />
       <video
-        className={`clozzz-countdown__bg${videoReady ? " is-ready" : ""}`}
+        ref={videoRef}
+        className={`clozzz-countdown__bg${showVideo ? " is-ready" : ""}`}
         src="/clozzz/bg1.mp4"
-        autoPlay
         muted
         loop
         playsInline
         preload="auto"
+        autoPlay={playVideo}
+        onLoadedData={() => setVideoReady(true)}
         onCanPlay={() => setVideoReady(true)}
         onPlaying={() => setVideoReady(true)}
       />
@@ -607,7 +632,7 @@ function CountdownStage({
       className={`clozzz-countdown clozzz-countdown--soon${critical ? " is-critical" : ""}${held ? " is-held" : ""}`}
       aria-live="polite"
     >
-      <CountdownBackdrop />
+      <CountdownBackdrop playVideo={!held} />
       <div className="clozzz-countdown__veil" aria-hidden="true" />
       <header className="clozzz-countdown__brand">
         <BrandLockup />
@@ -634,7 +659,7 @@ function StreamEndedStage({ elapsedSec, title, message }) {
       className="clozzz-countdown clozzz-countdown--ended"
       aria-live="polite"
     >
-      <CountdownBackdrop />
+      <CountdownBackdrop playVideo />
       <div className="clozzz-countdown__veil" aria-hidden="true" />
       <header className="clozzz-countdown__brand">
         <BrandLockup />
@@ -1119,9 +1144,10 @@ function RunningOverlay({ session, sessionKey }) {
   const moveLabel = onBreak
     ? "Break"
     : derived.currentLabel || current?.label || live?.currentLabel || "…";
+  // Final exercise: Next cue is Finish — never Rest / break / next-exercise copy.
   const nextCue = onBreak
     ? derived.currentLabel || current?.label || live?.currentLabel || "…"
-    : next?.label || "Rest";
+    : next?.label || "Finish";
   const timerText = done ? "0:00" : formatClock(remainingSec);
 
   return (

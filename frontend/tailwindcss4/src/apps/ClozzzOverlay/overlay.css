@@ -977,10 +977,10 @@ html.clozzz-stage-remote #root {
   color: rgba(228, 201, 137, 0.85);
 }
 
-.clozzz-remote__pad--ghost {
-  min-height: 12rem;
-  opacity: 0.35;
+/* Neighbor cards: full chrome rides swipe transform (no delayed ghost→buttons). */
+.clozzz-remote__pad--peer {
   pointer-events: none;
+  user-select: none;
 }
 
 .clozzz-remote__pull {

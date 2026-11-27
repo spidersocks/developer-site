@@ -850,163 +850,195 @@ export default function Remote({
         ? "Pull to refresh"
         : "";
 
-  const controls = (
-    <div className="clozzz-remote__pad">
-      {inCountdown ? (
-        <button
-          type="button"
-          className="clozzz-remote__btn clozzz-remote__btn--primary"
-          disabled={noLive || isBusy("skip_countdown")}
-          onClick={() => send("skip_countdown")}
-        >
-          Skip countdown
-        </button>
-      ) : introHeld ? (
-        <>
+  /**
+   * Same control chrome on every carousel card so settle does not ghost→buttons
+   * warp; peer cards ride the swipe transform (inert until active).
+   */
+  const renderControls = (interactive) => {
+    const off = !interactive;
+    return (
+      <div
+        className={`clozzz-remote__pad${off ? " clozzz-remote__pad--peer" : ""}`}
+        aria-hidden={off || undefined}
+      >
+        {inCountdown ? (
           <button
             type="button"
             className="clozzz-remote__btn clozzz-remote__btn--primary"
-            disabled={noLive || isBusy(primary.cmd)}
-            onClick={() => send(primary.cmd)}
-          >
-            {primary.text}
-          </button>
-          <button
-            type="button"
-            className="clozzz-remote__btn"
-            disabled={noLive || isBusy("skip_countdown")}
+            disabled={off || noLive || isBusy("skip_countdown")}
             onClick={() => send("skip_countdown")}
+            tabIndex={off ? -1 : undefined}
           >
             Skip countdown
           </button>
-        </>
-      ) : inStreamEnded ? (
-        <>
-          <button
-            type="button"
-            className="clozzz-remote__btn clozzz-remote__btn--primary"
-            disabled={noLive || isBusy("skip_stream_ended")}
-            onClick={() => send("skip_stream_ended")}
-          >
-            Dismiss ended screen
-          </button>
-          <button
-            type="button"
-            className="clozzz-remote__btn"
-            disabled={noLive || isBusy("restart")}
-            onClick={() => send("restart")}
-          >
-            Restart
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="clozzz-remote__btn clozzz-remote__btn--primary"
-            disabled={noLive || isBusy(primary.cmd)}
-            onClick={() => send(primary.cmd)}
-          >
-            {primary.text}
-          </button>
-          {logoArmed ? null : (
-            <div className="clozzz-remote__row">
-              <button
-                type="button"
-                className="clozzz-remote__btn"
-                disabled={noLive || status === "done" || isBusy("back")}
-                onClick={() => send("back")}
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                className="clozzz-remote__btn"
-                disabled={noLive || status === "done" || isBusy("skip")}
-                onClick={() => send("skip")}
-              >
-                Skip
-              </button>
-            </div>
-          )}
-        </>
-      )}
+        ) : introHeld ? (
+          <>
+            <button
+              type="button"
+              className="clozzz-remote__btn clozzz-remote__btn--primary"
+              disabled={off || noLive || isBusy(primary.cmd)}
+              onClick={() => send(primary.cmd)}
+              tabIndex={off ? -1 : undefined}
+            >
+              {primary.text}
+            </button>
+            <button
+              type="button"
+              className="clozzz-remote__btn"
+              disabled={off || noLive || isBusy("skip_countdown")}
+              onClick={() => send("skip_countdown")}
+              tabIndex={off ? -1 : undefined}
+            >
+              Skip countdown
+            </button>
+          </>
+        ) : inStreamEnded ? (
+          <>
+            <button
+              type="button"
+              className="clozzz-remote__btn clozzz-remote__btn--primary"
+              disabled={off || noLive || isBusy("restart")}
+              onClick={() => send("restart")}
+              tabIndex={off ? -1 : undefined}
+            >
+              Dismiss ended screen
+            </button>
+            <button
+              type="button"
+              className="clozzz-remote__btn"
+              disabled={off || noLive || isBusy("restart")}
+              onClick={() => send("restart")}
+              tabIndex={off ? -1 : undefined}
+            >
+              Restart
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="clozzz-remote__btn clozzz-remote__btn--primary"
+              disabled={off || noLive || isBusy(primary.cmd)}
+              onClick={() => send(primary.cmd)}
+              tabIndex={off ? -1 : undefined}
+            >
+              {primary.text}
+            </button>
+            {logoArmed ? null : (
+              <div className="clozzz-remote__row">
+                <button
+                  type="button"
+                  className="clozzz-remote__btn"
+                  disabled={
+                    off || noLive || status === "done" || isBusy("back")
+                  }
+                  onClick={() => send("back")}
+                  tabIndex={off ? -1 : undefined}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  className="clozzz-remote__btn"
+                  disabled={
+                    off || noLive || status === "done" || isBusy("skip")
+                  }
+                  onClick={() => send("skip")}
+                  tabIndex={off ? -1 : undefined}
+                >
+                  Skip
+                </button>
+              </div>
+            )}
+          </>
+        )}
 
-      <p className="clozzz-remote__section">Volume</p>
-      <div
-        className="clozzz-remote__volume"
-        role="group"
-        aria-label="Volume"
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
-        onTouchCancel={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          className="clozzz-remote__btn clozzz-remote__btn--mute"
-          disabled={noLive}
-          aria-pressed={cueMuted}
-          aria-label={cueMuted ? "Unmute" : "Mute"}
-          title={cueMuted ? "Unmute" : "Mute"}
-          onClick={() => setCueAudio({ cueMuted: !cueMuted })}
+        <p className="clozzz-remote__section">Volume</p>
+        <div
+          className="clozzz-remote__volume"
+          role="group"
+          aria-label="Volume"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onTouchCancel={(e) => e.stopPropagation()}
         >
-          {cueMuted ? <VolumeMutedIcon /> : <VolumeIcon />}
-        </button>
-        <label className="clozzz-remote__volume-slider">
-          <span className="clozzz-remote__volume-pct">
-            {cueMuted ? "Muted" : `${Math.round(cueVolume * 100)}%`}
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={Math.round(cueVolume * 100)}
-            disabled={noLive || cueMuted}
-            aria-label="Volume"
-            onPointerDown={() => {
-              cueDraggingRef.current = true;
-            }}
-            onPointerUp={endCueDrag}
-            onPointerCancel={endCueDrag}
-            onBlur={endCueDrag}
-            onChange={(e) =>
-              setCueAudio(
-                { cueVolume: Number(e.target.value) / 100 },
-                { debounceMs: 180 }
-              )
-            }
-          />
-        </label>
-      </div>
+          <button
+            type="button"
+            className="clozzz-remote__btn clozzz-remote__btn--mute"
+            disabled={off || noLive}
+            aria-pressed={cueMuted}
+            aria-label={cueMuted ? "Unmute" : "Mute"}
+            title={cueMuted ? "Unmute" : "Mute"}
+            onClick={() => setCueAudio({ cueMuted: !cueMuted })}
+            tabIndex={off ? -1 : undefined}
+          >
+            {cueMuted ? <VolumeMutedIcon /> : <VolumeIcon />}
+          </button>
+          <label className="clozzz-remote__volume-slider">
+            <span className="clozzz-remote__volume-pct">
+              {cueMuted ? "Muted" : `${Math.round(cueVolume * 100)}%`}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round(cueVolume * 100)}
+              disabled={off || noLive || cueMuted}
+              aria-label="Volume"
+              tabIndex={off ? -1 : undefined}
+              onPointerDown={() => {
+                cueDraggingRef.current = true;
+              }}
+              onPointerUp={endCueDrag}
+              onPointerCancel={endCueDrag}
+              onBlur={endCueDrag}
+              onChange={(e) =>
+                setCueAudio(
+                  { cueVolume: Number(e.target.value) / 100 },
+                  { debounceMs: 180 }
+                )
+              }
+            />
+          </label>
+        </div>
 
-      {/* Hide/Show + Reset only while paused — avoids accidental taps mid-run. */}
-      {status === "paused" || breakPaused ? (
-        <>
-          <p className="clozzz-remote__section">Overlay</p>
-          <button
-            type="button"
-            className="clozzz-remote__btn"
-            disabled={
-              noLive || isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
-            }
-            onClick={() => send(chromeVisible ? "hide_chrome" : "show_chrome")}
-          >
-            {chromeVisible ? "Hide exercise & timer" : "Show exercise & timer"}
-          </button>
-          <button
-            type="button"
-            className="clozzz-remote__btn clozzz-remote__btn--ghost"
-            disabled={noLive || isBusy("restart")}
-            onClick={() => send("restart")}
-          >
-            Reset to start
-          </button>
-        </>
-      ) : null}
-    </div>
-  );
+        {/* Hide/Show + Reset only while paused — avoids accidental taps mid-run. */}
+        {status === "paused" || breakPaused ? (
+          <>
+            <p className="clozzz-remote__section">Overlay</p>
+            <button
+              type="button"
+              className="clozzz-remote__btn"
+              disabled={
+                off ||
+                noLive ||
+                isBusy(chromeVisible ? "hide_chrome" : "show_chrome")
+              }
+              onClick={() =>
+                send(chromeVisible ? "hide_chrome" : "show_chrome")
+              }
+              tabIndex={off ? -1 : undefined}
+            >
+              {chromeVisible
+                ? "Hide exercise & timer"
+                : "Show exercise & timer"}
+            </button>
+            <button
+              type="button"
+              className="clozzz-remote__btn clozzz-remote__btn--ghost"
+              disabled={off || noLive || isBusy("restart")}
+              onClick={() => send("restart")}
+              tabIndex={off ? -1 : undefined}
+            >
+              Reset to start
+            </button>
+          </>
+        ) : null}
+      </div>
+    );
+  };
 
   // Idle/paused: Embla three-slot deck. Live lock: active panel only (no peeks).
   const prevId = canSwipe ? neighborId(-1) : null;
@@ -1066,7 +1098,7 @@ export default function Remote({
             {error}
           </p>
         ) : null}
-        {isActive ? controls : <div className="clozzz-remote__pad clozzz-remote__pad--ghost" />}
+        {renderControls(isActive)}
       </>
     );
   };
