@@ -316,13 +316,14 @@ export default function Remote({
     }, SWIPE_SETTLE_MS);
   }, []);
 
-  /** Channel switch only when paused / not started (idle). Live run locks swipe. */
+  /** Channel switch + pull-to-refresh only when idle/paused. Live/countdown locks both. */
   const liveStatus = live?.status || "idle";
   const swipeLocked =
     liveStatus === "running" ||
     liveStatus === "countdown" ||
     liveStatus === "stream_ended";
   const canSwipe = multiChannel && !swipeLocked;
+  const canPullRefresh = !swipeLocked;
 
   useEffect(() => {
     if (!swipeLocked) return;
@@ -331,9 +332,13 @@ export default function Remote({
       settleTimer.current = null;
     }
     pendingDelta.current = null;
+    gesture.current = null;
+    pullingRef.current = false;
     setSettling(false);
     setProgress(0);
     setSwipeHint("");
+    setPulling(false);
+    setPullY(0);
   }, [swipeLocked]);
 
   const onTouchStart = (e) => {
@@ -366,7 +371,7 @@ export default function Remote({
         pullingRef.current = false;
         setPulling(false);
         setPullY(0);
-      } else if (dy > 0 && window.scrollY <= 2) {
+      } else if (canPullRefresh && dy > 0 && window.scrollY <= 2) {
         gesture.current = "pull";
         pullingRef.current = true;
       } else {
@@ -442,7 +447,7 @@ export default function Remote({
 
     if (!pullingRef.current) return;
     pullingRef.current = false;
-    const shouldRefresh = pullY >= PULL_THRESHOLD_PX;
+    const shouldRefresh = canPullRefresh && pullY >= PULL_THRESHOLD_PX;
     setPulling(false);
     setPullY(0);
     if (!shouldRefresh) return;
@@ -769,6 +774,7 @@ export default function Remote({
     "clozzz-remote",
     swipeLocked ? "is-swipe-locked" : "",
     canSwipe ? "is-channel-open" : "",
+    canPullRefresh ? "" : "is-pull-locked",
   ]
     .filter(Boolean)
     .join(" ");

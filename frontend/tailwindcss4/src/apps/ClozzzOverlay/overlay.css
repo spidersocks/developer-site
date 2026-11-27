@@ -168,11 +168,11 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-corner--bl {
-  /* 2–3% inset from left + bottom; card ~35–38% of OBS frame */
+  /* 2–3% inset from left + bottom; card ~33–35% of OBS frame (slightly tighter) */
   bottom: 2.5%;
   left: 2.5%;
-  width: 37vw;
-  max-width: 37vw;
+  width: 34vw;
+  max-width: 34vw;
 }
 
 /* ——— Brand ——— */
@@ -303,19 +303,25 @@ html.clozzz-stage-preview #root {
 .clozzz-current-panel {
   /* ~54–58 / 62–67 / 33–36 px at 1920×1080 */
   --clozzz-move-size: clamp(1.85rem, 2.9vw, 3.5rem);
-  /* Timer numerals match title size so the ring never tallens the move row. */
+  /* Timer numerals track title; ring never grows card height. */
   --clozzz-timer-size: var(--clozzz-move-size);
   --clozzz-next-size: clamp(1.05rem, 1.8vw, 2.15rem);
   --clozzz-count-size: clamp(0.82rem, 1.15vw, 1.35rem);
-  /* Compact stack: count → title → Next (~6–8px visual gaps, pre-scale). */
+  /* Compact stack: count → title → Next (~6–8px visual gaps). */
   --clozzz-stack-gap: 0.2rem;
+  --clozzz-title-next-gap: 0.5rem;
   --clozzz-support: #cdd3de;
   --clozzz-next: #e8edf4;
-  display: flex;
-  flex-direction: column;
-  gap: var(--clozzz-stack-gap);
+  /*
+   * Two-column card: left copy stack | right timer.
+   * Timer uses align-self:center so it recenters when copy height changes.
+   */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.55rem;
+  align-items: center;
   width: 100%;
-  padding: 1rem 1.2rem 1.05rem;
+  padding: 1rem 1.05rem 1.05rem;
   border-radius: 0.85rem;
   border: 1px solid rgba(213, 220, 229, 0.22);
   /* Near-opaque navy + stronger blur — readable on bright and dark camera. */
@@ -335,42 +341,22 @@ html.clozzz-stage-preview #root {
   font-size: var(--clozzz-count-size);
   font-weight: 560;
   letter-spacing: 0.01em;
-  line-height: 1.05;
+  line-height: 1.15;
   color: rgba(205, 211, 222, 0.72);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
-/*
- * Grid: title | timer
- *        Next  |
- * Timer on title row only — large ring cannot push Next down.
- * row-gap is the real title→Next spacing (0.5rem = 8px @16).
- */
-.clozzz-move-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  column-gap: 1.15rem;
-  row-gap: 0.5rem;
-  align-items: center;
-  min-width: 0;
-}
-
-/* Hoist title + Next into the parent grid. */
+/* Left stack: count → title → Next (timer is a sibling, vertically centered). */
 .clozzz-move-copy {
-  display: contents;
-}
-
-.clozzz-move-row > .clozzz-move-copy > .clozzz-crossfade,
-.clozzz-move-row > .clozzz-move-copy > .clozzz-current {
-  grid-column: 1;
-  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--clozzz-stack-gap);
   min-width: 0;
+  grid-column: 1;
 }
 
-.clozzz-move-row > .clozzz-move-copy > .clozzz-up-next {
-  grid-column: 1;
-  grid-row: 2;
+.clozzz-move-copy > .clozzz-up-next {
+  margin-top: calc(var(--clozzz-title-next-gap) - var(--clozzz-stack-gap));
 }
 
 .clozzz-crossfade {
@@ -414,7 +400,8 @@ html.clozzz-stage-preview #root {
   font-size: var(--clozzz-move-size);
   font-weight: 600;
   font-variation-settings: "wght" 600;
-  line-height: 1.08;
+  /* Slightly open leading so g/y/p descenders aren’t clipped by line-clamp. */
+  line-height: 1.18;
   letter-spacing: 0.005em;
   color: #f3ead7;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
@@ -423,21 +410,23 @@ html.clozzz-stage-preview #root {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  /* Extra bottom breathing room for the last line’s descenders. */
+  padding-bottom: 0.06em;
 }
 
 .clozzz-card-timer {
   --clozzz-timer-p: 0;
   --clozzz-ring-fill: var(--clozzz-gold);
-  /* Soft light track — must read #CDD3DE on navy, not dark stroke. */
-  --clozzz-ring-track: rgba(205, 211, 222, 0.78);
+  /* Soft light track — Calm/Fitness-style; must read on navy. */
+  --clozzz-ring-track: rgba(205, 211, 222, 0.55);
   /*
-   * Large visual ring/digits; sits on title grid-row only.
-   * Layout height = digits; ring paints absolute and cannot stretch Next.
+   * Premium ring/digits (Apple Fitness / Calm cues): round caps, snug box.
+   * Grid sibling of left copy — align-self:center recenters with card height.
+   * Layout height = digits; ring paints absolute and cannot stretch the card.
    */
-  --clozzz-timer-box: 2.72em;
-  --clozzz-timer-digit: 0.92em;
+  --clozzz-timer-box: 2.82em;
+  --clozzz-timer-digit: 0.9em;
   grid-column: 2;
-  grid-row: 1;
   position: relative;
   display: grid;
   place-items: center;
@@ -461,17 +450,17 @@ html.clozzz-stage-preview #root {
   z-index: 1;
   font-family: var(--clozzz-font-display);
   font-size: var(--clozzz-timer-digit);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   line-height: 1;
   text-align: center;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
   width: max-content;
   min-width: 4ch;
   /* Optical center inside the ring (tabular clocks read high otherwise). */
-  transform: translateY(0.05em);
+  transform: translateY(0.04em);
 }
 
 /* Absolute large ring — does not inflate move-row / Next spacing. */
@@ -491,16 +480,17 @@ html.clozzz-stage-preview #root {
 .clozzz-timer-ring__track,
 .clozzz-timer-ring__sweep {
   fill: none;
-  stroke-width: 1.85;
+  stroke-width: 1.55;
 }
 
 .clozzz-timer-ring__track {
-  stroke: var(--clozzz-ring-track, rgba(205, 211, 222, 0.78));
+  stroke: var(--clozzz-ring-track, rgba(205, 211, 222, 0.55));
+  stroke-linecap: round;
 }
 
 .clozzz-timer-ring__sweep {
   stroke: var(--clozzz-ring-fill, var(--clozzz-gold));
-  stroke-linecap: butt;
+  stroke-linecap: round;
   transition: stroke 0.25s ease;
 }
 
@@ -536,12 +526,12 @@ html.clozzz-stage-preview #root {
 }
 
 .clozzz-up-next {
-  /* Gap comes from .clozzz-move-row row-gap (0.5rem = 8px) — no extra margin. */
+  /* Title→Next gap from .clozzz-move-copy margin-top tweak — no extra here. */
   margin: 0;
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   font-size: var(--clozzz-next-size);
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1.2;
   letter-spacing: 0.01em;
   /* Brighter priority over quiet Exercise N of M */
   color: var(--clozzz-next);
@@ -665,7 +655,7 @@ html.clozzz-stage-preview #root {
   }
 
   .clozzz-card-timer {
-    --clozzz-timer-box: 2.55em;
+    --clozzz-timer-box: 2.68em;
     --clozzz-timer-digit: 0.88em;
   }
 }
@@ -973,6 +963,11 @@ html.clozzz-stage-remote #root {
   display: none;
 }
 
+/* Live/countdown: same lock as swipe — no pull-to-refresh chrome. */
+.clozzz-remote.is-pull-locked .clozzz-remote__pull {
+  display: none;
+}
+
 /* Idle/paused channel switch: soft title cue, still no framed deck */
 .clozzz-remote.is-channel-open .clozzz-remote__title {
   cursor: grab;
@@ -1141,6 +1136,155 @@ html.clozzz-stage-remote #root {
   font-size: 0.95rem;
   font-weight: 650;
   border-radius: 0.9rem;
+}
+
+/*
+ * OBS Custom Browser Dock (~300–400px square / short viewport):
+ * compact density, wrap/stack, all controls visible + clickable without scroll.
+ * Tall phone remotes keep oversized touch targets above.
+ */
+@media (max-height: 480px) and (max-width: 560px) {
+  html.clozzz-stage-remote,
+  html.clozzz-stage-remote body,
+  html.clozzz-stage-remote #root {
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .clozzz-remote {
+    min-height: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    padding:
+      calc(0.35rem + var(--remote-safe-top))
+      calc(0.4rem + var(--remote-safe-right))
+      calc(0.35rem + var(--remote-safe-bottom))
+      calc(0.4rem + var(--remote-safe-left));
+    gap: 0.35rem;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .clozzz-remote__panel {
+    gap: 0.3rem;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .clozzz-remote__pull {
+    display: none;
+  }
+
+  .clozzz-remote__viewport {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .clozzz-remote__stage {
+    min-height: 0;
+    height: 100%;
+    gap: 0.3rem;
+  }
+
+  .clozzz-remote__card {
+    gap: 0.3rem;
+    padding: 0;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .clozzz-remote__eyebrow {
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+  }
+
+  .clozzz-remote__title {
+    margin: 0.1rem 0 0.05rem;
+    font-size: clamp(1.05rem, 7.5vw, 1.35rem);
+    line-height: 1.1;
+  }
+
+  .clozzz-remote__channel {
+    margin: 0.05rem 0;
+    font-size: 0.7rem;
+  }
+
+  .clozzz-remote__meta {
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .clozzz-remote__label {
+    margin: 0.2rem 0 0;
+    font-size: 0.95rem;
+    line-height: 1.2;
+  }
+
+  .clozzz-remote__error {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.72rem;
+    border-radius: 0.45rem;
+  }
+
+  .clozzz-remote__pad {
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+    flex: 1;
+    min-height: 0;
+    justify-content: flex-start;
+  }
+
+  .clozzz-remote__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .clozzz-remote__row > .clozzz-remote__btn {
+    flex: 1 1 calc(50% - 0.2rem);
+    min-width: 5.5rem;
+  }
+
+  .clozzz-remote__section {
+    margin: 0.15rem 0 0;
+    font-size: 0.62rem;
+  }
+
+  .clozzz-remote__btn {
+    min-height: 2.15rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.82rem;
+    font-weight: 650;
+    border-radius: 0.55rem;
+  }
+
+  .clozzz-remote__btn--primary {
+    min-height: 2.45rem;
+    font-size: 0.95rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  }
+
+  .clozzz-remote__btn--ghost {
+    min-height: 1.85rem;
+    font-size: 0.75rem;
+  }
+
+  .clozzz-remote__presets {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem;
+  }
+
+  .clozzz-remote__btn--compact {
+    min-height: 1.85rem;
+    font-size: 0.72rem;
+    border-radius: 0.45rem;
+  }
 }
 
 /* Desktop: Microsoft-style control panel (sidebar + primary actions). */

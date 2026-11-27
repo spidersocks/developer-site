@@ -441,11 +441,11 @@ function CountdownBackdrop() {
   );
 }
 
-/** Thin SVG ring — 12 o'clock origin, elapsed gold fill grows clockwise. */
+/** Premium SVG ring — 12 o'clock origin, elapsed gold fill grows clockwise. */
 function TimerProgressRing({ progress, className = "clozzz-timer-ring" }) {
   const p = Math.min(1, Math.max(0, Number(progress) || 0));
-  /* Slightly inset radius so stroke leaves room for “0:MM” glyphs. */
-  const r = 16.75;
+  /* Inset so round caps clear the viewBox; Calm/Fitness-style thin stroke. */
+  const r = 17.1;
   return (
     <svg
       className={className}
@@ -617,42 +617,38 @@ function RunningOverlay({ session, sessionKey }) {
         <section className="clozzz-corner clozzz-corner--bl clozzz-current-panel">
           {done ? (
             <>
-              <p className="clozzz-exercise-count">
-                {segments.length} exercises ·{" "}
-                {formatDuration(sessionTotalSec({ segments }))}
-              </p>
-              <div className="clozzz-move-row">
-                <div className="clozzz-move-copy">
-                  <h1 className="clozzz-current">Routine complete</h1>
-                </div>
-                <span
-                  className={`clozzz-card-timer clozzz-card-timer--${band}`}
-                  style={{ "--clozzz-timer-p": 1 }}
-                >
-                  <TimerProgressRing progress={1} />
-                  <span className="clozzz-card-timer__digits">{timerText}</span>
-                </span>
+              <div className="clozzz-move-copy">
+                <p className="clozzz-exercise-count">
+                  {segments.length} exercises ·{" "}
+                  {formatDuration(sessionTotalSec({ segments }))}
+                </p>
+                <h1 className="clozzz-current">Routine complete</h1>
               </div>
+              <span
+                className={`clozzz-card-timer clozzz-card-timer--${band}`}
+                style={{ "--clozzz-timer-p": 1 }}
+              >
+                <TimerProgressRing progress={1} />
+                <span className="clozzz-card-timer__digits">{timerText}</span>
+              </span>
             </>
           ) : (
             <>
-              <p className="clozzz-exercise-count">
-                Exercise {index + 1} of {segments.length}
-                {derived.paused ? " · Paused" : ""}
-              </p>
-              <div className="clozzz-move-row">
-                <div className="clozzz-move-copy">
-                  <CrossfadeTitle text={moveLabel} />
-                  <p className="clozzz-up-next">Next: {nextCue}</p>
-                </div>
-                <span
-                  className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
-                  style={{ "--clozzz-timer-p": elapsedFrac }}
-                >
-                  <TimerProgressRing progress={elapsedFrac} />
-                  <span className="clozzz-card-timer__digits">{timerText}</span>
-                </span>
+              <div className="clozzz-move-copy">
+                <p className="clozzz-exercise-count">
+                  Exercise {index + 1} of {segments.length}
+                  {derived.paused ? " · Paused" : ""}
+                </p>
+                <CrossfadeTitle text={moveLabel} />
+                <p className="clozzz-up-next">Next: {nextCue}</p>
               </div>
+              <span
+                className={`clozzz-card-timer clozzz-card-timer--${band}${armed ? " is-armed" : ""}${derived.paused ? " is-paused" : ""}`}
+                style={{ "--clozzz-timer-p": elapsedFrac }}
+              >
+                <TimerProgressRing progress={elapsedFrac} />
+                <span className="clozzz-card-timer__digits">{timerText}</span>
+              </span>
             </>
           )}
         </section>
